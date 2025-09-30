@@ -1,2 +1,0 @@
-# Software project
-graduation project
