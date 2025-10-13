@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Electronic Store - Home</title>
+    <!-- Tailwind CSS (Play CDN) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                DEFAULT: '#5b8cff',
+                600: '#4a78e6',
+                700: '#3d63bf'
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <!-- Project styles override Tailwind defaults where needed -->
+    <link rel="stylesheet" href="home.css" />
+    <!-- React 18 UMD -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Babel for in-browser JSX transpilation (dev only) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="text/babel" data-presets="react,env" src="Login.jsx"></script>
+    <script type="text/babel" data-presets="react,env" src="SignUp.jsx"></script>
+    <script type="text/babel" data-presets="react,env" src="Home.jsx"></script>
+    <script type="text/babel">
+      const root = ReactDOM.createRoot(document.getElementById('root'));
+      root.render(React.createElement(Home));
+    </script>
+  </body>
+  </html>
+
+
