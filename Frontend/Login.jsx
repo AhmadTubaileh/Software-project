@@ -10,6 +10,15 @@ function LoginForm({ onSubmit }) {
     const username = form.querySelector('input[name="username"]').value.trim();
     const password = form.querySelector('input[name="password"]').value;
     if (typeof onSubmit === 'function') onSubmit({ username, password });
+    try {
+      Toastify({
+        text: `Welcome ${username || 'user'}!`,
+        duration: 2500,
+        gravity: 'top',
+        position: 'center',
+        className: 'toast-custom',
+      }).showToast();
+    } catch {}
   }
 
   return (
