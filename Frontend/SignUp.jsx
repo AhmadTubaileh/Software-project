@@ -13,10 +13,27 @@ function SignUpForm({ onSubmit }) {
     const password = form.querySelector('input[name="su_password"]').value;
     const confirm = form.querySelector('input[name="su_confirm"]').value;
     if (password !== confirm) {
-      alert('Passwords do not match');
+      try {
+        Toastify({
+          text: 'Passwords do not match',
+          duration: 2500,
+          gravity: 'top',
+          position: 'center',
+          className: 'toast-custom toast-error'
+        }).showToast();
+      } catch { alert('Passwords do not match'); }
       return;
     }
     if (typeof onSubmit === 'function') onSubmit({ username, email, password });
+    try {
+      Toastify({
+        text: `Account created for ${username || email}!`,
+        duration: 2500,
+        gravity: 'top',
+        position: 'center',
+        className: 'toast-custom toast-success'
+      }).showToast();
+    } catch {}
   }
 
   return (

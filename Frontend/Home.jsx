@@ -81,7 +81,17 @@ function Home() {
     // For now, log action for UX demonstration
     // eslint-disable-next-line no-console
     console.log('Add to cart:', { productId: product.id, paymentPreference: pref });
-    alert(`${product.name} added to cart with ${pref.toUpperCase()} payment`);
+    try {
+      Toastify({
+        text: `${product.name} added (${pref})`,
+        duration: 2200,
+        gravity: 'top',
+        position: 'center',
+        className: 'toast-custom'
+      }).showToast();
+    } catch {
+      alert(`${product.name} added to cart with ${pref.toUpperCase()} payment`);
+    }
   }
 
   return (
@@ -168,7 +178,7 @@ function Home() {
 
                 <button className="add-to-cart px-3 py-2 rounded-lg border border-brand bg-brand text-white shadow hover:brightness-105 transition" onClick={() => onAddToCart(product)}>
                   Add to Cart
-                </button>
+                </button> 
               </div>
             </article>
           );

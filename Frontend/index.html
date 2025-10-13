@@ -23,6 +23,9 @@
     </script>
     <!-- Project styles override Tailwind defaults where needed -->
     <link rel="stylesheet" href="home.css" />
+    <!-- Toastify (lightweight toast library) -->
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/toastify-js/src/toastify.min.css">
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/toastify-js"></script>
     <!-- React 18 UMD -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -31,8 +34,19 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Utils & Data -->
+    <script type="text/babel" data-presets="react,env" src="utils/storage.js"></script>
+    <script type="text/babel" data-presets="react,env" src="utils/auth.js"></script>
+    <script type="text/babel" data-presets="react,env" src="utils/toast.js"></script>
+    <script type="text/babel" data-presets="react,env" src="data/products.js"></script>
+    <!-- Components & Forms -->
+    <script type="text/babel" data-presets="react,env" src="components/Modal.jsx"></script>
+    <script type="text/babel" data-presets="react,env" src="components/Header.jsx"></script>
+    <script type="text/babel" data-presets="react,env" src="components/AdminToolbar.jsx"></script>
+    <script type="text/babel" data-presets="react,env" src="components/ProductCard.jsx"></script>
     <script type="text/babel" data-presets="react,env" src="Login.jsx"></script>
     <script type="text/babel" data-presets="react,env" src="SignUp.jsx"></script>
+    <!-- App -->
     <script type="text/babel" data-presets="react,env" src="Home.jsx"></script>
     <script type="text/babel">
       const root = ReactDOM.createRoot(document.getElementById('root'));
