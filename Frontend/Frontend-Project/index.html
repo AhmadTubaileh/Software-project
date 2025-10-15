@@ -4,7 +4,14 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend-project</title>
+    <title>Electronic Store</title>
+    <!-- Tailwind CSS (Play CDN) for existing utility classes in legacy markup -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: { extend: { colors: { brand: { DEFAULT: '#5b8cff', 600: '#4a78e6', 700: '#3d63bf' } } } }
+      };
+    </script>
   </head>
   <body>
     <div id="root"></div>

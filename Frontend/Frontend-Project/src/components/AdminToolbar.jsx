@@ -1,3 +1,5 @@
+import React from 'react';
+
 function AdminToolbar() {
   return (
     <section className="admin-toolbar flex flex-wrap gap-2 my-2" aria-label="Admin actions">
@@ -11,7 +13,6 @@ function AdminToolbar() {
   );
 }
 
-window.AdminToolbar = AdminToolbar;
+export default AdminToolbar;
 
 
-//https://localhost:8080/Home.jsx

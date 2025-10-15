@@ -1,4 +1,4 @@
-const { useState } = React;
+import React from 'react';
 
 function Header({ query, setQuery, sortBy, setSortBy, currentUser, onLogin, onSignup, onLogout }) {
   return (
@@ -32,6 +32,6 @@ function Header({ query, setQuery, sortBy, setSortBy, currentUser, onLogin, onSi
   );
 }
 
-window.Header = Header;
+export default Header;
 
 

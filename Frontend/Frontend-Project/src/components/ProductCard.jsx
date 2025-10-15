@@ -1,3 +1,5 @@
+import React from 'react';
+
 function getCategoryIcon(category) {
   switch (category) {
     case 'phone': return '📱';
@@ -38,6 +40,6 @@ function ProductCard({ product, paymentPref, onSetPayment, onAddToCart }) {
   );
 }
 
-window.ProductCard = ProductCard;
+export default ProductCard;
 
 
