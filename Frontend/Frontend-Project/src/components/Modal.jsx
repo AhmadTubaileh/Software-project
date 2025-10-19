@@ -1,3 +1,5 @@
+import React from 'react';
+
 function Modal({ title, onClose, children }) {
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true">
@@ -12,6 +14,6 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-window.Modal = Modal;
+export default Modal;
 
 

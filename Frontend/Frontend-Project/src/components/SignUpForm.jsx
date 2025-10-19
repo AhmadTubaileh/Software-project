@@ -1,5 +1,4 @@
-// Standalone SignUp form component (no bundler). Exposes window.SignUpForm
-const { useState } = React;
+import React, { useState } from 'react';
 
 function SignUpForm({ onSubmit }) {
   const [showPw, setShowPw] = useState(false);
@@ -8,55 +7,29 @@ function SignUpForm({ onSubmit }) {
   function handleSubmit(e) {
     e.preventDefault();
     const form = e.currentTarget;
-    const username = form.querySelector('input[name="su_username"]').value.trim();
-    const email = form.querySelector('input[name="su_email"]').value.trim();
-    const password = form.querySelector('input[name="su_password"]').value;
-    const confirm = form.querySelector('input[name="su_confirm"]').value;
-    if (password !== confirm) {
-      try {
-        Toastify({
-          text: 'Passwords do not match',
-          duration: 2500,
-          gravity: 'top',
-          position: 'center',
-          className: 'toast-custom toast-error'
-        }).showToast();
-      } catch { alert('Passwords do not match'); }
-      return;
-    }
+    const username = form.su_username.value.trim();
+    const email = form.su_email.value.trim();
+    const password = form.su_password.value;
+    const confirm = form.su_confirm.value;
+    if (password !== confirm) return;
     if (typeof onSubmit === 'function') onSubmit({ username, email, password });
-    try {
-      Toastify({
-        text: `Account created for ${username || email}!`,
-        duration: 2500,
-        gravity: 'top',
-        position: 'center',
-        className: 'toast-custom toast-success'
-      }).showToast();
-    } catch {}
   }
 
   return (
     <form className="form" onSubmit={handleSubmit}>
       <label className="form-field">
         <span>Username</span>
-        <input className="px-4 py-3 rounded-lg border border-brand/25 bg-[#0c1427] text-white outline-none focus:ring-4 ring-brand/20" name="su_username" type="text" required placeholder="your username" />
+        <input name="su_username" type="text" required placeholder="your username" />
       </label>
       <label className="form-field">
         <span>Email</span>
-        <input className="px-4 py-3 rounded-lg border border-brand/25 bg-[#0c1427] text-white outline-none focus:ring-4 ring-brand/20" name="su_email" type="email" required placeholder="you@example.com" />
+        <input name="su_email" type="email" required placeholder="you@example.com" />
       </label>
       <label className="form-field">
         <span>Password</span>
         <div className="form-password">
-          <input className="px-4 py-3 rounded-lg border border-brand/25 bg-[#0c1427] text-white outline-none focus:ring-4 ring-brand/20" name="su_password" type={showPw ? 'text' : 'password'} required placeholder="min 8 characters" />
-          <button
-            type="button"
-            className="pw-toggle"
-            onClick={() => setShowPw(v => !v)}
-            aria-label={showPw ? 'Hide password' : 'Show password'}
-            title={showPw ? 'Hide password' : 'Show password'}
-          >
+          <input name="su_password" type={showPw ? 'text' : 'password'} required placeholder="min 8 characters" />
+          <button type="button" className="pw-toggle" onClick={() => setShowPw(v => !v)} aria-label={showPw ? 'Hide password' : 'Show password'} title={showPw ? 'Hide password' : 'Show password'}>
             {showPw ? (
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.5"/>
@@ -76,14 +49,8 @@ function SignUpForm({ onSubmit }) {
       <label className="form-field">
         <span>Confirm Password</span>
         <div className="form-password">
-          <input className="px-4 py-3 rounded-lg border border-brand/25 bg-[#0c1427] text-white outline-none focus:ring-4 ring-brand/20" name="su_confirm" type={showConfirm ? 'text' : 'password'} required placeholder="retype password" />
-          <button
-            type="button"
-            className="pw-toggle"
-            onClick={() => setShowConfirm(v => !v)}
-            aria-label={showConfirm ? 'Hide password' : 'Show password'}
-            title={showConfirm ? 'Hide password' : 'Show password'}
-          >
+          <input name="su_confirm" type={showConfirm ? 'text' : 'password'} required placeholder="retype password" />
+          <button type="button" className="pw-toggle" onClick={() => setShowConfirm(v => !v)} aria-label={showConfirm ? 'Hide password' : 'Show password'} title={showConfirm ? 'Hide password' : 'Show password'}>
             {showConfirm ? (
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <path d="M3 3l18 18" stroke="currentColor" strokeWidth="1.5"/>
@@ -100,11 +67,11 @@ function SignUpForm({ onSubmit }) {
           </button>
         </div>
       </label>
-      <button className="btn btn-primary px-4 py-2 rounded-lg border border-brand bg-brand text-white shadow hover:brightness-105 transition" type="submit">Sign up</button>
+      <button className="btn btn-primary" type="submit">Sign up</button>
     </form>
   );
 }
 
-window.SignUpForm = SignUpForm;
+export default SignUpForm;
 
 
