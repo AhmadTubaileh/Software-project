@@ -4,6 +4,8 @@ import './App.css';
 
 import Home from './pages/Home.jsx';
 import POS from './pages/POS.jsx';
+import Employees from './pages/Employees.jsx';
+
 
 function App() {
   return (
@@ -11,6 +13,8 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/pos" element={<POS />} />
+        <Route path="/employees" element={<Employees />} />
+        
       </Routes>
     </Router>
   );
