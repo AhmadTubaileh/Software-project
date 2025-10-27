@@ -9,16 +9,16 @@ function AdminSidebar() {
 
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: '📊' },
-    { name: 'Admin', path: '/admin', icon: '👑' },
+    // { name: 'Admin', path: '/admin', icon: '👑' },
     { name: 'POS', path: '/pos', icon: '💳' },
-    { name: 'Products', path: '/products', icon: '📦' },
-    { name: 'Orders', path: '/orders', icon: '🛒' },
-    { name: 'Customers', path: '/customers', icon: '👥' },
+    // { name: 'Products', path: '/products', icon: '📦' },
+    // { name: 'Orders', path: '/orders', icon: '🛒' },
+    // { name: 'Customers', path: '/customers', icon: '👥' },
     { name: 'Employees', path: '/employees', icon: '👨‍💼' },
-    { name: 'Reports', path: '/reports', icon: '📈' },
-    { name: 'Settings', path: '/settings', icon: '⚙️' },
-    { name: 'Service Tickets', path: '/tickets', icon: '🎫' },
-    { name: 'Users & Roles', path: '/users', icon: '👤' },
+    // { name: 'Reports', path: '/reports', icon: '📈' },
+    // { name: 'Settings', path: '/settings', icon: '⚙️' },
+    // { name: 'Service Tickets', path: '/tickets', icon: '🎫' },
+    // { name: 'Users & Roles', path: '/users', icon: '👤' },
   ];
 
   const isActive = (path) => location.pathname === path;
