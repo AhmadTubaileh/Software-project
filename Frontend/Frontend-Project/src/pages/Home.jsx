@@ -38,13 +38,45 @@ function Home() {
     toast.success(`${product.name} added (${pref})`);
   }, [currentUser, paymentPrefById]);
 
-  const handleLogin = useCallback(({ username, password }) => {
+  // UPDATED: Secure login - only admin handled in frontend, rest goes to backend
+  const handleLogin = useCallback(async ({ username, password }) => {
+    // Special case: Admin credentials (only these are handled in frontend)
     if (username === 'admin' && password === '472003') {
-      setSession({ id: '1', username: 'admin', role: 'admin' });
-    } else {
-      setSession({ id: '2', username: username || 'customer', role: 'customer' });
+      setSession({ 
+        id: '1', 
+        username: 'admin', 
+        role: 'admin',
+        user_type: 0 
+      });
+      toast.success('Welcome back, Admin!');
+      setAuthModal(null);
+      return;
     }
-    setAuthModal(null);
+
+    // All other logins go to backend
+    try {
+      const response = await fetch('http://localhost:5000/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Login failed');
+      }
+
+      // Set session with user data from backend
+      setSession(data.user);
+      toast.success('Login successful!');
+      setAuthModal(null);
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error(error.message || 'Login failed');
+    }
   }, [setSession]);
 
   const handleSignup = useCallback(({ username, email }) => {
@@ -52,8 +84,10 @@ function Home() {
       id: String(Date.now()),
       username: username || email || 'customer',
       role: 'customer',
+      user_type: 10
     });
     setAuthModal(null);
+    toast.success('Account created successfully!');
   }, [setSession]);
 
   const openLoginModal = useCallback(() => setAuthModal('login'), []);
@@ -64,13 +98,13 @@ function Home() {
     <div className="min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
 
-      {/* Sidebar for Admin */}
-      {currentUser && currentUser.role === 'admin' && <AdminSidebar />}
+      {/* Sidebar for Admin AND Employees (levels 0-9) */}
+      {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
 
       {/* Main Area */}
       <main
         className={`flex-1 flex flex-col min-h-screen transition-all duration-300 transform-gpu ${
-          currentUser && currentUser.role === 'admin' ? 'ml-64' : ''
+          currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : ''
         }`}
       >
         <div className="p-6 flex-1">
@@ -84,6 +118,21 @@ function Home() {
             onSignup={openSignupModal}
             onLogout={clearSession}
           />
+
+         
+
+          {/* Show welcome message for employee */}
+          {currentUser && currentUser.role === 'employee' && (
+            <div className="mb-6 p-4 bg-gradient-to-r from-green-600 to-blue-600 rounded-lg border border-green-400">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">👨‍💼</span>
+                <div>
+                  <h3 className="font-bold text-lg">Employee Access</h3>
+                  <p className="text-green-100 text-sm">Level {currentUser.user_type} employee privileges</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Product grid with POS-style animations */}
           <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mt-6 transform-gpu">

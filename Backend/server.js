@@ -2,8 +2,8 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-// Import routes
 const employeeRoutes = require('./routes/employees');
+const authRoutes = require('./routes/auth'); // NEW
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,21 +15,11 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/employees', employeeRoutes);
+app.use('/api/auth', authRoutes); // NEW
 
 // Health check route
 app.get('/api/health', (req, res) => {
   res.json({ message: 'Server is running!' });
-});
-
-// Test database connection route
-app.get('/api/test-db', (req, res) => {
-  const db = require('./config/database');
-  db.query('SELECT 1 + 1 AS solution', (err, results) => {
-    if (err) {
-      return res.status(500).json({ error: 'Database connection failed', details: err.message });
-    }
-    res.json({ message: 'Database connected!', result: results[0].solution });
-  });
 });
 
 // Error handling middleware
@@ -47,6 +37,6 @@ app.use((req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server is running on port ${PORT}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🗄️  Database test: http://localhost:${PORT}/api/test-db`);
+  console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`);
   console.log(`👥 Employees API: http://localhost:${PORT}/api/employees`);
 });
