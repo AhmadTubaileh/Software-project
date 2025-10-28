@@ -1,5 +1,4 @@
 import React, { useMemo, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header.jsx';
 import ProductCard from '../components/ProductCard.jsx';
 import Modal from '../components/Modal.jsx';
@@ -38,22 +37,8 @@ function Home() {
     toast.success(`${product.name} added (${pref})`);
   }, [currentUser, paymentPrefById]);
 
-  // UPDATED: Secure login - only admin handled in frontend, rest goes to backend
+  // UPDATED: Login handler - ALL logins go to backend
   const handleLogin = useCallback(async ({ username, password }) => {
-    // Special case: Admin credentials (only these are handled in frontend)
-    if (username === 'admin' && password === '472003') {
-      setSession({ 
-        id: '1', 
-        username: 'admin', 
-        role: 'admin',
-        user_type: 0 
-      });
-      toast.success('Welcome back, Admin!');
-      setAuthModal(null);
-      return;
-    }
-
-    // All other logins go to backend
     try {
       const response = await fetch('http://localhost:5000/api/auth/login', {
         method: 'POST',
@@ -79,15 +64,46 @@ function Home() {
     }
   }, [setSession]);
 
-  const handleSignup = useCallback(({ username, email }) => {
-    setSession({
-      id: String(Date.now()),
-      username: username || email || 'customer',
-      role: 'customer',
-      user_type: 10
-    });
-    setAuthModal(null);
-    toast.success('Account created successfully!');
+  // UPDATED: Signup handler with backend API
+  const handleSignup = useCallback(async (userData) => {
+    try {
+      // Create FormData to handle file upload
+      const formData = new FormData();
+      formData.append('username', userData.username);
+      formData.append('email', userData.email);
+      formData.append('phone', userData.phone);
+      formData.append('password', userData.password);
+      
+      // Set default user_type to 10 (customer)
+      formData.append('user_type', '10');
+      
+      // Append image if provided
+      if (userData.card_image) {
+        formData.append('card_image', userData.card_image);
+      }
+
+      const response = await fetch('http://localhost:5000/api/auth/signup', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Signup failed');
+      }
+
+      console.log('Signup successful, user data:', data.user);
+
+      // Set session with user data from backend
+      setSession(data.user);
+      toast.success(data.message || 'Account created successfully!');
+      setAuthModal(null);
+      
+    } catch (error) {
+      console.error('Signup error:', error);
+      toast.error(error.message || 'Signup failed');
+    }
   }, [setSession]);
 
   const openLoginModal = useCallback(() => setAuthModal('login'), []);
@@ -119,7 +135,18 @@ function Home() {
             onLogout={clearSession}
           />
 
-         
+          {/* Show welcome message for admin */}
+          {currentUser && currentUser.role === 'admin' && (
+            <div className="mb-6 p-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg border border-blue-400">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">👑</span>
+                <div>
+                  <h3 className="font-bold text-lg">Admin Dashboard Active</h3>
+                  <p className="text-blue-100 text-sm">Full system access granted</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Show welcome message for employee */}
           {currentUser && currentUser.role === 'employee' && (
