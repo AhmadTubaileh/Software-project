@@ -1,6 +1,6 @@
 import React from 'react';
 
-function EmployeeCard({ employee, onEdit, onDelete }) {
+function EmployeeCard({ employee, onEdit, onDelete, onViewImage }) {
   
   // Helper function to get image source
   const getImageSrc = () => {
@@ -11,15 +11,34 @@ function EmployeeCard({ employee, onEdit, onDelete }) {
     return null;
   };
 
+  const handleImageClick = () => {
+    if (employee.card_image) {
+      onViewImage(employee);
+    }
+  };
+
+  const imageSrc = getImageSrc();
+
   return (
     <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-colors duration-200 hover:scale-105 transform-gpu">
       <div className="flex items-center gap-4 mb-4">
-        {getImageSrc() ? (
-          <img
-            src={getImageSrc()}
-            alt={employee.username}
-            className="w-16 h-16 rounded-full object-cover border-2 border-gray-600"
-          />
+        {imageSrc ? (
+          <div 
+            className="relative cursor-pointer group"
+            onClick={handleImageClick}
+          >
+            <img
+              src={imageSrc}
+              alt={employee.username}
+              className="w-16 h-16 rounded-full object-cover border-2 border-gray-600 group-hover:border-blue-500 transition-colors duration-200"
+            />
+            {/* Hover overlay */}
+            <div className="absolute inset-0 bg-blue-500 bg-opacity-0 group-hover:bg-opacity-20 rounded-full transition-all duration-200 flex items-center justify-center">
+              <span className="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                👁️ View ID
+              </span>
+            </div>
+          </div>
         ) : (
           <div className="w-16 h-16 bg-gray-700 rounded-full flex items-center justify-center text-2xl">
             👨‍💼
@@ -28,6 +47,14 @@ function EmployeeCard({ employee, onEdit, onDelete }) {
         <div>
           <h3 className="font-semibold text-lg">{employee.username}</h3>
           <p className="text-gray-400 text-sm">{employee.email}</p>
+          {imageSrc && (
+            <button
+              onClick={handleImageClick}
+              className="text-xs text-blue-400 hover:text-blue-300 mt-1 transition-colors duration-200"
+            >
+              View ID Card
+            </button>
+          )}
         </div>
       </div>
 
