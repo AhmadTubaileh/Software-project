@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import { useLocalSession } from '../hooks/useLocalSession.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
-import PosApi from '../services/posApi.js'; // ✅ Add this import
+import PosApi from '../services/posApi.js';
 
 function POS() {
   const navigate = useNavigate();
@@ -15,7 +15,19 @@ function POS() {
   const [processing, setProcessing] = useState(false);
   const { currentUser } = useLocalSession();
 
-  // Fetch real items from backend using PosApi
+  // Access control - same as Employees page
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'employee')) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+          <p>You need admin or employee privileges to access this page.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Fetch all items from backend (including out of stock)
   useEffect(() => {
     fetchItems();
   }, []);
@@ -23,7 +35,7 @@ function POS() {
   const fetchItems = async () => {
     try {
       setLoading(true);
-      const itemsData = await PosApi.getItems(); // ✅ Using PosApi
+      const itemsData = await PosApi.getItems();
       setItems(itemsData);
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -41,27 +53,34 @@ function POS() {
       item.description.toLowerCase().includes(query.toLowerCase())
     );
 
-    // Sort products
-    switch (sortBy) {
-      case 'price-asc':
-        filtered.sort((a, b) => a.price_cash - b.price_cash);
-        break;
-      case 'price-desc':
-        filtered.sort((a, b) => b.price_cash - a.price_cash);
-        break;
-      case 'relevance':
-      default:
-        filtered.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-    }
+    // Sort products - available items first, then out of stock
+    filtered.sort((a, b) => {
+      const aAvailable = a.available === 1 && a.quantity > 0;
+      const bAvailable = b.available === 1 && b.quantity > 0;
+      
+      // Available items come first
+      if (aAvailable && !bAvailable) return -1;
+      if (!aAvailable && bAvailable) return 1;
+      
+      // Then sort by the selected criteria
+      switch (sortBy) {
+        case 'price-asc':
+          return a.price_cash - b.price_cash;
+        case 'price-desc':
+          return b.price_cash - a.price_cash;
+        case 'relevance':
+        default:
+          return a.name.localeCompare(b.name);
+      }
+    });
 
     return filtered;
   }, [items, query, sortBy]);
 
-  // Add product to cart
+  // Add product to cart - only if available and quantity > 0
   function addToCart(product) {
-    // Check if product is available
-    if (product.quantity <= 0) {
+    // Check if product is available and has quantity
+    if (product.available !== 1 || product.quantity <= 0) {
       toast.error(`${product.name} is out of stock`);
       return;
     }
@@ -104,7 +123,13 @@ function POS() {
 
     setCart(prev => {
       const product = items.find(p => p.id === productId);
-      if (newQty > (product?.quantity || 0)) {
+      if (!product || product.available !== 1 || product.quantity <= 0) {
+        toast.error(`${product?.name || 'Item'} is no longer available`);
+        removeFromCart(productId);
+        return prev.filter(item => item.id !== productId);
+      }
+
+      if (newQty > product.quantity) {
         toast.error(`Only ${product.quantity} ${product.name}(s) available`);
         return prev;
       }
@@ -127,11 +152,11 @@ function POS() {
 
     setProcessing(true);
     try {
-      const result = await PosApi.checkout(cart, currentUser.id); // ✅ Using PosApi
+      const result = await PosApi.checkout(cart, currentUser.id);
       
       toast.success(`Sale #${result.saleId} processed successfully!`);
       setCart([]);
-      // Refresh items to get updated quantities
+      // Refresh items to get updated quantities and availability
       await fetchItems();
       
     } catch (error) {
@@ -157,6 +182,25 @@ function POS() {
     } finally {
       setProcessing(false);
     }
+  };
+
+  // Function to check if item is available
+  const isItemAvailable = (item) => {
+    return item.available === 1 && item.quantity > 0;
+  };
+
+  // Function to get stock status badge
+  const getStockBadge = (item) => {
+    if (item.available !== 1) {
+      return { text: 'Unavailable', class: 'bg-red-600' };
+    }
+    if (item.quantity <= 0) {
+      return { text: 'Out of stock', class: 'bg-red-600' };
+    }
+    if (item.quantity <= 5) {
+      return { text: `Low stock (${item.quantity})`, class: 'bg-yellow-600' };
+    }
+    return { text: `${item.quantity} in stock`, class: 'bg-green-600' };
   };
 
   // Function to get emoji icon for each category
@@ -195,7 +239,7 @@ function POS() {
             </div>
             <div className="text-right">
               <div className="text-lg font-semibold text-green-400">
-                Items in Stock: {items.filter(item => item.quantity > 0).length}
+                Available Items: {items.filter(item => isItemAvailable(item)).length}
               </div>
               <div className="text-sm text-gray-400">
                 Total Products: {items.length}
@@ -232,64 +276,66 @@ function POS() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 max-h-[70vh] overflow-y-auto">
-                  {filteredProducts.map(product => (
-                    <div
-                      key={product.id}
-                      className={`p-4 bg-gray-800 rounded-xl border-2 transition-all duration-200 transform hover:scale-105 ${
-                        product.quantity <= 0 
-                          ? 'border-red-500 opacity-60' 
-                          : 'border-gray-700 hover:border-blue-500'
-                      }`}
-                    >
-                      {/* Product Image or Icon */}
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="text-4xl">
-                          {product.item_image ? (
-                            <img 
-                              src={`data:image/jpeg;base64,${product.item_image}`} 
-                              alt={product.name}
-                              className="w-12 h-12 rounded object-cover"
-                            />
-                          ) : (
-                            getCategoryIcon(product)
-                          )}
+                  {filteredProducts.map(product => {
+                    const available = isItemAvailable(product);
+                    const stockBadge = getStockBadge(product);
+                    
+                    return (
+                      <div
+                        key={product.id}
+                        className={`p-4 bg-gray-800 rounded-xl border-2 transition-all duration-200 transform ${
+                          available 
+                            ? 'border-gray-700 hover:border-blue-500 hover:scale-105' 
+                            : 'border-red-500 opacity-70'
+                        }`}
+                      >
+                        {/* Product Image or Icon */}
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="text-4xl">
+                            {product.item_image ? (
+                              <img 
+                                src={`data:image/jpeg;base64,${product.item_image}`} 
+                                alt={product.name}
+                                className="w-12 h-12 rounded object-cover"
+                              />
+                            ) : (
+                              getCategoryIcon(product)
+                            )}
+                          </div>
+                          <div className={`px-2 py-1 rounded text-xs font-semibold ${stockBadge.class}`}>
+                            {stockBadge.text}
+                          </div>
                         </div>
-                        <div className={`px-2 py-1 rounded text-xs font-semibold ${
-                          product.quantity > 10 ? 'bg-green-600' : 
-                          product.quantity > 0 ? 'bg-yellow-600' : 'bg-red-600'
-                        }`}>
-                          {product.quantity > 0 ? `${product.quantity} in stock` : 'Out of stock'}
-                        </div>
-                      </div>
 
-                      <h3 className="font-semibold text-lg mb-1 truncate">{product.name}</h3>
-                      <p className="text-gray-400 text-sm mb-2 line-clamp-2 h-10">
-                        {product.description}
-                      </p>
-                      
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-blue-400 text-xl font-bold">${product.price_cash}</p>
-                          {product.price_installment_total && (
-                            <p className="text-green-400 text-xs">
-                              Installment: ${product.price_installment_total}
-                            </p>
-                          )}
+                        <h3 className="font-semibold text-lg mb-1 truncate">{product.name}</h3>
+                        <p className="text-gray-400 text-sm mb-2 line-clamp-2 h-10">
+                          {product.description}
+                        </p>
+                        
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="text-blue-400 text-xl font-bold">${product.price_cash}</p>
+                            {product.price_installment_total && (
+                              <p className="text-green-400 text-xs">
+                                Installment: ${product.price_installment_total}
+                              </p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => addToCart(product)}
+                            disabled={!available}
+                            className={`px-4 py-2 rounded-lg transition-all duration-200 ${
+                              available
+                                ? 'bg-blue-600 hover:bg-blue-700 transform hover:scale-110'
+                                : 'bg-gray-600 cursor-not-allowed'
+                            }`}
+                          >
+                            {available ? 'Add to Cart' : 'Out of Stock'}
+                          </button>
                         </div>
-                        <button
-                          onClick={() => addToCart(product)}
-                          disabled={product.quantity <= 0}
-                          className={`px-4 py-2 rounded-lg transition-all duration-200 ${
-                            product.quantity <= 0
-                              ? 'bg-gray-600 cursor-not-allowed'
-                              : 'bg-blue-600 hover:bg-blue-700 transform hover:scale-110'
-                          }`}
-                        >
-                          {product.quantity <= 0 ? 'Out of Stock' : 'Add to Cart'}
-                        </button>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
