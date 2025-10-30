@@ -16,9 +16,9 @@ function Items() {
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [viewingImage, setViewingImage] = useState(null);
-  const { currentUser, clearSession } = useLocalSession();
+  const { currentUser } = useLocalSession();
 
-  // Access control - same as Employees page
+  // Access control
   if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'employee')) {
     return (
       <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
@@ -98,7 +98,6 @@ function Items() {
       
       if (result.success) {
         toast.success('Item deleted successfully');
-        // Remove item from local state
         setItems(prev => prev.filter(item => item.id !== itemId));
       } else {
         throw new Error(result.message || 'Delete failed');
@@ -128,24 +127,16 @@ function Items() {
       
       const method = editingItem ? 'PUT' : 'POST';
 
-      console.log('Sending request to:', url, 'with method:', method);
-
       const response = await fetch(url, {
         method: method,
         body: formData,
       });
 
-      // Debug: Check what the response actually contains
       const responseText = await response.text();
-      console.log('Raw response:', responseText);
-      console.log('Response status:', response.status);
-
-      // Try to parse as JSON
       let result;
       try {
         result = JSON.parse(responseText);
       } catch (parseError) {
-        console.error('JSON parse error:', parseError);
         throw new Error(`Server returned invalid JSON: ${responseText.substring(0, 100)}`);
       }
 
@@ -157,8 +148,6 @@ function Items() {
         toast.success(editingItem ? 'Item updated successfully' : 'Item added successfully');
         setShowForm(false);
         setEditingItem(null);
-        
-        // Refresh the items list
         await fetchItems();
       } else {
         throw new Error(result.message || 'Operation failed');
@@ -223,10 +212,10 @@ function Items() {
 
           {/* Item Form Modal */}
           <ItemForm
-            isOpen={showForm || editingEmployee}
+            isOpen={showForm || editingItem}  // ✅ FIXED: editingItem instead of editingEmployee
             item={editingItem}
-            onSubmit={editingItem ? handleUpdateItem : handleAddItem}
-            onCancel={handleModalClose}
+            onSubmit={handleFormSubmit}  // ✅ FIXED: Use existing function
+            onCancel={handleFormCancel}  // ✅ FIXED: Use existing function
           />
 
           {/* Image View Modal */}
@@ -259,14 +248,6 @@ function Items() {
             <div className="text-center py-12 text-gray-400">
               <div className="text-6xl mb-4">🔍</div>
               <p className="text-lg">No items match your filters</p>
-              <p className="text-sm">
-                {availableFilter !== 'all' && searchQuery 
-                  ? `No ${availableFilter === '1' ? 'available' : 'unavailable'} items found for "${searchQuery}"`
-                  : availableFilter !== 'all'
-                  ? `No ${availableFilter === '1' ? 'available' : 'unavailable'} items found`
-                  : `No items found for "${searchQuery}"`
-                }
-              </p>
               <button
                 onClick={() => {
                   setAvailableFilter('all');

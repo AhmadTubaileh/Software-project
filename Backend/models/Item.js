@@ -17,12 +17,12 @@ class Item {
   static create(data, callback) {
     const {
       name, description, price_cash, price_installment_total,
-      installment_months, istallment_per_month, available,
+      installment_months, installment_per_month, available,
       quantity, installment, item_image
     } = data;
     
     const query = `INSERT INTO items 
-      (name, description, price_cash, price_installment_total, installment_months, istallment_per_month, available, quantity, installment, item_image) 
+      (name, description, price_cash, price_installment_total, installment_months, installment_per_month, available, quantity, installment, item_image) 
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     
     db.query(
@@ -33,7 +33,7 @@ class Item {
         price_cash, 
         price_installment_total || null, 
         installment_months || 0, 
-        istallment_per_month || null, 
+        installment_per_month || null, 
         available ? 1 : 0, 
         quantity, 
         installment ? 1 : 0, 
@@ -47,13 +47,13 @@ class Item {
   static update(id, data, callback) {
     const {
       name, description, price_cash, price_installment_total,
-      installment_months, istallment_per_month, available,
+      installment_months, installment_per_month, available,
       quantity, installment, item_image
     } = data;
     
     let query = `UPDATE items SET 
       name=?, description=?, price_cash=?, price_installment_total=?, 
-      installment_months=?, istallment_per_month=?, available=?, 
+      installment_months=?, installment_per_month=?, available=?, 
       quantity=?, installment=?`;
     
     let params = [
@@ -62,7 +62,7 @@ class Item {
       price_cash, 
       price_installment_total || null, 
       installment_months || 0, 
-      istallment_per_month || null, 
+      installment_per_month || null, 
       available ? 1 : 0, 
       quantity, 
       installment ? 1 : 0

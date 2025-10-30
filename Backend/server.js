@@ -3,8 +3,9 @@ const cors = require('cors');
 require('dotenv').config();
 
 const employeeRoutes = require('./routes/employees');
-const authRoutes = require('./routes/auth'); // NEW
-const itemsRoutes = require('./routes/items'); // NEW
+const authRoutes = require('./routes/auth');
+const itemsRoutes = require('./routes/items');
+const posRoutes = require('./routes/pos'); // ✅ POS routes
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -16,30 +17,20 @@ app.use(express.urlencoded({ extended: true }));
 
 // Routes
 app.use('/api/employees', employeeRoutes);
-app.use('/api/auth', authRoutes); // NEW
-app.use('/api/items', itemsRoutes); // NEW
+app.use('/api/auth', authRoutes);
+app.use('/api/items', itemsRoutes);
+app.use('/api/pos', posRoutes); // ✅ POS routes
 
-// Health check route
+// Health check
 app.get('/api/health', (req, res) => {
-  res.json({ message: 'Server is running!' });
-});
-
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
-});
-
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
+  res.json({ 
+    message: 'Server is running!',
+    routes: ['/api/employees', '/api/auth', '/api/items', '/api/pos']
+  });
 });
 
 // Start server
 app.listen(PORT, () => {
-  console.log(`✅ Server is running on port ${PORT}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`);
-  console.log(`👥 Employees API: http://localhost:${PORT}/api/employees`);
-  console.log(`📦 Items API: http://localhost:${PORT}/api/items`);
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`🛒 POS System: http://localhost:${PORT}/api/pos/items`);
 });
