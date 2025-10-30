@@ -15,6 +15,7 @@ function AdminSidebar() {
     // { name: 'Orders', path: '/orders', icon: '🛒' },
     // { name: 'Customers', path: '/customers', icon: '👥' },
     { name: 'Employees', path: '/employees', icon: '👨‍💼' },
+    { name: 'Items', path: '/items', icon: '📦' },
     // { name: 'Reports', path: '/reports', icon: '📈' },
     // { name: 'Settings', path: '/settings', icon: '⚙️' },
     // { name: 'Service Tickets', path: '/tickets', icon: '🎫' },

@@ -135,19 +135,7 @@ function Home() {
             onLogout={clearSession}
           />
 
-          {/* Show welcome message for admin */}
-          {currentUser && currentUser.role === 'admin' && (
-            <div className="mb-6 p-4 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg border border-blue-400">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">👑</span>
-                <div>
-                  <h3 className="font-bold text-lg">Admin Dashboard Active</h3>
-                  <p className="text-blue-100 text-sm">Full system access granted</p>
-                </div>
-              </div>
-            </div>
-          )}
-
+          
           {/* Show welcome message for employee */}
           {currentUser && currentUser.role === 'employee' && (
             <div className="mb-6 p-4 bg-gradient-to-r from-green-600 to-blue-600 rounded-lg border border-green-400">
