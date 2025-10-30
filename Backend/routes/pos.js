@@ -2,9 +2,9 @@ const express = require('express');
 const router = express.Router();
 const POS = require('../models/POS');
 
-// GET /api/pos/items - Get all available items for POS
+// GET /api/pos/items - Get ALL items for POS (including out of stock)
 router.get('/items', (req, res) => {
-  console.log('🛒 POS: Fetching available items...');
+  console.log('🛒 POS: Fetching ALL items...');
   
   POS.getAvailableItems((err, results) => {
     if (err) {
@@ -16,7 +16,9 @@ router.get('/items', (req, res) => {
       });
     }
     
-    console.log(`✅ POS: Found ${results.length} available items`);
+    console.log(`✅ POS: Found ${results.length} total items`);
+    console.log(`📊 Available: ${results.filter(item => item.available === 1 && item.quantity > 0).length}`);
+    console.log(`📊 Out of stock: ${results.filter(item => item.available === 0 || item.quantity <= 0).length}`);
     
     // Convert image to base64 if exists
     const items = results.map(item => {
@@ -34,7 +36,7 @@ router.get('/items', (req, res) => {
     res.json({ 
       success: true, 
       items,
-      message: `Found ${items.length} available items`
+      message: `Found ${items.length} total items (${items.filter(item => item.available === 1 && item.quantity > 0).length} available)`
     });
   });
 });
