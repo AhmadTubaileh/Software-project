@@ -1,7 +1,7 @@
 const API_BASE = 'http://localhost:5000/api/pos';
 
 class PosApi {
-  // Get all available items for POS
+  // Get ALL items (including out of stock)
   static async getItems() {
     try {
       const response = await fetch(`${API_BASE}/items`);

@@ -17,8 +17,12 @@ class POS {
         installment,
         item_image
       FROM items 
-      WHERE available = 1 AND quantity > 0 
-      ORDER BY name
+      ORDER BY 
+        CASE 
+          WHEN available = 1 AND quantity > 0 THEN 1  -- Available items first
+          ELSE 2  -- Out of stock items last
+        END,
+        name
     `;
     
     db.query(query, (err, results) => {
@@ -27,21 +31,24 @@ class POS {
         return callback(err);
       }
       
-      console.log(`✅ POS: Found ${results.length} available items`);
+      console.log(`✅ POS: Found ${results.length} total items`);
       callback(null, results);
     });
   }
 
   // Get item by ID
   static getItemById(id, callback) {
-    const query = 'SELECT * FROM items WHERE id = ? AND available = 1 AND quantity > 0';
+    const query = 'SELECT * FROM items WHERE id = ?';
     db.query(query, [id], callback);
   }
 
-  // Update item quantity after sale
+  // Update item quantity and auto-update availability
   static updateItemQuantity(id, newQuantity, callback) {
-    const query = 'UPDATE items SET quantity = ? WHERE id = ?';
-    db.query(query, [newQuantity, id], callback);
+    // If quantity reaches 0, set available to 0 (false), otherwise keep as is
+    const availableValue = newQuantity <= 0 ? 0 : 1;
+    
+    const query = 'UPDATE items SET quantity = ?, available = ? WHERE id = ?';
+    db.query(query, [newQuantity, availableValue, id], callback);
   }
 
   // Create sale records
