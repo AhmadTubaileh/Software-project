@@ -4,6 +4,7 @@ require('dotenv').config();
 
 const employeeRoutes = require('./routes/employees');
 const authRoutes = require('./routes/auth'); // NEW
+const itemsRoutes = require('./routes/items'); // NEW
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -16,6 +17,7 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/employees', employeeRoutes);
 app.use('/api/auth', authRoutes); // NEW
+app.use('/api/items', itemsRoutes); // NEW
 
 // Health check route
 app.get('/api/health', (req, res) => {
@@ -39,4 +41,5 @@ app.listen(PORT, () => {
   console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
   console.log(`🔐 Auth API: http://localhost:${PORT}/api/auth`);
   console.log(`👥 Employees API: http://localhost:${PORT}/api/employees`);
+  console.log(`📦 Items API: http://localhost:${PORT}/api/items`);
 });
