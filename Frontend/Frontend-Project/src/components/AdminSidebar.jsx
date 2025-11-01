@@ -9,20 +9,31 @@ function AdminSidebar() {
 
   const menuItems = [
     { name: 'Dashboard', path: '/', icon: '📊' },
-    // { name: 'Admin', path: '/admin', icon: '👑' },
     { name: 'POS', path: '/pos', icon: '💳' },
-    // { name: 'Products', path: '/products', icon: '📦' },
-    // { name: 'Orders', path: '/orders', icon: '🛒' },
-    // { name: 'Customers', path: '/customers', icon: '👥' },
     { name: 'Employees', path: '/employees', icon: '👨‍💼' },
     { name: 'Items', path: '/items', icon: '📦' },
-    // { name: 'Reports', path: '/reports', icon: '📈' },
-    // { name: 'Settings', path: '/settings', icon: '⚙️' },
-    // { name: 'Service Tickets', path: '/tickets', icon: '🎫' },
-    // { name: 'Users & Roles', path: '/users', icon: '👤' },
   ];
 
   const isActive = (path) => location.pathname === path;
+
+  // Enhanced logout function
+  const handleLogout = () => {
+    // Clear the session (remove user data from localStorage)
+    clearSession();
+    
+    // Show logout success message
+    if (window.toast) {
+      window.toast.success('Logged out successfully!');
+    }
+    
+    // Redirect to dashboard (home page)
+    navigate('/');
+    
+    // Force a page reload to reset the application state
+    setTimeout(() => {
+      window.location.reload();
+    }, 100);
+  };
 
   return (
     <aside className="w-64 bg-gradient-to-b from-gray-900 to-gray-800 text-white p-6 flex flex-col fixed top-0 left-0 h-screen z-50 border-r border-gray-700/50 shadow-2xl">
@@ -99,7 +110,7 @@ function AdminSidebar() {
       {/* Footer */}
       <div className="pt-6 border-t border-gray-700/50">
         <button
-          onClick={clearSession}
+          onClick={handleLogout} // Use the enhanced logout function
           className="w-full flex items-center gap-3 p-3 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-200 group"
         >
           <div className="text-xl group-hover:scale-110 transition-transform duration-200">
