@@ -162,50 +162,10 @@ function EmployeeForm({ employee, onSubmit, onCancel }) {
     }
   };
 
-  const handleSubmitt = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
   
-    try {
-      const submitData = new FormData();
-      submitData.append('username', formData.username);
-      submitData.append('email', formData.email);
-      submitData.append('phone', formData.phone);
-      submitData.append('id_card', formData.id_card);
-      submitData.append('user_type', formData.user_type);
-      
-      if (formData.password) {
-        submitData.append('password', formData.password);
-      }
-      
-      if (selectedFile) {
-        submitData.append('card_image', selectedFile);
-      }
-  
-      // DEBUG: Check the FormData
-      console.log('=== FORM DATA DEBUG ===');
-      for (let [key, value] of submitData.entries()) {
-        console.log(`${key}:`, value);
-      }
-      console.log('=== END DEBUG ===');
-  
-      console.log('About to call onSubmit...');
-      
-      await onSubmit(submitData);
-      
-      console.log('onSubmit completed successfully');
-      
-    } catch (error) {
-      console.error('Error in form submission:', error);
-      console.error('Error stack:', error.stack);
-      alert(error.message || 'Error submitting form');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
-    <form onSubmit={handleSubmitt} className="space-y-6">
+    <form onSubmit={handleSubmit} className="space-y-6">
       {/* Username and Email */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
