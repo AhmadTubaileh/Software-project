@@ -44,10 +44,10 @@ router.get('/:id', (req, res) => {
   });
 });
 
-// Create new employee
+// Create new employee - FIXED VERSION
 router.post('/', upload.single('card_image'), async (req, res) => {
   try {
-    const { username, email, phone, password, user_type } = req.body;
+    const { username, email, phone, id_card, password, user_type } = req.body;
     const card_image = req.file ? req.file.buffer : null;
 
     // DEBUG: Log received data
@@ -55,70 +55,92 @@ router.post('/', upload.single('card_image'), async (req, res) => {
       username,
       email,
       phone,
+      id_card,
       user_type,
       user_type_type: typeof user_type,
       hasPassword: !!password,
       hasImage: !!card_image
     });
 
-    // Validate required fields
-    if (!username || !email || !phone || !password || user_type === undefined) {
+    // FIX: Check if id_card is properly received
+    if (!username || !email || !phone || !id_card || !password || user_type === undefined) {
+      console.log('Missing fields:', {
+        username: !!username,
+        email: !!email,
+        phone: !!phone,
+        id_card: !!id_card,
+        password: !!password,
+        user_type: user_type !== undefined
+      });
       return res.status(400).json({ error: 'All fields are required' });
     }
 
-    // Parse user_type to integer (remove the || 5 default)
+    // Parse user_type to integer
     const parsedUserType = parseInt(user_type);
 
-    // Check if email already exists
-    Employee.checkEmailExists(email, (err, emailResults) => {
+    // Check if ID card already exists
+    Employee.checkIdCardExists(id_card, (err, idCardResults) => {
       if (err) {
-        console.error('Error checking email:', err);
+        console.error('Error checking ID card:', err);
         return res.status(500).json({ error: 'Server error' });
       }
 
-      if (emailResults.length > 0) {
-        return res.status(400).json({ error: 'Email already exists' });
+      if (idCardResults.length > 0) {
+        return res.status(400).json({ error: 'ID Card already exists' });
       }
 
-      // Check if username already exists
-      Employee.checkUsernameExists(username, (err, usernameResults) => {
+      // Check if email already exists
+      Employee.checkEmailExists(email, (err, emailResults) => {
         if (err) {
-          console.error('Error checking username:', err);
+          console.error('Error checking email:', err);
           return res.status(500).json({ error: 'Server error' });
         }
 
-        if (usernameResults.length > 0) {
-          return res.status(400).json({ error: 'Username already exists' });
+        if (emailResults.length > 0) {
+          return res.status(400).json({ error: 'Email already exists' });
         }
 
-        // Hash password
-        bcrypt.hash(password, 10, (err, hashedPassword) => {
+        // Check if username already exists
+        Employee.checkUsernameExists(username, (err, usernameResults) => {
           if (err) {
-            console.error('Error hashing password:', err);
+            console.error('Error checking username:', err);
             return res.status(500).json({ error: 'Server error' });
           }
 
-          // Create employee with hashed password - USE THE PROVIDED user_type
-          const employeeData = {
-            username,
-            email,
-            phone,
-            card_image,
-            password: hashedPassword,
-            user_type: parsedUserType // Use the parsed value without default
-          };
+          if (usernameResults.length > 0) {
+            return res.status(400).json({ error: 'Username already exists' });
+          }
 
-          console.log('Creating employee with data:', employeeData);
-
-          Employee.create(employeeData, (err, results) => {
+          // Hash password
+          bcrypt.hash(password, 10, (err, hashedPassword) => {
             if (err) {
-              console.error('Error creating employee:', err);
-              return res.status(500).json({ error: 'Failed to create employee' });
+              console.error('Error hashing password:', err);
+              return res.status(500).json({ error: 'Server error' });
             }
 
-            res.status(201).json({
-              message: 'Employee created successfully',
-              employeeId: results.insertId
+            // Create employee with hashed password
+            const employeeData = {
+              username,
+              email,
+              phone,
+              id_card,
+              card_image,
+              password: hashedPassword,
+              user_type: parsedUserType
+            };
+
+            console.log('Creating employee with data:', employeeData);
+
+            Employee.create(employeeData, (err, results) => {
+              if (err) {
+                console.error('Error creating employee:', err);
+                return res.status(500).json({ error: 'Failed to create employee' });
+              }
+
+              res.status(201).json({
+                message: 'Employee created successfully',
+                employeeId: results.insertId
+              });
             });
           });
         });
@@ -130,11 +152,11 @@ router.post('/', upload.single('card_image'), async (req, res) => {
   }
 });
 
-// Update employee
+// Update employee - FIXED VERSION
 router.put('/:id', upload.single('card_image'), async (req, res) => {
   try {
     const employeeId = req.params.id;
-    const { username, email, phone, password, user_type } = req.body;
+    const { username, email, phone, id_card, password, user_type } = req.body;
     const card_image = req.file ? req.file.buffer : undefined;
 
     // DEBUG: Log received data
@@ -143,18 +165,26 @@ router.put('/:id', upload.single('card_image'), async (req, res) => {
       username,
       email,
       phone,
+      id_card,
       user_type,
       user_type_type: typeof user_type,
       hasPassword: !!password,
       hasImage: !!card_image
     });
 
-    // Validate required fields
-    if (!username || !email || !phone || user_type === undefined) {
+    // FIX: Check if id_card is properly received
+    if (!username || !email || !phone || !id_card || user_type === undefined) {
+      console.log('Missing fields for update:', {
+        username: !!username,
+        email: !!email,
+        phone: !!phone,
+        id_card: !!id_card,
+        user_type: user_type !== undefined
+      });
       return res.status(400).json({ error: 'All fields except password are required' });
     }
 
-    // Parse user_type to integer (remove the || 5 default)
+    // Parse user_type to integer
     const parsedUserType = parseInt(user_type);
 
     // Check if employee exists
@@ -170,48 +200,75 @@ router.put('/:id', upload.single('card_image'), async (req, res) => {
 
       const currentEmployee = results[0];
 
-      // Check if email exists for other users
-      Employee.checkEmailExistsForOtherUsers(email, employeeId, (err, emailResults) => {
+      // FIX: Safely handle current employee data
+      console.log('Current employee data:', currentEmployee);
+
+      // Check if ID card exists for other users
+      Employee.checkIdCardExistsForOtherUsers(id_card, employeeId, (err, idCardResults) => {
         if (err) {
-          console.error('Error checking email:', err);
+          console.error('Error checking ID card:', err);
           return res.status(500).json({ error: 'Server error' });
         }
 
-        if (emailResults.length > 0) {
-          return res.status(400).json({ error: 'Email already exists for another user' });
+        if (idCardResults.length > 0) {
+          return res.status(400).json({ error: 'ID Card already exists for another user' });
         }
 
-        // Check if username exists for other users
-        Employee.checkUsernameExistsForOtherUsers(username, employeeId, (err, usernameResults) => {
+        // Check if email exists for other users
+        Employee.checkEmailExistsForOtherUsers(email, employeeId, (err, emailResults) => {
           if (err) {
-            console.error('Error checking username:', err);
+            console.error('Error checking email:', err);
             return res.status(500).json({ error: 'Server error' });
           }
 
-          if (usernameResults.length > 0) {
-            return res.status(400).json({ error: 'Username already exists for another user' });
+          if (emailResults.length > 0) {
+            return res.status(400).json({ error: 'Email already exists for another user' });
           }
 
-          const employeeData = {
-            username,
-            email,
-            phone,
-            card_image: card_image !== undefined ? card_image : currentEmployee.card_image,
-            user_type: parsedUserType // Use the parsed value without default
-          };
+          // Check if username exists for other users
+          Employee.checkUsernameExistsForOtherUsers(username, employeeId, (err, usernameResults) => {
+            if (err) {
+              console.error('Error checking username:', err);
+              return res.status(500).json({ error: 'Server error' });
+            }
 
-          console.log('Updating employee with data:', employeeData);
+            if (usernameResults.length > 0) {
+              return res.status(400).json({ error: 'Username already exists for another user' });
+            }
 
-          // If password is provided, hash it and include in update
-          if (password) {
-            bcrypt.hash(password, 10, (err, hashedPassword) => {
-              if (err) {
-                console.error('Error hashing password:', err);
-                return res.status(500).json({ error: 'Server error' });
-              }
+            // Build employee data
+            const employeeData = {
+              username,
+              email,
+              phone,
+              id_card,
+              card_image: card_image !== undefined ? card_image : currentEmployee.card_image,
+              user_type: parsedUserType
+            };
 
-              employeeData.password = hashedPassword;
+            console.log('Updating employee with data:', employeeData);
 
+            // If password is provided, hash it and include in update
+            if (password) {
+              bcrypt.hash(password, 10, (err, hashedPassword) => {
+                if (err) {
+                  console.error('Error hashing password:', err);
+                  return res.status(500).json({ error: 'Server error' });
+                }
+
+                employeeData.password = hashedPassword;
+
+                Employee.update(employeeId, employeeData, (err, results) => {
+                  if (err) {
+                    console.error('Error updating employee:', err);
+                    return res.status(500).json({ error: 'Failed to update employee' });
+                  }
+
+                  res.json({ message: 'Employee updated successfully' });
+                });
+              });
+            } else {
+              // Update without password
               Employee.update(employeeId, employeeData, (err, results) => {
                 if (err) {
                   console.error('Error updating employee:', err);
@@ -220,18 +277,8 @@ router.put('/:id', upload.single('card_image'), async (req, res) => {
 
                 res.json({ message: 'Employee updated successfully' });
               });
-            });
-          } else {
-            // Update without password
-            Employee.update(employeeId, employeeData, (err, results) => {
-              if (err) {
-                console.error('Error updating employee:', err);
-                return res.status(500).json({ error: 'Failed to update employee' });
-              }
-
-              res.json({ message: 'Employee updated successfully' });
-            });
-          }
+            }
+          });
         });
       });
     });
