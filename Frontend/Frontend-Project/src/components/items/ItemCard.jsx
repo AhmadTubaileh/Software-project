@@ -62,10 +62,24 @@ function ItemCard({ item, onEdit, onDelete, onViewImage }) {
             </div>
           )}
           
-          {item.istallment_per_month && (
+          {item.installment_first_payment > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-400">First Payment:</span>
+              <span className="text-white">${item.installment_first_payment}</span>
+            </div>
+          )}
+          
+          {item.installment_per_month && (
             <div className="flex justify-between">
               <span className="text-gray-400">Monthly Payment:</span>
-              <span className="text-white">${item.istallment_per_month}</span>
+              <span className="text-white">${item.installment_per_month}</span>
+            </div>
+          )}
+          
+          {item.installment_months > 0 && (
+            <div className="flex justify-between">
+              <span className="text-gray-400">Installment Months:</span>
+              <span className="text-white">{item.installment_months}</span>
             </div>
           )}
           
