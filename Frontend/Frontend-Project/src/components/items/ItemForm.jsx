@@ -6,8 +6,9 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
     description: item?.description || '',
     price_cash: item?.price_cash || '',
     price_installment_total: item?.price_installment_total || '',
+    installment_first_payment: item?.installment_first_payment || '',
     installment_months: item?.installment_months || '',
-    istallment_per_month: item?.istallment_per_month || '',
+    installment_per_month: item?.installment_per_month || '',
     available: item?.available !== undefined ? item.available : 1,
     quantity: item?.quantity || 0,
     installment: item?.installment !== undefined ? item.installment : 1,
@@ -24,8 +25,9 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
         description: item.description || '',
         price_cash: item.price_cash || '',
         price_installment_total: item.price_installment_total || '',
+        installment_first_payment: item.installment_first_payment || '',
         installment_months: item.installment_months || '',
-        istallment_per_month: item.istallment_per_month || '',
+        installment_per_month: item.installment_per_month || '',
         available: item.available !== undefined ? item.available : 1,
         quantity: item.quantity || 0,
         installment: item.installment !== undefined ? item.installment : 1,
@@ -43,8 +45,9 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
         description: '',
         price_cash: '',
         price_installment_total: '',
+        installment_first_payment: '',
         installment_months: '',
-        istallment_per_month: '',
+        installment_per_month: '',
         available: 1,
         quantity: 0,
         installment: 1,
@@ -90,8 +93,9 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
       submitData.append('description', formData.description);
       submitData.append('price_cash', formData.price_cash);
       submitData.append('price_installment_total', formData.price_installment_total);
+      submitData.append('installment_first_payment', formData.installment_first_payment);
       submitData.append('installment_months', formData.installment_months);
-      submitData.append('istallment_per_month', formData.istallment_per_month);
+      submitData.append('installment_per_month', formData.installment_per_month);
       submitData.append('available', formData.available);
       submitData.append('quantity', formData.quantity);
       submitData.append('installment', formData.installment);
@@ -190,7 +194,7 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
                   Installment Total
@@ -201,6 +205,21 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
                   min="0"
                   name="price_installment_total"
                   value={formData.price_installment_total}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  First Payment
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  name="installment_first_payment"
+                  value={formData.installment_first_payment}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
                 />
@@ -228,8 +247,8 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
                   type="number"
                   step="0.01"
                   min="0"
-                  name="istallment_per_month"
-                  value={formData.istallment_per_month}
+                  name="installment_per_month"
+                  value={formData.installment_per_month}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
                 />

@@ -17,13 +17,13 @@ class Item {
   static create(data, callback) {
     const {
       name, description, price_cash, price_installment_total,
-      installment_months, installment_per_month, available,
-      quantity, installment, item_image
+      installment_first_payment, installment_months, installment_per_month, 
+      available, quantity, installment, item_image
     } = data;
     
     const query = `INSERT INTO items 
-      (name, description, price_cash, price_installment_total, installment_months, installment_per_month, available, quantity, installment, item_image) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      (name, description, price_cash, price_installment_total, installment_first_payment, installment_months, installment_per_month, available, quantity, installment, item_image) 
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
     
     db.query(
       query,
@@ -32,6 +32,7 @@ class Item {
         description, 
         price_cash, 
         price_installment_total || null, 
+        installment_first_payment || 0.00, 
         installment_months || 0, 
         installment_per_month || null, 
         available ? 1 : 0, 
@@ -47,20 +48,21 @@ class Item {
   static update(id, data, callback) {
     const {
       name, description, price_cash, price_installment_total,
-      installment_months, installment_per_month, available,
-      quantity, installment, item_image
+      installment_first_payment, installment_months, installment_per_month, 
+      available, quantity, installment, item_image
     } = data;
     
     let query = `UPDATE items SET 
       name=?, description=?, price_cash=?, price_installment_total=?, 
-      installment_months=?, installment_per_month=?, available=?, 
-      quantity=?, installment=?`;
+      installment_first_payment=?, installment_months=?, installment_per_month=?, 
+      available=?, quantity=?, installment=?`;
     
     let params = [
       name, 
       description, 
       price_cash, 
       price_installment_total || null, 
+      installment_first_payment || 0.00, 
       installment_months || 0, 
       installment_per_month || null, 
       available ? 1 : 0, 
