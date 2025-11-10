@@ -68,10 +68,11 @@ class Contract {
 
           if (customerResults.length > 0) {
             customerId = customerResults[0].id;
-            // Update customer
+            // Update customer - only update image if a new one was provided
             const updateCustomerQuery = `
               UPDATE contract_customers 
-              SET full_name = ?, phone = ?, address = ?, email = ?, id_card_image = ?
+              SET full_name = ?, phone = ?, address = ?, email = ?, 
+                  id_card_image = COALESCE(?, id_card_image)
               WHERE id = ?
             `;
             
@@ -80,7 +81,7 @@ class Contract {
               customer_data.phone,
               customer_data.address,
               customer_data.email,
-              customer_data.id_card_image,
+              customer_data.id_card_image, // Will be NULL if no new image, keeping existing
               customerId
             ], (updateErr) => {
               if (updateErr) {
@@ -465,6 +466,20 @@ class Contract {
           return;
         }
         resolve(results);
+      });
+    });
+  }
+
+  // Get reserved count for an item
+  static getReservedCount(itemId) {
+    return new Promise((resolve, reject) => {
+      const query = 'SELECT COUNT(*) as reserved_count FROM installment_contracts WHERE item_id = ? AND status = "pending"';
+      db.query(query, [itemId], (err, results) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(results[0].reserved_count);
       });
     });
   }

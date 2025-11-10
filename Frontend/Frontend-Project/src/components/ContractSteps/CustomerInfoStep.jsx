@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 
 const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
   const handleCustomerChange = (field, value) => {
@@ -35,6 +35,27 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
            customer.phone.trim() && 
            customer.id_card_number.trim() && 
            customer.address.trim();
+  };
+
+  // Display existing image if available
+  const renderExistingImage = () => {
+    if (formData.customer.id_card_image && typeof formData.customer.id_card_image === 'string') {
+      // This is a base64 image from existing customer
+      return (
+        <div className="mt-2">
+          <p className="text-sm text-green-400 mb-2">Existing ID Card Image:</p>
+          <img 
+            src={`data:image/jpeg;base64,${formData.customer.id_card_image}`} 
+            alt="Existing ID Card"
+            className="w-32 h-20 object-cover rounded border border-gray-600"
+          />
+          <p className="text-xs text-gray-400 mt-1">
+            This image is already on file. Upload a new one only if you need to update it.
+          </p>
+        </div>
+      );
+    }
+    return null;
   };
 
   return (
@@ -80,6 +101,7 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
               onChange={(e) => handleCustomerChange('id_card_number', e.target.value)}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               placeholder="ID card number"
+              readOnly // ID card number is set from previous step and shouldn't be changed
             />
           </div>
         </div>
@@ -117,21 +139,27 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
           <label className="block text-sm font-medium text-gray-300 mb-2">
             ID Card Image
           </label>
-          <div className="flex items-center gap-4">
+          
+          {/* Show existing image if available */}
+          {renderExistingImage()}
+          
+          <div className="flex items-center gap-4 mt-2">
             <input
               type="file"
               accept="image/*"
               onChange={handleFileChange}
               className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
             />
-            {formData.customer.id_card_image && (
+            {formData.customer.id_card_image && formData.customer.id_card_image instanceof File && (
               <span className="text-green-400 text-sm">
-                ✅ Image selected
+                ✅ New image selected
               </span>
             )}
           </div>
           <p className="text-sm text-gray-400 mt-2">
-            Upload a clear photo of the customer's ID card (max 5MB)
+            {formData.existingCustomer && formData.customer.id_card_image && typeof formData.customer.id_card_image === 'string' 
+              ? 'Upload a new image only if you need to update the existing one. Leave empty to keep the current image.'
+              : 'Upload a clear photo of the customer\'s ID card (max 5MB)'}
           </p>
         </div>
 

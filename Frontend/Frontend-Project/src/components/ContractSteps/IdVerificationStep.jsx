@@ -42,7 +42,7 @@ const IdVerificationStep = ({ formData, updateFormData, nextStep }) => {
       setSearched(true);
       
       if (data.exists) {
-        // Pre-fill customer data if exists
+        // Pre-fill customer data if exists (including image)
         const customerData = data.customerData;
         updateFormData({
           existingCustomer: customerData,
@@ -52,7 +52,8 @@ const IdVerificationStep = ({ formData, updateFormData, nextStep }) => {
             phone: customerData.phone || '',
             id_card_number: formData.idCardNumber,
             address: customerData.address || '',
-            email: customerData.email || ''
+            email: customerData.email || '',
+            id_card_image: customerData.id_card_image || null // ✅ Include existing image
           }
         });
         toast.success(`Customer found! ${data.type === 'user' ? 'User account' : 'Existing contract customer'}`);
@@ -65,7 +66,8 @@ const IdVerificationStep = ({ formData, updateFormData, nextStep }) => {
             full_name: '',
             phone: '',
             address: '',
-            email: ''
+            email: '',
+            id_card_image: null
           }
         });
         toast.success('ID card not found. Please fill in customer information.');
@@ -162,6 +164,9 @@ const IdVerificationStep = ({ formData, updateFormData, nextStep }) => {
                     {formData.existingCustomer.address && (
                       <p><strong>Address:</strong> {formData.existingCustomer.address}</p>
                     )}
+                    {formData.existingCustomer.id_card_image && (
+                      <p><strong>ID Card Image:</strong> ✅ Already on file</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -175,7 +180,7 @@ const IdVerificationStep = ({ formData, updateFormData, nextStep }) => {
           <ul className="text-sm text-gray-400 space-y-1">
             <li>• Enter the customer's ID card number</li>
             <li>• We'll search in both user accounts and existing contract customers</li>
-            <li>• If found, we'll pre-fill their information</li>
+            <li>• If found, we'll pre-fill their information including ID card image</li>
             <li>• If not found, you'll need to enter their details manually</li>
           </ul>
         </div>
