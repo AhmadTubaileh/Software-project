@@ -2,6 +2,12 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLocalSession } from '../hooks/useLocalSession.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 import toast, { Toaster } from 'react-hot-toast';
+import ImageModal from '../components/ContractSteps/ImageModal';
+import ContractsTable from '../components/ContractManagement/ContractsTable';
+import ContractDetailsModal from '../components/ContractManagement/ContractDetailsModal';
+import ApproveModal from '../components/ContractManagement/ApproveModal';
+import RejectModal from '../components/ContractManagement/RejectModal';
+import StatsCards from '../components/ContractManagement/StatsCards';
 
 function ContractManagement() {
   const [contracts, setContracts] = useState([]);
@@ -9,8 +15,12 @@ function ContractManagement() {
   const [selectedContract, setSelectedContract] = useState(null);
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
   const [processing, setProcessing] = useState(false);
+  const [contractDetails, setContractDetails] = useState(null);
+  const [sponsors, setSponsors] = useState([]);
+  const [viewingImage, setViewingImage] = useState(null);
   const { currentUser } = useLocalSession();
 
   // Access control
@@ -45,6 +55,64 @@ function ContractManagement() {
       setLoading(false);
     }
   }, []);
+
+  // Fetch contract details and sponsors
+  const fetchContractDetails = async (contractId) => {
+    try {
+      // Fetch contract details
+      const contractResponse = await fetch(`http://localhost:5000/api/contracts/${contractId}`);
+      if (!contractResponse.ok) {
+        throw new Error('Failed to fetch contract details');
+      }
+      const contractData = await contractResponse.json();
+      
+      console.log('Contract details:', contractData.contract);
+      console.log('Customer image exists:', !!contractData.contract.customer_id_card_image);
+      console.log('Customer image type:', typeof contractData.contract.customer_id_card_image);
+      
+      setContractDetails(contractData.contract);
+
+      // Fetch sponsors
+      const sponsorsResponse = await fetch(`http://localhost:5000/api/contracts/${contractId}/sponsors`);
+      if (sponsorsResponse.ok) {
+        const sponsorsData = await sponsorsResponse.json();
+        setSponsors(sponsorsData.sponsors || []);
+      } else {
+        setSponsors([]);
+      }
+
+      setShowDetailsModal(true);
+    } catch (error) {
+      console.error('Error fetching contract details:', error);
+      toast.error('Failed to load contract details');
+    }
+  };
+
+  // Convert image data to base64 - FIXED VERSION
+  const convertImageToBase64 = (imageData) => {
+    if (!imageData) {
+      console.log('No image data provided');
+      return null;
+    }
+    
+    console.log('Image data type:', typeof imageData);
+    console.log('Image data sample:', typeof imageData === 'string' ? imageData.substring(0, 30) : 'Not a string');
+    
+    // If it's already a base64 string (from backend conversion)
+    if (typeof imageData === 'string') {
+      // Check if it already has data URL prefix
+      if (imageData.startsWith('data:')) {
+        console.log('✓ Image already has data URL prefix');
+        return imageData;
+      }
+      // Add data URL prefix if it's just base64
+      console.log('✓ Adding data URL prefix to base64 string');
+      return `data:image/jpeg;base64,${imageData}`;
+    }
+    
+    console.log('✗ Unsupported image data type:', typeof imageData);
+    return null;
+  };
 
   // Load contracts on component mount
   useEffect(() => {
@@ -124,33 +192,56 @@ function ContractManagement() {
     }
   };
 
-  // Format currency
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount);
+  // Handle view details
+  const handleViewDetails = (contract) => {
+    setSelectedContract(contract);
+    fetchContractDetails(contract.id);
   };
 
-  // Format date
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString();
+  // Handle close details modal
+  const handleCloseDetailsModal = () => {
+    setShowDetailsModal(false);
+    setContractDetails(null);
+    setSponsors([]);
+    setSelectedContract(null);
   };
 
-  // Get status badge
-  const getStatusBadge = (status) => {
-    const statusConfig = {
-      'pending': { color: 'bg-yellow-600', text: 'Pending Review' },
-      'approved': { color: 'bg-green-600', text: 'Approved' },
-      'rejected': { color: 'bg-red-600', text: 'Rejected' }
-    };
+  // Handle view image - FIXED VERSION
+  const handleViewImage = (person, type = 'customer') => {
+    console.log('=== HANDLE VIEW IMAGE DEBUG ===');
+    console.log('Person:', person.full_name, 'Type:', type);
+    console.log('Raw image data:', person.id_card_image);
+    console.log('Image data type:', typeof person.id_card_image);
+    console.log('Image data sample:', typeof person.id_card_image === 'string' ? person.id_card_image.substring(0, 50) : 'Not a string');
     
-    const config = statusConfig[status] || statusConfig.pending;
-    return (
-      <span className={`px-2 py-1 rounded text-xs font-semibold ${config.color}`}>
-        {config.text}
-      </span>
-    );
+    if (person.id_card_image) {
+      const imageSrc = getImageSrc(person.id_card_image);
+      console.log('Generated image source:', imageSrc ? `Length: ${imageSrc.length}` : 'NULL');
+      
+      if (imageSrc) {
+        setViewingImage({ 
+          customer: person, 
+          type,
+          imageSrc: imageSrc 
+        });
+        console.log('✓ Image modal should open');
+      } else {
+        console.log('✗ Failed to generate image source');
+        toast.error('Image format not supported');
+      }
+    } else {
+      console.log('✗ No ID card image available');
+      toast.error('No ID card image available');
+    }
+    console.log('=== END DEBUG ===');
+  };
+
+  const handleCloseImageModal = () => {
+    setViewingImage(null);
+  };
+
+  const getImageSrc = (idCardImage) => {
+    return convertImageToBase64(idCardImage);
   };
 
   return (
@@ -174,260 +265,70 @@ function ContractManagement() {
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700/50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm">Total Pending</p>
-                  <p className="text-2xl font-bold text-white mt-1">
-                    {contracts.length}
-                  </p>
-                </div>
-                <div className="text-3xl text-yellow-400">📋</div>
-              </div>
-            </div>
-            <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700/50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm">Ready for Review</p>
-                  <p className="text-2xl font-bold text-white mt-1">
-                    {contracts.filter(c => c.approval_status === 'pending_review').length}
-                  </p>
-                </div>
-                <div className="text-3xl text-blue-400">👁️</div>
-              </div>
-            </div>
-            <div className="bg-gray-800/50 p-6 rounded-xl border border-gray-700/50">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-gray-400 text-sm">Admin Actions</p>
-                  <p className="text-lg font-bold text-white mt-1">
-                    Approve / Reject
-                  </p>
-                </div>
-                <div className="text-3xl text-green-400">⚡</div>
-              </div>
-            </div>
-          </div>
+          <StatsCards contracts={contracts} />
 
           {/* Contracts Table */}
-          <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 overflow-hidden">
-            {/* Table Header */}
-            <div className="p-4 border-b border-gray-700/50">
-              <h2 className="text-xl font-semibold text-white">Pending Contracts</h2>
-              <p className="text-gray-400 text-sm mt-1">
-                Review contract applications and make decisions
-              </p>
-            </div>
-
-            {/* Loading State */}
-            {loading && (
-              <div className="p-8 text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                <p className="mt-4 text-gray-400">Loading contracts...</p>
-              </div>
-            )}
-
-            {/* Empty State */}
-            {!loading && contracts.length === 0 && (
-              <div className="p-12 text-center">
-                <div className="text-6xl mb-4 text-gray-600">📝</div>
-                <h3 className="text-xl font-semibold text-gray-400 mb-2">No Pending Contracts</h3>
-                <p className="text-gray-500">All contract applications have been processed.</p>
-              </div>
-            )}
-
-            {/* Contracts List */}
-            {!loading && contracts.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-gray-700/50">
-                    <tr>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        Contract Details
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        Customer
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        Financials
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        Status
-                      </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-700/50">
-                    {contracts.map((contract) => (
-                      <tr key={contract.id} className="hover:bg-gray-700/30 transition-colors duration-200">
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="font-semibold text-white">{contract.item_name}</p>
-                            <p className="text-sm text-gray-400 mt-1">
-                              Contract #{contract.id}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              Created: {formatDate(contract.created_at)}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="font-medium text-white">{contract.customer_name}</p>
-                            <p className="text-sm text-gray-400">{contract.customer_phone}</p>
-                            <p className="text-xs text-gray-500">
-                              Processed by: {contract.worker_name}
-                            </p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div>
-                            <p className="text-white">
-                              Total: {formatCurrency(contract.total_price)}
-                            </p>
-                            <p className="text-sm text-gray-400">
-                              Down: {formatCurrency(contract.down_payment)}
-                            </p>
-                            <p className="text-sm text-gray-400">
-                              {contract.months} months × {formatCurrency(contract.monthly_payment)}/mo
-                            </p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          {getStatusBadge(contract.status)}
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex space-x-2">
-                            <button
-                              onClick={() => {
-                                setSelectedContract(contract);
-                                setShowApproveModal(true);
-                              }}
-                              className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm font-medium transition-colors duration-200"
-                            >
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedContract(contract);
-                                setShowRejectModal(true);
-                              }}
-                              className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm font-medium transition-colors duration-200"
-                            >
-                              Reject
-                            </button>
-                            <button
-                              onClick={() => setSelectedContract(contract)}
-                              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors duration-200"
-                            >
-                              Details
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+          <ContractsTable
+            contracts={contracts}
+            loading={loading}
+            onViewDetails={handleViewDetails}
+            onApprove={(contract) => {
+              setSelectedContract(contract);
+              setShowApproveModal(true);
+            }}
+            onReject={(contract) => {
+              setSelectedContract(contract);
+              setShowRejectModal(true);
+            }}
+          />
         </div>
       </main>
 
+      {/* Contract Details Modal */}
+      {showDetailsModal && contractDetails && (
+        <ContractDetailsModal
+          contractDetails={contractDetails}
+          sponsors={sponsors}
+          onClose={handleCloseDetailsModal}
+          onViewImage={handleViewImage}
+          getImageSrc={getImageSrc}
+        />
+      )}
+
+      {/* Image Modal - FIXED: Pass imageSrc directly */}
+      {viewingImage && (
+        <ImageModal
+          isOpen={!!viewingImage}
+          imageSrc={viewingImage.imageSrc}
+          customer={viewingImage.customer}
+          onClose={handleCloseImageModal}
+          type={viewingImage.type}
+        />
+      )}
+
       {/* Approve Confirmation Modal */}
       {showApproveModal && selectedContract && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full border border-gray-700">
-            <h3 className="text-xl font-bold text-white mb-4">Approve Contract</h3>
-            <p className="text-gray-300 mb-2">
-              Are you sure you want to approve this contract?
-            </p>
-            <div className="bg-gray-700/50 p-4 rounded-lg mb-4">
-              <p><strong>Customer:</strong> {selectedContract.customer_name}</p>
-              <p><strong>Item:</strong> {selectedContract.item_name}</p>
-              <p><strong>Total:</strong> {formatCurrency(selectedContract.total_price)}</p>
-              <p><strong>Months:</strong> {selectedContract.months}</p>
-            </div>
-            <p className="text-yellow-400 text-sm mb-4">
-              ✅ This will create payment schedule and activate the contract.
-            </p>
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setShowApproveModal(false)}
-                disabled={processing}
-                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg font-medium transition-colors duration-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleApprove}
-                disabled={processing}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
-              >
-                {processing ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Processing...
-                  </>
-                ) : (
-                  'Approve Contract'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        <ApproveModal
+          contract={selectedContract}
+          processing={processing}
+          onClose={() => setShowApproveModal(false)}
+          onApprove={handleApprove}
+        />
       )}
 
       {/* Reject Confirmation Modal */}
       {showRejectModal && selectedContract && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full border border-gray-700">
-            <h3 className="text-xl font-bold text-white mb-4">Reject Contract</h3>
-            <p className="text-gray-300 mb-4">
-              Please provide a reason for rejecting this contract:
-            </p>
-            <div className="bg-gray-700/50 p-4 rounded-lg mb-4">
-              <p><strong>Customer:</strong> {selectedContract.customer_name}</p>
-              <p><strong>Item:</strong> {selectedContract.item_name}</p>
-            </div>
-            <textarea
-              value={rejectionReason}
-              onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="Enter rejection reason..."
-              rows={4}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-red-500 mb-4"
-            />
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowRejectModal(false);
-                  setRejectionReason('');
-                }}
-                disabled={processing}
-                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg font-medium transition-colors duration-200"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleReject}
-                disabled={processing || !rejectionReason.trim()}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
-              >
-                {processing ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    Processing...
-                  </>
-                ) : (
-                  'Reject Contract'
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+        <RejectModal
+          contract={selectedContract}
+          processing={processing}
+          rejectionReason={rejectionReason}
+          onRejectionReasonChange={setRejectionReason}
+          onClose={() => {
+            setShowRejectModal(false);
+            setRejectionReason('');
+          }}
+          onReject={handleReject}
+        />
       )}
     </div>
   );
