@@ -58,4 +58,4 @@ const RejectModal = ({ contract, processing, rejectionReason, onRejectionReasonC
   );
 };
 
-export default RejectModal;
+export default RejectModal; 
