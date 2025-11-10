@@ -1,6 +1,9 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
+import ImageModal from './ImageModal';
 
 const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
+  const [viewingImage, setViewingImage] = useState(null);
+
   const addSponsor = () => {
     const newSponsor = {
       full_name: '',
@@ -44,6 +47,56 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
 
       updateSponsor(index, 'id_card_image', file);
     }
+  };
+
+  const handleViewSponsorImage = (sponsor, index) => {
+    if (sponsor.id_card_image) {
+      setViewingImage({ sponsor, index, type: 'sponsor' });
+    }
+  };
+
+  const handleCloseImageModal = () => {
+    setViewingImage(null);
+  };
+
+  const getSponsorImageSrc = (sponsor) => {
+    if (!sponsor.id_card_image) return null;
+    
+    if (typeof sponsor.id_card_image === 'string') {
+      return `data:image/jpeg;base64,${sponsor.id_card_image}`;
+    } else if (sponsor.id_card_image instanceof File) {
+      return URL.createObjectURL(sponsor.id_card_image);
+    }
+    return null;
+  };
+
+  const renderSponsorImage = (sponsor, index) => {
+    const imageSrc = getSponsorImageSrc(sponsor);
+    if (imageSrc) {
+      return (
+        <div className="mt-2">
+          <p className="text-sm text-green-400 mb-2">ID Card Image:</p>
+          <div className="flex items-center gap-4">
+            <img 
+              src={imageSrc} 
+              alt="Sponsor ID Card"
+              className="w-24 h-16 object-cover rounded border border-gray-600 cursor-pointer hover:border-blue-500 transition-colors duration-200"
+              onClick={() => handleViewSponsorImage(sponsor, index)}
+            />
+            <div>
+              <button
+                type="button"
+                onClick={() => handleViewSponsorImage(sponsor, index)}
+                className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium transition-colors duration-200 mb-1"
+              >
+                🔍 View
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
   };
 
   const canProceed = () => {
@@ -156,6 +209,10 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 ID Card Image
               </label>
+              
+              {/* Show existing image if available */}
+              {renderSponsorImage(sponsor, index)}
+              
               <div className="flex items-center gap-4">
                 <input
                   type="file"
@@ -163,7 +220,7 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                   onChange={(e) => handleSponsorFileChange(index, e)}
                   className="flex-1 px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
                 />
-                {sponsor.id_card_image && (
+                {sponsor.id_card_image && sponsor.id_card_image instanceof File && !renderSponsorImage(sponsor, index) && (
                   <span className="text-green-400 text-sm">
                     ✅ Image selected
                   </span>
@@ -198,6 +255,17 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
               </div>
             </div>
           </div>
+        )}
+
+        {/* Image Modal for Sponsors */}
+        {viewingImage && (
+          <ImageModal
+            isOpen={!!viewingImage}
+            imageSrc={getSponsorImageSrc(viewingImage.sponsor)}
+            customer={viewingImage.sponsor}
+            onClose={handleCloseImageModal}
+            type="sponsor"
+          />
         )}
 
         {/* Action Buttons */}
