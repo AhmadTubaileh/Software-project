@@ -230,11 +230,11 @@ class Contract {
                     });
 
                     function finalizeContract() {
-                      // 7. Create inventory log for reservation
+                      // 7. Create inventory log for reservation (using 'sale' type with 0 quantity change)
                       const inventoryQuery = `
                         INSERT INTO inventory_logs 
                         (item_id, worker_id, change_type, quantity_changed) 
-                        VALUES (?, ?, 'reserved', 0)
+                        VALUES (?, ?, 'sale', 0)
                       `;
                       
                       db.query(inventoryQuery, [
@@ -275,7 +275,7 @@ class Contract {
     });
   }
 
-  // Approve contract - finalize the sale and create payment schedule
+  // Approve contract - create payment schedule WITHOUT changing item quantity
   static approve(contractId, approverId) {
     return new Promise((resolve, reject) => {
       db.query('START TRANSACTION', (startErr) => {
@@ -322,90 +322,87 @@ class Contract {
                 return rollbackAndReject(approvalErr, reject);
               }
 
-              // 4. Decrease item quantity (final sale)
-              const finalizeSaleQuery = 'UPDATE items SET quantity = quantity - 1 WHERE id = ?';
-              db.query(finalizeSaleQuery, [itemId], (saleErr) => {
-                if (saleErr) {
-                  return rollbackAndReject(saleErr, reject);
-                }
-
-                // 5. Create payment schedule in installment_payments table
-                const createPaymentSchedule = () => {
-                  const monthlyPayment = contract.monthly_payment;
-                  const months = contract.months;
-                  const startDate = new Date(contract.start_date);
-                  
-                  let paymentsCreated = 0;
-
-                  // If no payments to create (months = 0), proceed to inventory log
-                  if (months <= 0) {
-                    createInventoryLog();
-                    return;
+              // 4. DO NOT decrease item quantity - item stays reserved for installment
+              // Create inventory log for approved installment contract (using 'sale' type with 0 quantity change)
+              const createInventoryLog = () => {
+                const inventoryQuery = `
+                  INSERT INTO inventory_logs 
+                  (item_id, worker_id, change_type, quantity_changed) 
+                  VALUES (?, ?, 'sale', 0)
+                `;
+                db.query(inventoryQuery, [itemId, approverId], (inventoryErr) => {
+                  if (inventoryErr) {
+                    return rollbackAndReject(inventoryErr, reject);
                   }
 
-                  for (let month = 1; month <= months; month++) {
-                    const dueDate = new Date(startDate);
-                    dueDate.setMonth(dueDate.getMonth() + month);
+                  // 5. Create payment schedule in installment_payments table
+                  const createPaymentSchedule = () => {
+                    const monthlyPayment = contract.monthly_payment;
+                    const months = contract.months;
+                    const startDate = new Date(contract.start_date);
                     
-                    const paymentQuery = `
-                      INSERT INTO installment_payments 
-                      (sale_id, month_number, due_date, amount_due, amount_paid, status) 
-                      VALUES (?, ?, ?, ?, 0.00, 'pending')
-                    `;
-                    
-                    db.query(paymentQuery, [
-                      contract.sale_id,
-                      month,
-                      dueDate.toISOString().split('T')[0],
-                      monthlyPayment
-                    ], (paymentErr) => {
-                      if (paymentErr) {
-                        return rollbackAndReject(paymentErr, reject);
-                      }
-                      
-                      paymentsCreated++;
-                      if (paymentsCreated === months) {
-                        // All payments created, proceed with inventory log
-                        createInventoryLog();
-                      }
-                    });
-                  }
-                };
+                    let paymentsCreated = 0;
 
-                // 6. Create inventory log for final sale
-                const createInventoryLog = () => {
-                  const inventoryQuery = `
-                    INSERT INTO inventory_logs 
-                    (item_id, worker_id, change_type, quantity_changed) 
-                    VALUES (?, ?, 'sale', -1)
-                  `;
-                  db.query(inventoryQuery, [itemId, approverId], (inventoryErr) => {
-                    if (inventoryErr) {
-                      return rollbackAndReject(inventoryErr, reject);
+                    // If no payments to create (months = 0), commit transaction
+                    if (months <= 0) {
+                      commitTransaction();
+                      return;
                     }
 
-                    // Commit transaction
-                    db.query('COMMIT', (commitErr) => {
-                      if (commitErr) {
-                        return rollbackAndReject(commitErr, reject);
-                      }
+                    for (let month = 1; month <= months; month++) {
+                      const dueDate = new Date(startDate);
+                      dueDate.setMonth(dueDate.getMonth() + month);
                       
-                      resolve({
-                        success: true,
-                        message: 'Contract approved successfully and payment schedule created',
-                        contractId: contractId,
-                        paymentsCreated: contract.months
+                      const paymentQuery = `
+                        INSERT INTO installment_payments 
+                        (sale_id, month_number, due_date, amount_due, amount_paid, status) 
+                        VALUES (?, ?, ?, ?, 0.00, 'pending')
+                      `;
+                      
+                      db.query(paymentQuery, [
+                        contract.sale_id,
+                        month,
+                        dueDate.toISOString().split('T')[0],
+                        monthlyPayment
+                      ], (paymentErr) => {
+                        if (paymentErr) {
+                          return rollbackAndReject(paymentErr, reject);
+                        }
+                        
+                        paymentsCreated++;
+                        if (paymentsCreated === months) {
+                          // All payments created, commit transaction
+                          commitTransaction();
+                        }
                       });
-                    });
-                  });
-                };
+                    }
+                  };
 
-                // Start creating payment schedule
-                createPaymentSchedule();
-              });
+                  // Start creating payment schedule
+                  createPaymentSchedule();
+                });
+              };
+
+              // Start the process
+              createInventoryLog();
             });
           });
         });
+
+        function commitTransaction() {
+          db.query('COMMIT', (commitErr) => {
+            if (commitErr) {
+              return rollbackAndReject(commitErr, reject);
+            }
+            
+            resolve({
+              success: true,
+              message: 'Contract approved successfully and payment schedule created',
+              contractId: contractId,
+              paymentsCreated: contract.months
+            });
+          });
+        }
 
         // Helper function to rollback and reject
         function rollbackAndReject(error, rejectCallback) {
@@ -417,7 +414,7 @@ class Contract {
     });
   }
 
-  // Reject contract - cancel reservation
+  // Reject contract - increase item quantity by 1 (release reservation)
   static reject(contractId, approverId, reason) {
     return new Promise((resolve, reject) => {
       db.query('START TRANSACTION', (startErr) => {
@@ -457,26 +454,34 @@ class Contract {
                 return rollbackAndReject(approvalErr, reject);
               }
 
-              // 4. Create inventory log for reservation cancellation
-              const inventoryQuery = `
-                INSERT INTO inventory_logs 
-                (item_id, worker_id, change_type, quantity_changed) 
-                VALUES (?, ?, 'return', 0)
-              `;
-              db.query(inventoryQuery, [itemId, approverId], (inventoryErr) => {
-                if (inventoryErr) {
-                  return rollbackAndReject(inventoryErr, reject);
+              // 4. INCREASE item quantity by 1 (release the reservation)
+              const increaseQuantityQuery = 'UPDATE items SET quantity = quantity + 1 WHERE id = ?';
+              db.query(increaseQuantityQuery, [itemId], (quantityErr) => {
+                if (quantityErr) {
+                  return rollbackAndReject(quantityErr, reject);
                 }
 
-                // Commit transaction
-                db.query('COMMIT', (commitErr) => {
-                  if (commitErr) {
-                    return rollbackAndReject(commitErr, reject);
+                // 5. Create inventory log for reservation release (using 'return' type with +1 quantity change)
+                const inventoryQuery = `
+                  INSERT INTO inventory_logs 
+                  (item_id, worker_id, change_type, quantity_changed) 
+                  VALUES (?, ?, 'return', 1)
+                `;
+                db.query(inventoryQuery, [itemId, approverId], (inventoryErr) => {
+                  if (inventoryErr) {
+                    return rollbackAndReject(inventoryErr, reject);
                   }
-                  
-                  resolve({
-                    success: true,
-                    message: 'Contract rejected successfully'
+
+                  // Commit transaction
+                  db.query('COMMIT', (commitErr) => {
+                    if (commitErr) {
+                      return rollbackAndReject(commitErr, reject);
+                    }
+                    
+                    resolve({
+                      success: true,
+                      message: 'Contract rejected successfully - item quantity increased'
+                    });
                   });
                 });
               });
@@ -570,78 +575,77 @@ class Contract {
     });
   }
 
-  // Get contract details by ID (FIXED CUSTOMER IMAGE CONVERSION)
   // Get contract details by ID - FIXED CUSTOMER IMAGE CONVERSION
-static getById(contractId) {
-  return new Promise((resolve, reject) => {
-    const query = `
-      SELECT 
-        ic.*,
-        cc.full_name as customer_name,
-        cc.phone as customer_phone,
-        cc.id_card_number as customer_id_card_number,
-        cc.id_card_image as customer_id_card_image,
-        cc.address as customer_address,
-        cc.email as customer_email,
-        i.name as item_name,
-        i.description as item_description,
-        u.username as worker_name,
-        ca.status as approval_status,
-        ca.reason as rejection_reason,
-        ca.approver_id,
-        ca.updated_at as decision_date
-      FROM installment_contracts ic
-      LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
-      LEFT JOIN items i ON ic.item_id = i.id
-      LEFT JOIN users u ON ic.user_id = u.id
-      LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
-      WHERE ic.id = ?
-    `;
-    
-    db.query(query, [contractId], (err, results) => {
-      if (err) {
-        reject(err);
-        return;
-      }
+  static getById(contractId) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT 
+          ic.*,
+          cc.full_name as customer_name,
+          cc.phone as customer_phone,
+          cc.id_card_number as customer_id_card_number,
+          cc.id_card_image as customer_id_card_image,
+          cc.address as customer_address,
+          cc.email as customer_email,
+          i.name as item_name,
+          i.description as item_description,
+          u.username as worker_name,
+          ca.status as approval_status,
+          ca.reason as rejection_reason,
+          ca.approver_id,
+          ca.updated_at as decision_date
+        FROM installment_contracts ic
+        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+        LEFT JOIN items i ON ic.item_id = i.id
+        LEFT JOIN users u ON ic.user_id = u.id
+        LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+        WHERE ic.id = ?
+      `;
       
-      const contract = results[0] || null;
-      
-      // Convert customer image if exists - FIXED AND SIMPLIFIED VERSION
-      if (contract && contract.customer_id_card_image) {
-        try {
-          console.log('Customer image data type:', typeof contract.customer_id_card_image);
-          console.log('Customer image is Buffer?', Buffer.isBuffer(contract.customer_id_card_image));
-          
-          // Handle all possible image data formats consistently
-          if (Buffer.isBuffer(contract.customer_id_card_image)) {
-            // It's a Buffer - convert to base64 string
-            contract.customer_id_card_image = contract.customer_id_card_image.toString('base64');
-            console.log('✓ Converted customer image from Buffer to base64 string');
-          } 
-          // If it's already a string, ensure it's proper base64
-          else if (typeof contract.customer_id_card_image === 'string') {
-            // If it doesn't have data URL prefix, it's raw base64
-            if (!contract.customer_id_card_image.startsWith('data:')) {
-              console.log('✓ Customer image is raw base64 string, keeping as is');
-              // Keep as raw base64 - frontend will add data URL prefix
-            } else {
-              console.log('✓ Customer image already has data URL prefix');
-            }
-          }
-          
-          console.log('Customer image after conversion - length:', contract.customer_id_card_image?.length);
-        } catch (error) {
-          console.error('Error converting customer image:', error);
-          contract.customer_id_card_image = null;
+      db.query(query, [contractId], (err, results) => {
+        if (err) {
+          reject(err);
+          return;
         }
-      } else {
-        console.log('No customer image found or image is null');
-      }
-      
-      resolve(contract);
+        
+        const contract = results[0] || null;
+        
+        // Convert customer image if exists - FIXED AND SIMPLIFIED VERSION
+        if (contract && contract.customer_id_card_image) {
+          try {
+            console.log('Customer image data type:', typeof contract.customer_id_card_image);
+            console.log('Customer image is Buffer?', Buffer.isBuffer(contract.customer_id_card_image));
+            
+            // Handle all possible image data formats consistently
+            if (Buffer.isBuffer(contract.customer_id_card_image)) {
+              // It's a Buffer - convert to base64 string
+              contract.customer_id_card_image = contract.customer_id_card_image.toString('base64');
+              console.log('✓ Converted customer image from Buffer to base64 string');
+            } 
+            // If it's already a string, ensure it's proper base64
+            else if (typeof contract.customer_id_card_image === 'string') {
+              // If it doesn't have data URL prefix, it's raw base64
+              if (!contract.customer_id_card_image.startsWith('data:')) {
+                console.log('✓ Customer image is raw base64 string, keeping as is');
+                // Keep as raw base64 - frontend will add data URL prefix
+              } else {
+                console.log('✓ Customer image already has data URL prefix');
+              }
+            }
+            
+            console.log('Customer image after conversion - length:', contract.customer_id_card_image?.length);
+          } catch (error) {
+            console.error('Error converting customer image:', error);
+            contract.customer_id_card_image = null;
+          }
+        } else {
+          console.log('No customer image found or image is null');
+        }
+        
+        resolve(contract);
+      });
     });
-  });
-}
+  }
 
   // Get sponsors for a contract
   static getSponsors(contractId) {

@@ -1,6 +1,13 @@
 import React from 'react';
 
 const RejectModal = ({ contract, processing, rejectionReason, onRejectionReasonChange, onClose, onReject }) => {
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl p-6 max-w-md w-full border border-gray-700">
@@ -11,7 +18,11 @@ const RejectModal = ({ contract, processing, rejectionReason, onRejectionReasonC
         <div className="bg-gray-700/50 p-4 rounded-lg mb-4">
           <p><strong>Customer:</strong> {contract.customer_name}</p>
           <p><strong>Item:</strong> {contract.item_name}</p>
+          <p><strong>Total:</strong> {formatCurrency(contract.total_price)}</p>
         </div>
+        <p className="text-green-400 text-sm mb-4">
+          📈 Item quantity will be increased by 1 (reservation released).
+        </p>
         <textarea
           value={rejectionReason}
           onChange={(e) => onRejectionReasonChange(e.target.value)}
