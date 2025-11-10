@@ -21,4 +21,4 @@ const upload = multer({
   fileFilter: fileFilter
 });
 
-module.exports = upload;
+module.exports = upload; // ✅ Export just the upload function

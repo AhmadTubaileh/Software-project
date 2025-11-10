@@ -7,12 +7,14 @@ function AdminSidebar() {
   const location = useLocation();
   const { clearSession, currentUser } = useLocalSession();
 
-  const menuItems = [
-    { name: 'Dashboard', path: '/', icon: '📊' },
-    { name: 'POS', path: '/pos', icon: '💳' },
-    { name: 'Employees', path: '/employees', icon: '👨‍💼' },
-    { name: 'Items', path: '/items', icon: '📦' },
-  ];
+  // Add this to the menuItems array:
+const menuItems = [
+  { name: 'Dashboard', path: '/', icon: '📊' },
+  { name: 'POS', path: '/pos', icon: '💳' },
+  { name: 'Employees', path: '/employees', icon: '👨‍💼' },
+  { name: 'Items', path: '/items', icon: '📦' },
+  { name: 'New Contract', path: '/contract-application', icon: '📝' }, // NEW
+];
 
   const isActive = (path) => location.pathname === path;
 
