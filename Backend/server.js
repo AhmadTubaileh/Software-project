@@ -5,7 +5,9 @@ require('dotenv').config();
 const employeeRoutes = require('./routes/employees');
 const authRoutes = require('./routes/auth');
 const itemsRoutes = require('./routes/items');
-const posRoutes = require('./routes/pos'); // ✅ POS routes
+const posRoutes = require('./routes/pos');
+const contractRoutes = require('./routes/contracts'); // NEW
+const customerRoutes = require('./routes/customers'); // NEW
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -19,18 +21,20 @@ app.use(express.urlencoded({ extended: true }));
 app.use('/api/employees', employeeRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemsRoutes);
-app.use('/api/pos', posRoutes); // ✅ POS routes
+app.use('/api/pos', posRoutes);
+app.use('/api/contracts', contractRoutes); // NEW
+app.use('/api/customers', customerRoutes); // NEW
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 
     message: 'Server is running!',
-    routes: ['/api/employees', '/api/auth', '/api/items', '/api/pos']
+    routes: ['/api/employees', '/api/auth', '/api/items', '/api/pos', '/api/contracts', '/api/customers']
   });
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
-  console.log(`🛒 POS System: http://localhost:${PORT}/api/pos/items`);
+  console.log(`📝 Contract System: http://localhost:${PORT}/api/contracts`);
 });
