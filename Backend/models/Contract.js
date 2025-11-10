@@ -570,29 +570,94 @@ class Contract {
     });
   }
 
-  // Get contract details by ID
-  static getById(contractId) {
+  // Get contract details by ID (FIXED CUSTOMER IMAGE CONVERSION)
+  // Get contract details by ID - FIXED CUSTOMER IMAGE CONVERSION
+static getById(contractId) {
+  return new Promise((resolve, reject) => {
+    const query = `
+      SELECT 
+        ic.*,
+        cc.full_name as customer_name,
+        cc.phone as customer_phone,
+        cc.id_card_number as customer_id_card_number,
+        cc.id_card_image as customer_id_card_image,
+        cc.address as customer_address,
+        cc.email as customer_email,
+        i.name as item_name,
+        i.description as item_description,
+        u.username as worker_name,
+        ca.status as approval_status,
+        ca.reason as rejection_reason,
+        ca.approver_id,
+        ca.updated_at as decision_date
+      FROM installment_contracts ic
+      LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+      LEFT JOIN items i ON ic.item_id = i.id
+      LEFT JOIN users u ON ic.user_id = u.id
+      LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+      WHERE ic.id = ?
+    `;
+    
+    db.query(query, [contractId], (err, results) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      
+      const contract = results[0] || null;
+      
+      // Convert customer image if exists - FIXED AND SIMPLIFIED VERSION
+      if (contract && contract.customer_id_card_image) {
+        try {
+          console.log('Customer image data type:', typeof contract.customer_id_card_image);
+          console.log('Customer image is Buffer?', Buffer.isBuffer(contract.customer_id_card_image));
+          
+          // Handle all possible image data formats consistently
+          if (Buffer.isBuffer(contract.customer_id_card_image)) {
+            // It's a Buffer - convert to base64 string
+            contract.customer_id_card_image = contract.customer_id_card_image.toString('base64');
+            console.log('✓ Converted customer image from Buffer to base64 string');
+          } 
+          // If it's already a string, ensure it's proper base64
+          else if (typeof contract.customer_id_card_image === 'string') {
+            // If it doesn't have data URL prefix, it's raw base64
+            if (!contract.customer_id_card_image.startsWith('data:')) {
+              console.log('✓ Customer image is raw base64 string, keeping as is');
+              // Keep as raw base64 - frontend will add data URL prefix
+            } else {
+              console.log('✓ Customer image already has data URL prefix');
+            }
+          }
+          
+          console.log('Customer image after conversion - length:', contract.customer_id_card_image?.length);
+        } catch (error) {
+          console.error('Error converting customer image:', error);
+          contract.customer_id_card_image = null;
+        }
+      } else {
+        console.log('No customer image found or image is null');
+      }
+      
+      resolve(contract);
+    });
+  });
+}
+
+  // Get sponsors for a contract
+  static getSponsors(contractId) {
     return new Promise((resolve, reject) => {
       const query = `
         SELECT 
-          ic.*,
-          cc.full_name as customer_name,
-          cc.phone as customer_phone,
-          cc.address as customer_address,
-          cc.email as customer_email,
-          i.name as item_name,
-          i.description as item_description,
-          u.username as worker_name,
-          ca.status as approval_status,
-          ca.reason as rejection_reason,
-          ca.approver_id,
-          ca.updated_at as decision_date
-        FROM installment_contracts ic
-        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
-        LEFT JOIN items i ON ic.item_id = i.id
-        LEFT JOIN users u ON ic.user_id = u.id
-        LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
-        WHERE ic.id = ?
+          id,
+          full_name,
+          phone,
+          id_card_number,
+          id_card_image,
+          relationship,
+          address
+        FROM contract_sponsors 
+        WHERE contract_id = ?
+        ORDER BY id
       `;
       
       db.query(query, [contractId], (err, results) => {
@@ -600,7 +665,32 @@ class Contract {
           reject(err);
           return;
         }
-        resolve(results[0] || null);
+        
+        // Convert BLOB images to base64 - FIXED VERSION
+        const sponsors = results.map(sponsor => {
+          if (sponsor.id_card_image) {
+            try {
+              console.log('Sponsor image data type:', typeof sponsor.id_card_image);
+              
+              // Handle BLOB data properly (same logic as customer)
+              if (Buffer.isBuffer(sponsor.id_card_image)) {
+                sponsor.id_card_image = sponsor.id_card_image.toString('base64');
+              } else if (sponsor.id_card_image.type === 'Buffer' && sponsor.id_card_image.data) {
+                sponsor.id_card_image = Buffer.from(sponsor.id_card_image.data).toString('base64');
+              } else if (typeof sponsor.id_card_image === 'string') {
+                if (!sponsor.id_card_image.startsWith('data:')) {
+                  sponsor.id_card_image = `data:image/jpeg;base64,${sponsor.id_card_image}`;
+                }
+              }
+            } catch (error) {
+              console.error('Error converting sponsor image:', error);
+              sponsor.id_card_image = null;
+            }
+          }
+          return sponsor;
+        });
+        
+        resolve(sponsors);
       });
     });
   }

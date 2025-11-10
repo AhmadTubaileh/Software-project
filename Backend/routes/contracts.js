@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Contract = require('../models/Contract');
 const upload = require('../middleware/upload');
+const db = require('../config/database');
 
 // GET /api/contracts/items - Get items available for installment
 router.get('/items', async (req, res) => {
@@ -75,6 +76,72 @@ router.get('/:id', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch contract details'
+    });
+  }
+});
+
+// GET /api/contracts/:id/sponsors - Get sponsors for a contract (UPDATED)
+router.get('/:id/sponsors', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const query = `
+      SELECT 
+        id,
+        full_name,
+        phone,
+        id_card_number,
+        id_card_image,
+        relationship,
+        address
+      FROM contract_sponsors 
+      WHERE contract_id = ?
+      ORDER BY id
+    `;
+    
+    db.query(query, [id], (err, results) => {
+      if (err) {
+        console.error('Get sponsors error:', err);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to fetch sponsors'
+        });
+      }
+
+      // Convert BLOB images to base64 - FIXED VERSION
+      const sponsors = results.map(sponsor => {
+        if (sponsor.id_card_image) {
+          try {
+            console.log('Sponsor image data type:', typeof sponsor.id_card_image);
+            
+            // Handle BLOB data properly (same logic as customer)
+            if (Buffer.isBuffer(sponsor.id_card_image)) {
+              sponsor.id_card_image = sponsor.id_card_image.toString('base64');
+            } else if (sponsor.id_card_image.type === 'Buffer' && sponsor.id_card_image.data) {
+              sponsor.id_card_image = Buffer.from(sponsor.id_card_image.data).toString('base64');
+            } else if (typeof sponsor.id_card_image === 'string') {
+              if (!sponsor.id_card_image.startsWith('data:')) {
+                sponsor.id_card_image = `data:image/jpeg;base64,${sponsor.id_card_image}`;
+              }
+            }
+          } catch (error) {
+            console.error('Error converting sponsor image:', error);
+            sponsor.id_card_image = null;
+          }
+        }
+        return sponsor;
+      });
+
+      res.json({
+        success: true,
+        sponsors
+      });
+    });
+  } catch (error) {
+    console.error('Get sponsors error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch sponsors'
     });
   }
 });
