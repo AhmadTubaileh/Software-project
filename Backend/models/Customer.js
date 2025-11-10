@@ -12,7 +12,8 @@ class Customer {
           phone,
           id_card as id_card_number,
           email,
-          NULL as address
+          NULL as address,
+          card_image as id_card_image
         FROM users 
         WHERE id_card = ?
         
@@ -25,7 +26,8 @@ class Customer {
           phone,
           id_card_number,
           email,
-          address
+          address,
+          id_card_image
         FROM contract_customers 
         WHERE id_card_number = ?
       `;
@@ -37,8 +39,17 @@ class Customer {
         }
         
         if (results.length > 0) {
-          // Return the first match (users take precedence over contract_customers)
-          resolve(results[0]);
+          // Convert BLOB image to base64 if it exists
+          const customer = results[0];
+          if (customer.id_card_image) {
+            try {
+              customer.id_card_image = Buffer.from(customer.id_card_image).toString('base64');
+            } catch (error) {
+              console.error('Error serializing existing customer image:', error);
+              customer.id_card_image = null;
+            }
+          }
+          resolve(customer);
         } else {
           resolve(null);
         }
