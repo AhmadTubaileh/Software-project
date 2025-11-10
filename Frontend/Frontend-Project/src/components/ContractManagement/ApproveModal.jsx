@@ -21,8 +21,11 @@ const ApproveModal = ({ contract, processing, onClose, onApprove }) => {
           <p><strong>Total:</strong> {formatCurrency(contract.total_price)}</p>
           <p><strong>Months:</strong> {contract.months}</p>
         </div>
+        <p className="text-green-400 text-sm mb-4">
+          ✅ Contract will be activated and payment schedule created.
+        </p>
         <p className="text-yellow-400 text-sm mb-4">
-          ✅ This will create payment schedule and activate the contract.
+          📝 Item quantity will remain the same (reserved for installment).
         </p>
         <div className="flex justify-end space-x-3">
           <button

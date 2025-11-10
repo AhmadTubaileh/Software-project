@@ -141,7 +141,7 @@ function ContractManagement() {
         throw new Error(data.error || 'Failed to approve contract');
       }
 
-      toast.success('Contract approved successfully!');
+      toast.success('Contract approved successfully! Payment schedule created.');
       setShowApproveModal(false);
       setSelectedContract(null);
       await fetchContracts(); // Refresh the list
@@ -179,7 +179,7 @@ function ContractManagement() {
         throw new Error(data.error || 'Failed to reject contract');
       }
 
-      toast.success('Contract rejected successfully!');
+      toast.success('Contract rejected successfully! Item quantity increased.');
       setShowRejectModal(false);
       setSelectedContract(null);
       setRejectionReason('');
