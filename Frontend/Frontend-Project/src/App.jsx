@@ -7,6 +7,7 @@ import POS from './pages/POS.jsx';
 import Employees from './pages/Employees.jsx';
 import Items from './pages/Items.jsx';
 import ContractApplication from './pages/ContractApplication.jsx'; // NEW
+import ContractManagement from './pages/ContractManagement.jsx';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="/employees" element={<Employees />} />
         <Route path="/items" element={<Items />} />
         <Route path="/contract-application" element={<ContractApplication />} /> {/* NEW */}
+        <Route path="/contract-management" element={<ContractManagement />} /> {/* NEW */}
       </Routes>
     </Router>
   );

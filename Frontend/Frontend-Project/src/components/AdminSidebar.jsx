@@ -13,7 +13,8 @@ const menuItems = [
   { name: 'POS', path: '/pos', icon: '💳' },
   { name: 'Employees', path: '/employees', icon: '👨‍💼' },
   { name: 'Items', path: '/items', icon: '📦' },
-  { name: 'New Contract', path: '/contract-application', icon: '📝' }, // NEW
+  { name: 'New Contract', path: '/contract-application', icon: '📝' },
+  { name: 'Manage Contracts', path: '/contract-management', icon: '⚡' }, // NEW
 ];
 
   const isActive = (path) => location.pathname === path;

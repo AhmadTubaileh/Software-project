@@ -34,6 +34,80 @@ router.get('/pending', async (req, res) => {
   }
 });
 
+// GET /api/contracts/all - Get all contracts with filters
+router.get('/all', async (req, res) => {
+  try {
+    const { status } = req.query;
+    const contracts = await Contract.getAllContracts(status);
+    
+    res.json({
+      success: true,
+      contracts
+    });
+  } catch (error) {
+    console.error('Get all contracts error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch contracts'
+    });
+  }
+});
+
+// GET /api/contracts/:id - Get contract details by ID
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const contract = await Contract.getById(id);
+    
+    if (!contract) {
+      return res.status(404).json({
+        success: false,
+        error: 'Contract not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      contract
+    });
+  } catch (error) {
+    console.error('Get contract error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch contract details'
+    });
+  }
+});
+
+// GET /api/contracts/:id/payments - Get payment schedule for contract
+router.get('/:id/payments', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // First get the contract to find sale_id
+    const contract = await Contract.getById(id);
+    if (!contract) {
+      return res.status(404).json({
+        success: false,
+        error: 'Contract not found'
+      });
+    }
+
+    const payments = await Contract.getPaymentSchedule(contract.sale_id);
+    
+    res.json({
+      success: true,
+      payments
+    });
+  } catch (error) {
+    console.error('Get payment schedule error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch payment schedule'
+    });
+  }
+});
+
 // POST /api/contracts/apply - Apply for new contract
 router.post('/apply', upload.fields([
   { name: 'customer_id_card_image', maxCount: 1 },
@@ -104,7 +178,8 @@ router.put('/:id/approve', async (req, res) => {
 
     res.json({
       success: true,
-      message: result.message
+      message: result.message,
+      paymentsCreated: result.paymentsCreated
     });
 
   } catch (error) {
