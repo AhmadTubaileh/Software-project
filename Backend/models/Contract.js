@@ -275,81 +275,151 @@ class Contract {
     });
   }
 
-  // Approve contract - create payment schedule WITHOUT changing item quantity
-  static approve(contractId, approverId) {
-    return new Promise((resolve, reject) => {
-      db.query('START TRANSACTION', (startErr) => {
-        if (startErr) {
-          reject(startErr);
-          return;
+  // Approve contract - create payment schedule with different first payment
+static approve(contractId, approverId) {
+  return new Promise((resolve, reject) => {
+    db.query('START TRANSACTION', (startErr) => {
+      if (startErr) {
+        reject(startErr);
+        return;
+      }
+
+      // 1. Get contract details WITH ITEM PAYMENT INFO
+      const getContractQuery = `
+        SELECT 
+          ic.*, 
+          cc.full_name as customer_name, 
+          i.name as item_name,
+          i.installment_first_payment,
+          i.installment_per_month,
+          i.installment_months
+        FROM installment_contracts ic
+        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+        LEFT JOIN items i ON ic.item_id = i.id
+        WHERE ic.id = ? AND ic.status = "pending"
+      `;
+      db.query(getContractQuery, [contractId], (err, contractResults) => {
+        if (err) {
+          return rollbackAndReject(err, reject);
         }
 
-        // 1. Get contract details
-        const getContractQuery = `
-          SELECT ic.*, cc.full_name as customer_name, i.name as item_name
-          FROM installment_contracts ic
-          LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
-          LEFT JOIN items i ON ic.item_id = i.id
-          WHERE ic.id = ? AND ic.status = "pending"
-        `;
-        db.query(getContractQuery, [contractId], (err, contractResults) => {
-          if (err) {
-            return rollbackAndReject(err, reject);
+        if (contractResults.length === 0) {
+          return rollbackAndReject(new Error('Contract not found or already processed'), reject);
+        }
+
+        const contract = contractResults[0];
+        const itemId = contract.item_id;
+
+        // 2. Update contract status to 'active'
+        const updateContractQuery = 'UPDATE installment_contracts SET status = "active" WHERE id = ?';
+        db.query(updateContractQuery, [contractId], (updateErr) => {
+          if (updateErr) {
+            return rollbackAndReject(updateErr, reject);
           }
 
-          if (contractResults.length === 0) {
-            return rollbackAndReject(new Error('Contract not found or already processed'), reject);
-          }
-
-          const contract = contractResults[0];
-          const itemId = contract.item_id;
-
-          // 2. Update contract status to 'active'
-          const updateContractQuery = 'UPDATE installment_contracts SET status = "active" WHERE id = ?';
-          db.query(updateContractQuery, [contractId], (updateErr) => {
-            if (updateErr) {
-              return rollbackAndReject(updateErr, reject);
+          // 3. Update approval status to 'approved'
+          const updateApprovalQuery = `
+            UPDATE contract_approvals 
+            SET status = 'approved', approver_id = ?, updated_at = NOW() 
+            WHERE contract_id = ?
+          `;
+          db.query(updateApprovalQuery, [approverId, contractId], (approvalErr) => {
+            if (approvalErr) {
+              return rollbackAndReject(approvalErr, reject);
             }
 
-            // 3. Update approval status to 'approved'
-            const updateApprovalQuery = `
-              UPDATE contract_approvals 
-              SET status = 'approved', approver_id = ?, updated_at = NOW() 
-              WHERE contract_id = ?
-            `;
-            db.query(updateApprovalQuery, [approverId, contractId], (approvalErr) => {
-              if (approvalErr) {
-                return rollbackAndReject(approvalErr, reject);
-              }
+            // 4. DO NOT decrease item quantity - item stays reserved for installment
+            // Create inventory log for approved installment contract (using 'sale' type with 0 quantity change)
+            const createInventoryLog = () => {
+              const inventoryQuery = `
+                INSERT INTO inventory_logs 
+                (item_id, worker_id, change_type, quantity_changed) 
+                VALUES (?, ?, 'sale', 0)
+              `;
+              db.query(inventoryQuery, [itemId, approverId], (inventoryErr) => {
+                if (inventoryErr) {
+                  return rollbackAndReject(inventoryErr, reject);
+                }
 
-              // 4. DO NOT decrease item quantity - item stays reserved for installment
-              // Create inventory log for approved installment contract (using 'sale' type with 0 quantity change)
-              const createInventoryLog = () => {
-                const inventoryQuery = `
-                  INSERT INTO inventory_logs 
-                  (item_id, worker_id, change_type, quantity_changed) 
-                  VALUES (?, ?, 'sale', 0)
-                `;
-                db.query(inventoryQuery, [itemId, approverId], (inventoryErr) => {
-                  if (inventoryErr) {
-                    return rollbackAndReject(inventoryErr, reject);
+                // 5. Create payment schedule in installment_payments table WITH DIFFERENT FIRST PAYMENT
+                const createPaymentSchedule = () => {
+                  const firstPayment = parseFloat(contract.installment_first_payment) || parseFloat(contract.down_payment);
+                  const monthlyPayment = parseFloat(contract.installment_per_month) || parseFloat(contract.monthly_payment);
+                  const months = parseInt(contract.installment_months) || parseInt(contract.months);
+                  const startDate = new Date(contract.start_date);
+                  
+                  let paymentsCreated = 0;
+                  const totalPayments = months;
+
+                  // If no payments to create (months = 0), commit transaction
+                  if (months <= 0) {
+                    // Define commitTransaction here where contract is accessible
+                    const commitTransaction = () => {
+                      db.query('COMMIT', (commitErr) => {
+                        if (commitErr) {
+                          return rollbackAndReject(commitErr, reject);
+                        }
+                        
+                        resolve({
+                          success: true,
+                          message: 'Contract approved successfully and payment schedule created',
+                          contractId: contractId,
+                          paymentsCreated: contract.installment_months || contract.months,
+                          firstPaymentAmount: contract.installment_first_payment || contract.down_payment,
+                          monthlyPaymentAmount: contract.installment_per_month || contract.monthly_payment
+                        });
+                      });
+                    };
+                    commitTransaction();
+                    return;
                   }
 
-                  // 5. Create payment schedule in installment_payments table
-                  const createPaymentSchedule = () => {
-                    const monthlyPayment = contract.monthly_payment;
-                    const months = contract.months;
-                    const startDate = new Date(contract.start_date);
+                  // Create first payment (different amount)
+                  const firstDueDate = new Date(startDate);
+                  firstDueDate.setMonth(firstDueDate.getMonth() + 1);
+                  
+                  const firstPaymentQuery = `
+                    INSERT INTO installment_payments 
+                    (sale_id, month_number, due_date, amount_due, amount_paid, status) 
+                    VALUES (?, ?, ?, ?, 0.00, 'pending')
+                  `;
+                  
+                  db.query(firstPaymentQuery, [
+                    contract.sale_id,
+                    1, // First month
+                    firstDueDate.toISOString().split('T')[0],
+                    firstPayment
+                  ], (firstPaymentErr) => {
+                    if (firstPaymentErr) {
+                      return rollbackAndReject(firstPaymentErr, reject);
+                    }
                     
-                    let paymentsCreated = 0;
-
-                    // If no payments to create (months = 0), commit transaction
-                    if (months <= 0) {
+                    paymentsCreated++;
+                    
+                    // If only one payment, commit transaction
+                    if (months === 1) {
+                      const commitTransaction = () => {
+                        db.query('COMMIT', (commitErr) => {
+                          if (commitErr) {
+                            return rollbackAndReject(commitErr, reject);
+                          }
+                          
+                          resolve({
+                            success: true,
+                            message: 'Contract approved successfully and payment schedule created',
+                            contractId: contractId,
+                            paymentsCreated: contract.installment_months || contract.months,
+                            firstPaymentAmount: contract.installment_first_payment || contract.down_payment,
+                            monthlyPaymentAmount: contract.installment_per_month || contract.monthly_payment
+                          });
+                        });
+                      };
                       commitTransaction();
                       return;
                     }
 
-                    for (let month = 1; month <= months; month++) {
+                    // Create remaining payments (regular monthly amount)
+                    for (let month = 2; month <= months; month++) {
                       const dueDate = new Date(startDate);
                       dueDate.setMonth(dueDate.getMonth() + month);
                       
@@ -370,49 +440,51 @@ class Contract {
                         }
                         
                         paymentsCreated++;
-                        if (paymentsCreated === months) {
+                        if (paymentsCreated === totalPayments) {
                           // All payments created, commit transaction
+                          const commitTransaction = () => {
+                            db.query('COMMIT', (commitErr) => {
+                              if (commitErr) {
+                                return rollbackAndReject(commitErr, reject);
+                              }
+                              
+                              resolve({
+                                success: true,
+                                message: 'Contract approved successfully and payment schedule created',
+                                contractId: contractId,
+                                paymentsCreated: contract.installment_months || contract.months,
+                                firstPaymentAmount: contract.installment_first_payment || contract.down_payment,
+                                monthlyPaymentAmount: contract.installment_per_month || contract.monthly_payment
+                              });
+                            });
+                          };
                           commitTransaction();
                         }
                       });
                     }
-                  };
+                  });
+                };
 
-                  // Start creating payment schedule
-                  createPaymentSchedule();
-                });
-              };
+                // Start creating payment schedule
+                createPaymentSchedule();
+              });
+            };
 
-              // Start the process
-              createInventoryLog();
-            });
+            // Start the process
+            createInventoryLog();
           });
         });
-
-        function commitTransaction() {
-          db.query('COMMIT', (commitErr) => {
-            if (commitErr) {
-              return rollbackAndReject(commitErr, reject);
-            }
-            
-            resolve({
-              success: true,
-              message: 'Contract approved successfully and payment schedule created',
-              contractId: contractId,
-              paymentsCreated: contract.months
-            });
-          });
-        }
-
-        // Helper function to rollback and reject
-        function rollbackAndReject(error, rejectCallback) {
-          db.query('ROLLBACK', () => {
-            rejectCallback(error);
-          });
-        }
       });
+
+      // Helper function to rollback and reject
+      function rollbackAndReject(error, rejectCallback) {
+        db.query('ROLLBACK', () => {
+          rejectCallback(error);
+        });
+      }
     });
-  }
+  });
+}
 
   // Reject contract - increase item quantity by 1 (release reservation)
   static reject(contractId, approverId, reason) {
@@ -510,6 +582,9 @@ class Contract {
           i.name as item_name,
           i.price_cash,
           i.price_installment_total,
+          i.installment_first_payment,
+          i.installment_per_month,
+          i.installment_months,
           i.quantity as item_quantity,
           u.username as worker_name,
           ca.status as approval_status
@@ -543,6 +618,9 @@ class Contract {
           i.name as item_name,
           i.price_cash,
           i.price_installment_total,
+          i.installment_first_payment,
+          i.installment_per_month,
+          i.installment_months,
           u.username as worker_name,
           ca.status as approval_status,
           ca.reason as rejection_reason,
@@ -589,6 +667,9 @@ class Contract {
           cc.email as customer_email,
           i.name as item_name,
           i.description as item_description,
+          i.installment_first_payment,
+          i.installment_per_month,
+          i.installment_months,
           u.username as worker_name,
           ca.status as approval_status,
           ca.reason as rejection_reason,
