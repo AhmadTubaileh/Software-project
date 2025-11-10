@@ -1,6 +1,9 @@
-import React, { useCallback, useEffect } from 'react';
+import React, { useCallback, useState } from 'react';
+import ImageModal from './ImageModal';
 
 const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
+  const [viewingImage, setViewingImage] = useState(false);
+
   const handleCustomerChange = (field, value) => {
     updateFormData({
       customer: {
@@ -29,6 +32,29 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
     }
   };
 
+  const handleViewImage = () => {
+    if (formData.customer.id_card_image) {
+      setViewingImage(true);
+    }
+  };
+
+  const handleCloseImageModal = () => {
+    setViewingImage(false);
+  };
+
+  const getImageSrc = () => {
+    if (!formData.customer.id_card_image) return null;
+    
+    if (typeof formData.customer.id_card_image === 'string') {
+      // Base64 image from database
+      return `data:image/jpeg;base64,${formData.customer.id_card_image}`;
+    } else if (formData.customer.id_card_image instanceof File) {
+      // New uploaded file
+      return URL.createObjectURL(formData.customer.id_card_image);
+    }
+    return null;
+  };
+
   const canProceed = () => {
     const { customer } = formData;
     return customer.full_name.trim() && 
@@ -39,19 +65,33 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
 
   // Display existing image if available
   const renderExistingImage = () => {
-    if (formData.customer.id_card_image && typeof formData.customer.id_card_image === 'string') {
-      // This is a base64 image from existing customer
+    const imageSrc = getImageSrc();
+    if (imageSrc) {
       return (
         <div className="mt-2">
-          <p className="text-sm text-green-400 mb-2">Existing ID Card Image:</p>
-          <img 
-            src={`data:image/jpeg;base64,${formData.customer.id_card_image}`} 
-            alt="Existing ID Card"
-            className="w-32 h-20 object-cover rounded border border-gray-600"
-          />
-          <p className="text-xs text-gray-400 mt-1">
-            This image is already on file. Upload a new one only if you need to update it.
-          </p>
+          <p className="text-sm text-green-400 mb-2">ID Card Image:</p>
+          <div className="flex items-center gap-4">
+            <img 
+              src={imageSrc} 
+              alt="ID Card"
+              className="w-32 h-20 object-cover rounded border border-gray-600 cursor-pointer hover:border-blue-500 transition-colors duration-200"
+              onClick={handleViewImage}
+            />
+            <div>
+              <button
+                type="button"
+                onClick={handleViewImage}
+                className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors duration-200 mb-2"
+              >
+                🔍 View Full Size
+              </button>
+              <p className="text-xs text-gray-400">
+                {typeof formData.customer.id_card_image === 'string' 
+                  ? 'Existing image from database'
+                  : 'New image selected'}
+              </p>
+            </div>
+          </div>
         </div>
       );
     }
@@ -150,7 +190,7 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
               onChange={handleFileChange}
               className="flex-1 px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
             />
-            {formData.customer.id_card_image && formData.customer.id_card_image instanceof File && (
+            {formData.customer.id_card_image && formData.customer.id_card_image instanceof File && !renderExistingImage() && (
               <span className="text-green-400 text-sm">
                 ✅ New image selected
               </span>
@@ -162,6 +202,17 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
               : 'Upload a clear photo of the customer\'s ID card (max 5MB)'}
           </p>
         </div>
+
+        {/* Image Modal */}
+        {viewingImage && (
+          <ImageModal
+            isOpen={viewingImage}
+            imageSrc={getImageSrc()}
+            customer={formData.customer}
+            onClose={handleCloseImageModal}
+            type="customer"
+          />
+        )}
 
         {/* Action Buttons */}
         <div className="flex justify-between pt-6">
