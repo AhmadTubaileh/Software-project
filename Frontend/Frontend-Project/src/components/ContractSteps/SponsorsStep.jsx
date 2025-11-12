@@ -1,8 +1,10 @@
 import React, { useCallback, useState } from 'react';
 import ImageModal from './ImageModal';
+import toast from 'react-hot-toast';
 
 const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
   const [viewingImage, setViewingImage] = useState(null);
+  const [verifyingSponsors, setVerifyingSponsors] = useState({});
 
   const addSponsor = () => {
     const newSponsor = {
@@ -11,7 +13,9 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
       id_card_number: '',
       relationship: '',
       address: '',
-      id_card_image: null
+      id_card_image: null,
+      existingCustomer: null,
+      searched: false
     };
     
     updateFormData({
@@ -30,6 +34,111 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
     );
     
     updateFormData({ sponsors: updatedSponsors });
+  };
+
+  const handleSponsorIdCardChange = (index, e) => {
+    const idCardNumber = e.target.value;
+    updateSponsor(index, 'id_card_number', idCardNumber);
+    
+    // Reset search status when ID card number changes
+    if (formData.sponsors[index].searched) {
+      updateSponsor(index, 'searched', false);
+    }
+    if (formData.sponsors[index].existingCustomer) {
+      updateSponsor(index, 'existingCustomer', null);
+    }
+  };
+
+  const handleSponsorKeyPress = (index, e) => {
+    if (e.key === 'Enter') {
+      verifySponsorIdCard(index);
+    }
+  };
+
+  const verifySponsorIdCard = async (index) => {
+    const sponsor = formData.sponsors[index];
+    
+    if (!sponsor.id_card_number.trim()) {
+      toast.error('Please enter an ID card number');
+      return;
+    }
+
+    if (sponsor.id_card_number.trim().length < 5) {
+      toast.error('Please enter a valid ID card number');
+      return;
+    }
+
+    setVerifyingSponsors(prev => ({ ...prev, [index]: true }));
+    
+    try {
+      console.log('Verifying sponsor ID:', sponsor.id_card_number);
+      
+      const response = await fetch('http://localhost:5000/api/customers/check', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id_card_number: sponsor.id_card_number }),
+      });
+
+      const data = await response.json();
+      console.log('Sponsor verification response:', data);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      if (data.exists && data.customerData) {
+        // Pre-fill sponsor data if exists
+        const customerData = data.customerData;
+        console.log('Found existing customer:', customerData);
+        
+        // Create updated sponsor object with all changes
+        const updatedSponsor = {
+          ...sponsor,
+          full_name: customerData.full_name || '',
+          phone: customerData.phone || '',
+          address: customerData.address || customerData.address || '',
+          id_card_image: customerData.id_card_image || null,
+          existingCustomer: customerData,
+          searched: true
+        };
+
+        // Update the entire sponsor at once
+        const updatedSponsors = [...formData.sponsors];
+        updatedSponsors[index] = updatedSponsor;
+        
+        updateFormData({ 
+          sponsors: updatedSponsors 
+        });
+        
+        toast.success(`Sponsor found! ${data.type === 'user' ? 'User account' : 'Existing contract customer'}`);
+      } else {
+        console.log('No existing customer found');
+        // Update only the searched status
+        const updatedSponsors = [...formData.sponsors];
+        updatedSponsors[index] = {
+          ...sponsor,
+          existingCustomer: null,
+          searched: true
+        };
+        
+        updateFormData({ 
+          sponsors: updatedSponsors 
+        });
+        
+        toast.success('ID card not found. Please fill in sponsor information.');
+      }
+    } catch (error) {
+      console.error('Sponsor verification error:', error);
+      if (error.message.includes('Network') || error.message.includes('fetch')) {
+        toast.error('Network error: Cannot connect to server');
+      } else {
+        toast.error(error.message || 'Failed to verify sponsor ID card');
+      }
+    } finally {
+      setVerifyingSponsors(prev => ({ ...prev, [index]: false }));
+    }
   };
 
   const handleSponsorFileChange = (index, e) => {
@@ -130,6 +239,79 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
               )}
             </div>
 
+            {/* ID Card Verification */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                ID Card Number *
+              </label>
+              <div className="flex gap-4">
+                <input
+                  type="text"
+                  value={sponsor.id_card_number}
+                  onChange={(e) => handleSponsorIdCardChange(index, e)}
+                  onKeyPress={(e) => handleSponsorKeyPress(index, e)}
+                  className="flex-1 px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                  placeholder="Enter sponsor's ID card number"
+                  disabled={verifyingSponsors[index]}
+                />
+                <button
+                  onClick={() => verifySponsorIdCard(index)}
+                  disabled={verifyingSponsors[index] || !sponsor.id_card_number.trim()}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded font-medium transition-colors duration-200 flex items-center gap-2"
+                >
+                  {verifyingSponsors[index] ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Verifying...
+                    </>
+                  ) : (
+                    'Verify'
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Verification Result */}
+            {sponsor.searched && (
+              <div className={`p-3 rounded-lg border mb-4 ${
+                sponsor.existingCustomer 
+                  ? 'bg-green-900/20 border-green-500' 
+                  : 'bg-blue-900/20 border-blue-500'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`text-xl ${
+                    sponsor.existingCustomer ? 'text-green-400' : 'text-blue-400'
+                  }`}>
+                    {sponsor.existingCustomer ? '✅' : '🆕'}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-sm">
+                      {sponsor.existingCustomer 
+                        ? 'Sponsor Found!' 
+                        : 'New Sponsor'}
+                    </h3>
+                    <p className="text-xs text-gray-300 mt-1">
+                      {sponsor.existingCustomer 
+                        ? `Existing ${sponsor.existingCustomer.type === 'user' ? 'user' : 'contract customer'} found. You can review and update their information.`
+                        : 'This is a new sponsor. Please fill in their information.'}
+                    </p>
+                    {sponsor.existingCustomer && (
+                      <div className="mt-1 text-xs text-gray-400">
+                        <p><strong>Name:</strong> {sponsor.full_name}</p>
+                        <p><strong>Phone:</strong> {sponsor.phone}</p>
+                        {sponsor.address && (
+                          <p><strong>Address:</strong> {sponsor.address}</p>
+                        )}
+                        {sponsor.id_card_image && (
+                          <p><strong>ID Card Image:</strong> ✅ Already on file</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               {/* Full Name */}
               <div>
@@ -161,20 +343,6 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-              {/* ID Card Number */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  ID Card Number *
-                </label>
-                <input
-                  type="text"
-                  value={sponsor.id_card_number}
-                  onChange={(e) => updateSponsor(index, 'id_card_number', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
-                  placeholder="ID card number"
-                />
-              </div>
-
               {/* Relationship */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -226,6 +394,11 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                   </span>
                 )}
               </div>
+              <p className="text-sm text-gray-400 mt-2">
+                {sponsor.existingCustomer && sponsor.id_card_image && typeof sponsor.id_card_image === 'string' 
+                  ? 'Upload a new image only if you need to update the existing one. Leave empty to keep the current image.'
+                  : 'Upload a clear photo of the sponsor\'s ID card (max 5MB)'}
+              </p>
             </div>
           </div>
         ))}
