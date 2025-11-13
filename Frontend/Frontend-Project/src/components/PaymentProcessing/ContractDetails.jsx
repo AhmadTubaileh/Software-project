@@ -32,7 +32,7 @@ const ContractDetails = ({ contract, payments, selectedPayment, onSelectPayment 
       <h3 className="text-xl font-semibold mb-4">Selected Contract</h3>
       
       {/* Contract Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div className="bg-gray-700/50 rounded-lg p-4">
           <p className="text-gray-400 text-sm">Customer</p>
           <p className="font-semibold text-lg">{contract.customer_name}</p>
@@ -47,6 +47,21 @@ const ContractDetails = ({ contract, payments, selectedPayment, onSelectPayment 
           <p className="text-gray-400 text-sm">Payment Plan</p>
           <p className="font-semibold text-lg">{contract.months} months</p>
           <p className="text-gray-400">{formatCurrency(contract.monthly_payment)}/month</p>
+        </div>
+        <div className="bg-gray-700/50 rounded-lg p-4">
+          <p className="text-gray-400 text-sm">Contract Status</p>
+          <p className={`font-semibold text-lg ${
+            contract.status === 'completed' ? 'text-green-400' :
+            contract.status === 'active' ? 'text-blue-400' :
+            contract.status === 'pending' ? 'text-yellow-400' : 'text-red-400'
+          }`}>
+            {contract.status.toUpperCase()}
+          </p>
+          <p className="text-gray-400 text-sm">
+            {contract.status === 'completed' ? 'All payments completed' :
+             contract.status === 'active' ? 'Payments in progress' :
+             contract.status === 'pending' ? 'Awaiting approval' : 'Rejected'}
+          </p>
         </div>
       </div>
 
