@@ -1,6 +1,6 @@
 import React from 'react';
 
-const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject }) => {
+const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject, showActions = true }) => {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -16,7 +16,9 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
     const statusConfig = {
       'pending': { color: 'bg-yellow-600', text: 'Pending Review' },
       'approved': { color: 'bg-green-600', text: 'Approved' },
-      'rejected': { color: 'bg-red-600', text: 'Rejected' }
+      'rejected': { color: 'bg-red-600', text: 'Rejected' },
+      'active': { color: 'bg-blue-600', text: 'Active' },
+      'completed': { color: 'bg-purple-600', text: 'Completed' }
     };
     
     const config = statusConfig[status] || statusConfig.pending;
@@ -31,9 +33,9 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
     <div className="bg-gray-800/50 rounded-xl border border-gray-700/50 overflow-hidden">
       {/* Table Header */}
       <div className="p-4 border-b border-gray-700/50">
-        <h2 className="text-xl font-semibold text-white">Pending Contracts</h2>
+        <h2 className="text-xl font-semibold text-white">Contracts</h2>
         <p className="text-gray-400 text-sm mt-1">
-          Review contract applications and make decisions
+          {contracts.length} contract{contracts.length !== 1 ? 's' : ''} found
         </p>
       </div>
 
@@ -49,8 +51,8 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
       {!loading && contracts.length === 0 && (
         <div className="p-12 text-center">
           <div className="text-6xl mb-4 text-gray-600">📝</div>
-          <h3 className="text-xl font-semibold text-gray-400 mb-2">No Pending Contracts</h3>
-          <p className="text-gray-500">All contract applications have been processed.</p>
+          <h3 className="text-xl font-semibold text-gray-400 mb-2">No Contracts Found</h3>
+          <p className="text-gray-500">No contracts match the current filter.</p>
         </div>
       )}
 
@@ -118,18 +120,22 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex space-x-2">
-                      <button
-                        onClick={() => onApprove(contract)}
-                        className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm font-medium transition-colors duration-200"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => onReject(contract)}
-                        className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm font-medium transition-colors duration-200"
-                      >
-                        Reject
-                      </button>
+                      {showActions && contract.status === 'pending' && (
+                        <>
+                          <button
+                            onClick={() => onApprove(contract)}
+                            className="px-3 py-1 bg-green-600 hover:bg-green-700 rounded text-sm font-medium transition-colors duration-200"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => onReject(contract)}
+                            className="px-3 py-1 bg-red-600 hover:bg-red-700 rounded text-sm font-medium transition-colors duration-200"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
                       <button
                         onClick={() => onViewDetails(contract)}
                         className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors duration-200"
