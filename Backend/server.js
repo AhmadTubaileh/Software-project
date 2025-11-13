@@ -6,8 +6,9 @@ const employeeRoutes = require('./routes/employees');
 const authRoutes = require('./routes/auth');
 const itemsRoutes = require('./routes/items');
 const posRoutes = require('./routes/pos');
-const contractRoutes = require('./routes/contracts'); // NEW
-const customerRoutes = require('./routes/customers'); // NEW
+const contractRoutes = require('./routes/contracts');
+const customerRoutes = require('./routes/customers');
+const paymentRoutes = require('./routes/payments'); // NEW
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -22,19 +23,20 @@ app.use('/api/employees', employeeRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/items', itemsRoutes);
 app.use('/api/pos', posRoutes);
-app.use('/api/contracts', contractRoutes); // NEW
-app.use('/api/customers', customerRoutes); // NEW
+app.use('/api/contracts', contractRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/payments', paymentRoutes); // NEW
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 
     message: 'Server is running!',
-    routes: ['/api/employees', '/api/auth', '/api/items', '/api/pos', '/api/contracts', '/api/customers']
+    routes: ['/api/employees', '/api/auth', '/api/items', '/api/pos', '/api/contracts', '/api/customers', '/api/payments']
   });
 });
 
 // Start server
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
-  console.log(`📝 Contract System: http://localhost:${PORT}/api/contracts`);
+  console.log(`💰 Payment System: http://localhost:${PORT}/api/payments`);
 });
