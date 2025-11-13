@@ -7,32 +7,25 @@ function AdminSidebar() {
   const location = useLocation();
   const { clearSession, currentUser } = useLocalSession();
 
-  // Add this to the menuItems array:
-const menuItems = [
-  { name: 'Dashboard', path: '/', icon: '📊' },
-  { name: 'POS', path: '/pos', icon: '💳' },
-  { name: 'Employees', path: '/employees', icon: '👨‍💼' },
-  { name: 'Items', path: '/items', icon: '📦' },
-  { name: 'New Contract', path: '/contract-application', icon: '📝' },
-  { name: 'Manage Contracts', path: '/contract-management', icon: '⚡' }, // NEW
-];
+  // Updated menuItems array with Payment Processing
+  const menuItems = [
+    { name: 'Dashboard', path: '/', icon: '📊' },
+    { name: 'POS', path: '/pos', icon: '💳' },
+    { name: 'Employees', path: '/employees', icon: '👨‍💼' },
+    { name: 'Items', path: '/items', icon: '📦' },
+    { name: 'New Contract', path: '/contract-application', icon: '📝' },
+    { name: 'Manage Contracts', path: '/contract-management', icon: '⚡' },
+    { name: 'Payment Processing', path: '/payment-processing', icon: '💰' }, // NEW
+  ];
 
   const isActive = (path) => location.pathname === path;
 
-  // Enhanced logout function
   const handleLogout = () => {
-    // Clear the session (remove user data from localStorage)
     clearSession();
-    
-    // Show logout success message
     if (window.toast) {
       window.toast.success('Logged out successfully!');
     }
-    
-    // Redirect to dashboard (home page)
     navigate('/');
-    
-    // Force a page reload to reset the application state
     setTimeout(() => {
       window.location.reload();
     }, 100);
@@ -72,7 +65,7 @@ const menuItems = [
         </div>
       </div>
 
-      {/* Navigation - Vertical Arrangement */}
+      {/* Navigation */}
       <nav className="flex-1 space-y-2">
         {menuItems.map((item) => (
           <button
@@ -104,7 +97,6 @@ const menuItems = [
               )}
             </div>
             
-            {/* Hover effect */}
             <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl" />
           </button>
         ))}
@@ -113,7 +105,7 @@ const menuItems = [
       {/* Footer */}
       <div className="pt-6 border-t border-gray-700/50">
         <button
-          onClick={handleLogout} // Use the enhanced logout function
+          onClick={handleLogout}
           className="w-full flex items-center gap-3 p-3 text-gray-400 hover:text-red-400 hover:bg-red-500/10 rounded-xl transition-all duration-200 group"
         >
           <div className="text-xl group-hover:scale-110 transition-transform duration-200">
