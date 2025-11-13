@@ -11,6 +11,7 @@ import StatsCards from '../components/ContractManagement/StatsCards';
 
 function ContractManagement() {
   const [contracts, setContracts] = useState([]);
+  const [filteredContracts, setFilteredContracts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedContract, setSelectedContract] = useState(null);
   const [showApproveModal, setShowApproveModal] = useState(false);
@@ -21,6 +22,7 @@ function ContractManagement() {
   const [contractDetails, setContractDetails] = useState(null);
   const [sponsors, setSponsors] = useState([]);
   const [viewingImage, setViewingImage] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('pending'); // Default to pending
   const { currentUser } = useLocalSession();
 
   // Access control
@@ -35,11 +37,18 @@ function ContractManagement() {
     );
   }
 
-  // Fetch pending contracts
+  // Fetch contracts based on filter
   const fetchContracts = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/contracts/pending');
+      let url = 'http://localhost:5000/api/contracts/all';
+      
+      // Add status filter if not 'all'
+      if (statusFilter !== 'all') {
+        url += `?status=${statusFilter}`;
+      }
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error('Failed to fetch contracts');
@@ -47,14 +56,16 @@ function ContractManagement() {
       
       const data = await response.json();
       setContracts(data.contracts || []);
+      setFilteredContracts(data.contracts || []);
     } catch (error) {
       console.error('Error fetching contracts:', error);
       toast.error('Failed to load contracts');
       setContracts([]);
+      setFilteredContracts([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [statusFilter]);
 
   // Fetch contract details and sponsors
   const fetchContractDetails = async (contractId) => {
@@ -114,7 +125,7 @@ function ContractManagement() {
     return null;
   };
 
-  // Load contracts on component mount
+  // Load contracts when component mounts or filter changes
   useEffect(() => {
     fetchContracts();
   }, [fetchContracts]);
@@ -206,7 +217,7 @@ function ContractManagement() {
     setSelectedContract(null);
   };
 
-  // Handle view image - FIXED VERSION
+  // Handle view image
   const handleViewImage = (person, type = 'customer') => {
     console.log('=== HANDLE VIEW IMAGE DEBUG ===');
     console.log('Person:', person.full_name, 'Type:', type);
@@ -244,6 +255,11 @@ function ContractManagement() {
     return convertImageToBase64(idCardImage);
   };
 
+  // Handle filter change
+  const handleFilterChange = (newFilter) => {
+    setStatusFilter(newFilter);
+  };
+
   return (
     <div className="flex min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
@@ -264,12 +280,37 @@ function ContractManagement() {
             </p>
           </div>
 
+          {/* Status Filter */}
+          <div className="mb-6">
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: 'pending', label: 'Pending Review', color: 'bg-yellow-600 hover:bg-yellow-700' },
+                { value: 'active', label: 'Active', color: 'bg-green-600 hover:bg-green-700' },
+                { value: 'rejected', label: 'Rejected', color: 'bg-red-600 hover:bg-red-700' },
+                { value: 'completed', label: 'Completed', color: 'bg-blue-600 hover:bg-blue-700' },
+                { value: 'all', label: 'All Contracts', color: 'bg-purple-600 hover:bg-purple-700' }
+              ].map((filter) => (
+                <button
+                  key={filter.value}
+                  onClick={() => handleFilterChange(filter.value)}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                    statusFilter === filter.value 
+                      ? filter.color.replace('hover:', '') + ' ring-2 ring-white ring-opacity-50' 
+                      : 'bg-gray-700 hover:bg-gray-600'
+                  }`}
+                >
+                  {filter.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Stats Cards */}
           <StatsCards contracts={contracts} />
 
           {/* Contracts Table */}
           <ContractsTable
-            contracts={contracts}
+            contracts={filteredContracts}
             loading={loading}
             onViewDetails={handleViewDetails}
             onApprove={(contract) => {
@@ -280,6 +321,7 @@ function ContractManagement() {
               setSelectedContract(contract);
               setShowRejectModal(true);
             }}
+            showActions={statusFilter === 'pending'} // Only show approve/reject for pending contracts
           />
         </div>
       </main>
@@ -295,7 +337,7 @@ function ContractManagement() {
         />
       )}
 
-      {/* Image Modal - FIXED: Pass imageSrc directly */}
+      {/* Image Modal */}
       {viewingImage && (
         <ImageModal
           isOpen={!!viewingImage}
