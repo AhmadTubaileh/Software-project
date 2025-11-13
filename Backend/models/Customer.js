@@ -1,24 +1,11 @@
 const db = require('../config/database');
 
 class Customer {
-  // Check if customer exists by ID card (in users or contract_customers)
-  static checkByIdCard(idCardNumber) {
+  // Enhanced verification that searches contract_customers, contract_sponsors, and users
+  static checkByIdCard(idCardNumber, targetType = 'customer') {
     return new Promise((resolve, reject) => {
       const query = `
-        SELECT 
-          'user' as type,
-          id,
-          username as full_name,
-          phone,
-          id_card as id_card_number,
-          email,
-          NULL as address,
-          card_image as id_card_image
-        FROM users 
-        WHERE id_card = ?
-        
-        UNION ALL
-        
+        -- Search in contract_customers
         SELECT 
           'contract_customer' as type,
           id,
@@ -27,12 +14,45 @@ class Customer {
           id_card_number,
           email,
           address,
-          id_card_image
+          id_card_image,
+          'contract_customers' as source_table
         FROM contract_customers 
         WHERE id_card_number = ?
+        
+        UNION ALL
+        
+        -- Search in contract_sponsors  
+        SELECT 
+          'contract_sponsor' as type,
+          id,
+          full_name,
+          phone,
+          id_card_number,
+          NULL as email,
+          address,
+          id_card_image,
+          'contract_sponsors' as source_table
+        FROM contract_sponsors 
+        WHERE id_card_number = ?
+        
+        UNION ALL
+        
+        -- Search in users
+        SELECT 
+          'user' as type,
+          id,
+          username as full_name,
+          phone,
+          id_card as id_card_number,
+          email,
+          NULL as address,
+          card_image as id_card_image,
+          'users' as source_table
+        FROM users 
+        WHERE id_card = ?
       `;
       
-      db.query(query, [idCardNumber, idCardNumber], (err, results) => {
+      db.query(query, [idCardNumber, idCardNumber, idCardNumber], (err, results) => {
         if (err) {
           reject(err);
           return;
@@ -57,7 +77,7 @@ class Customer {
     });
   }
 
-  // Create or update customer in contract_customers table
+  // Create or update customer in contract_customers table (original functionality)
   static createOrUpdate(customerData) {
     return new Promise((resolve, reject) => {
       // First, check if customer already exists

@@ -78,7 +78,10 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ id_card_number: sponsor.id_card_number }),
+        body: JSON.stringify({ 
+          id_card_number: sponsor.id_card_number,
+          target_type: 'sponsor' 
+        }),
       });
 
       const data = await response.json();
@@ -89,7 +92,7 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
       }
 
       if (data.exists && data.customerData) {
-        // Pre-fill sponsor data if exists
+        // Pre-fill sponsor data if exists (BUT DON'T SAVE TO DATABASE)
         const customerData = data.customerData;
         console.log('Found existing customer:', customerData);
         
@@ -98,7 +101,7 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
           ...sponsor,
           full_name: customerData.full_name || '',
           phone: customerData.phone || '',
-          address: customerData.address || customerData.address || '',
+          address: customerData.address || '',
           id_card_image: customerData.id_card_image || null,
           existingCustomer: customerData,
           searched: true
@@ -112,7 +115,16 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
           sponsors: updatedSponsors 
         });
         
-        toast.success(`Sponsor found! ${data.type === 'user' ? 'User account' : 'Existing contract customer'}`);
+        let sourceInfo = '';
+        if (data.source_table === 'contract_customers') {
+          sourceInfo = ' (found in customers table)';
+        } else if (data.source_table === 'users') {
+          sourceInfo = ' (found in users table)';
+        } else if (data.source_table === 'contract_sponsors') {
+          sourceInfo = ' (found in sponsors table)';
+        }
+        
+        toast.success(`Sponsor found!${sourceInfo}`);
       } else {
         console.log('No existing customer found');
         // Update only the searched status
@@ -239,6 +251,24 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
               )}
             </div>
 
+            {/* Source Information */}
+            {sponsor.existingCustomer && (
+              <div className="bg-blue-900/20 border border-blue-500 p-3 rounded-lg mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="text-blue-400 text-lg">ℹ️</div>
+                  <div>
+                    <h3 className="font-semibold text-blue-400 text-sm">Data Source</h3>
+                    <p className="text-xs text-gray-300 mt-1">
+                      Found in: <strong>{sponsor.existingCustomer.source_table}</strong> as <strong>{sponsor.existingCustomer.type}</strong>
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Information will be used for this contract only
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ID Card Verification */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -292,7 +322,7 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                     </h3>
                     <p className="text-xs text-gray-300 mt-1">
                       {sponsor.existingCustomer 
-                        ? `Existing ${sponsor.existingCustomer.type === 'user' ? 'user' : 'contract customer'} found. You can review and update their information.`
+                        ? `Existing ${sponsor.existingCustomer.type} found. You can review and update their information.`
                         : 'This is a new sponsor. Please fill in their information.'}
                     </p>
                     {sponsor.existingCustomer && (
