@@ -119,8 +119,16 @@ function PaymentProcessing() {
 
       toast.success(data.message || 'Payment processed successfully!');
       
-      // Refresh payments
+      // Refresh contract details and payments
       if (selectedContract) {
+        // Reload contract details to get updated status
+        const contractResponse = await fetch(`http://localhost:5000/api/contracts/${selectedContract.id}`);
+        if (contractResponse.ok) {
+          const contractData = await contractResponse.json();
+          setSelectedContract(contractData.contract);
+        }
+
+        // Reload payments
         const paymentsResponse = await fetch(`http://localhost:5000/api/payments/contract/${selectedContract.id}`);
         if (paymentsResponse.ok) {
           const paymentsData = await paymentsResponse.json();
@@ -239,10 +247,6 @@ const formatCurrency = (amount) => {
     style: 'currency',
     currency: 'USD'
   }).format(amount);
-};
-
-const formatDate = (dateString) => {
-  return new Date(dateString).toLocaleDateString();
 };
 
 export default PaymentProcessing;

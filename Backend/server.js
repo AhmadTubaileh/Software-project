@@ -8,7 +8,7 @@ const itemsRoutes = require('./routes/items');
 const posRoutes = require('./routes/pos');
 const contractRoutes = require('./routes/contracts');
 const customerRoutes = require('./routes/customers');
-const paymentRoutes = require('./routes/payments'); // NEW
+const paymentRoutes = require('./routes/payments'); // Updated import
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -25,7 +25,7 @@ app.use('/api/items', itemsRoutes);
 app.use('/api/pos', posRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/customers', customerRoutes);
-app.use('/api/payments', paymentRoutes); // NEW
+app.use('/api/payments', paymentRoutes); // Same route path
 
 // Health check
 app.get('/api/health', (req, res) => {
