@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import ImageModal from './ImageModal';
+import toast from 'react-hot-toast';
 
 const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
   const [viewingImage, setViewingImage] = useState(false);
@@ -16,13 +17,11 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Validate file type
       if (!file.type.startsWith('image/')) {
         alert('Please select an image file');
         return;
       }
       
-      // Validate file size (5MB)
       if (file.size > 5 * 1024 * 1024) {
         alert('File size must be less than 5MB');
         return;
@@ -46,10 +45,8 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
     if (!formData.customer.id_card_image) return null;
     
     if (typeof formData.customer.id_card_image === 'string') {
-      // Base64 image from database
       return `data:image/jpeg;base64,${formData.customer.id_card_image}`;
     } else if (formData.customer.id_card_image instanceof File) {
-      // New uploaded file
       return URL.createObjectURL(formData.customer.id_card_image);
     }
     return null;
@@ -103,6 +100,24 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
       <h2 className="text-2xl font-bold mb-6 text-blue-400">Step 2: Customer Information</h2>
       
       <div className="space-y-6">
+        {/* Source Information */}
+        {formData.existingCustomer && (
+          <div className="bg-blue-900/20 border border-blue-500 p-4 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="text-blue-400 text-xl">ℹ️</div>
+              <div>
+                <h3 className="font-semibold text-blue-400">Data Source</h3>
+                <p className="text-sm text-gray-300 mt-1">
+                  Found in: <strong>{formData.existingCustomer.source_table}</strong> as <strong>{formData.existingCustomer.type}</strong>
+                </p>
+                <p className="text-sm text-gray-400 mt-1">
+                  Information will be used for this contract only
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Full Name */}
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -141,7 +156,7 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
               onChange={(e) => handleCustomerChange('id_card_number', e.target.value)}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               placeholder="ID card number"
-              readOnly // ID card number is set from previous step and shouldn't be changed
+              readOnly
             />
           </div>
         </div>
