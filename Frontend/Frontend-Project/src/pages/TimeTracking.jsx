@@ -2,6 +2,10 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLocalSession } from '../hooks/useLocalSession.js';
 import AdminSidebar from '../components/AdminSidebar.jsx';
 import toast, { Toaster } from 'react-hot-toast';
+import CurrentStatusCard from '../components/TimeTracking/CurrentStatusCard.jsx';
+import SummaryCards from '../components/TimeTracking/SummaryCards.jsx';
+import Timeline from '../components/TimeTracking/Timeline.jsx';
+import InfoPanel from '../components/TimeTracking/InfoPanel.jsx';
 
 function TimeTracking() {
   const [currentSession, setCurrentSession] = useState(null);
@@ -9,11 +13,6 @@ function TimeTracking() {
   const [isLoading, setIsLoading] = useState(false);
   const [clockOutNotes, setClockOutNotes] = useState('');
   const { currentUser } = useLocalSession();
-
-  const statusStyles = {
-    work: { bg: 'bg-blue-500/20', border: 'border-blue-500/30', text: 'text-blue-300', dot: 'bg-blue-400' },
-    break: { bg: 'bg-purple-500/20', border: 'border-purple-500/30', text: 'text-purple-300', dot: 'bg-purple-400' }
-  };
 
   const fetchCurrentStatus = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -182,163 +181,24 @@ function TimeTracking() {
             <p className="text-gray-400 text-lg">Simple clock in/out with automatic break detection</p>
           </div>
 
-          {/* Current Status Card */}
-          <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50 mb-8">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-semibold text-white">Current Status</h2>
-                <p className="text-gray-400">
-                  {currentSession ? 'Active work session' : 'No active session'}
-                </p>
-              </div>
-              {currentSession && (
-                <div className={`px-4 py-2 rounded-full border ${statusStyles.work.bg} ${statusStyles.work.border} ${statusStyles.work.text}`}>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${statusStyles.work.dot} animate-pulse`} />
-                    <span className="font-medium">Working</span>
-                  </div>
-                </div>
-              )}
-            </div>
+          <CurrentStatusCard
+            currentSession={currentSession}
+            clockOutNotes={clockOutNotes}
+            setClockOutNotes={setClockOutNotes}
+            onClockIn={handleClockIn}
+            onClockOut={handleClockOut}
+            isLoading={isLoading}
+            calculateCurrentDuration={calculateCurrentDuration}
+          />
 
-            {currentSession ? (
-              <div className="text-center">
-                <div className="text-5xl font-mono font-bold text-white mb-4">
-                  {calculateCurrentDuration()}
-                </div>
-                <p className="text-gray-400 mb-6">
-                  Started at {new Date(currentSession.in_time).toLocaleTimeString()}
-                </p>
-                
-                <div className="space-y-4 max-w-md mx-auto">
-                  <textarea
-                    value={clockOutNotes}
-                    onChange={(e) => setClockOutNotes(e.target.value)}
-                    placeholder="Add notes for this work session (optional)"
-                    className="w-full bg-gray-700/50 border border-gray-600/50 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue-500 resize-none"
-                    rows="3"
-                  />
-                  <button
-                    onClick={handleClockOut}
-                    disabled={isLoading}
-                    className="w-full bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white px-6 py-4 rounded-xl font-semibold text-lg transition-all duration-300 transform hover:scale-105 disabled:opacity-50"
-                  >
-                    {isLoading ? 'Ending Work...' : 'End Work Session'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center">
-                <div className="mb-6">
-                  <div className="text-6xl mb-4">⏰</div>
-                  <p className="text-gray-400">Ready to start your work day?</p>
-                </div>
-                <button
-                  onClick={handleClockIn}
-                  disabled={isLoading}
-                  className="w-full max-w-md mx-auto bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white px-6 py-4 rounded-xl font-semibold text-lg transition-all duration-300 transform hover:scale-105 disabled:opacity-50"
-                >
-                  {isLoading ? 'Starting Work...' : 'Start Work Session'}
-                </button>
-              </div>
-            )}
-          </div>
+          <SummaryCards todayStats={todayStats} />
 
-          {/* Today's Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <div className="bg-blue-500/10 rounded-xl p-4 border border-blue-500/20 text-center">
-              <div className="text-2xl font-bold text-blue-300">{todayStats.work}h</div>
-              <div className="text-blue-400/80 text-sm">Work Hours</div>
-            </div>
-            <div className="bg-purple-500/10 rounded-xl p-4 border border-purple-500/20 text-center">
-              <div className="text-2xl font-bold text-purple-300">{todayStats.break}h</div>
-              <div className="text-purple-400/80 text-sm">Break Hours</div>
-            </div>
-            <div className="bg-gray-700/50 rounded-xl p-4 border border-gray-600/50 text-center">
-              <div className="text-2xl font-bold text-white">{todayStats.total}h</div>
-              <div className="text-gray-400 text-sm">Total Hours</div>
-            </div>
-          </div>
+          <Timeline
+            todaySessions={todaySessions}
+            todayStats={todayStats}
+          />
 
-          {/* Today's Timeline */}
-          <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50">
-            <h3 className="text-xl font-semibold text-white mb-4">Today's Timeline</h3>
-            
-            {todaySessions.length > 0 ? (
-              <div className="space-y-4">
-                {/* Work Sessions */}
-                {todaySessions.map((session, index) => (
-                  <div key={session.id}>
-                    {/* Auto-detected Break (if any) */}
-                    {index > 0 && todayStats.autoBreaks[index - 1] && (
-                      <div className="mb-3 p-4 rounded-xl border border-purple-500/30 bg-purple-500/10">
-                        <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-3">
-                            <div className="w-3 h-3 rounded-full bg-purple-400" />
-                            <span className="font-medium text-purple-300">Auto Break</span>
-                          </div>
-                          <div className="text-right">
-                            <div className="text-white font-mono">
-                              {todayStats.autoBreaks[index - 1].start.toLocaleTimeString()} -{' '}
-                              {todayStats.autoBreaks[index - 1].end.toLocaleTimeString()}
-                            </div>
-                            <div className="text-sm text-purple-300">
-                              Duration: {todayStats.autoBreaks[index - 1].duration}h
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Work Session */}
-                    <div className={`p-4 rounded-xl border ${statusStyles[session.session_type].bg} ${statusStyles[session.session_type].border}`}>
-                      <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-3 h-3 rounded-full ${statusStyles[session.session_type].dot}`} />
-                          <span className="font-medium capitalize">{session.session_type}</span>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-white font-mono">
-                            {new Date(session.in_time).toLocaleTimeString()} -{' '}
-                            {session.out_time ? new Date(session.out_time).toLocaleTimeString() : 'Active'}
-                          </div>
-                          {session.duration && (
-                            <div className="text-sm text-gray-300">
-                              Duration: {session.duration}h
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {session.notes && (
-                        <div className="mt-2 text-sm text-gray-300">
-                          📝 {session.notes}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-400">
-                <div className="text-4xl mb-2">📅</div>
-                <p>No sessions recorded today</p>
-              </div>
-            )}
-          </div>
-
-          {/* Info Panel */}
-          <div className="mt-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-            <div className="flex items-start gap-3">
-              <div className="text-blue-400 text-lg">💡</div>
-              <div>
-                <h4 className="font-semibold text-blue-300 mb-1">Automatic Break Detection</h4>
-                <p className="text-blue-400/80 text-sm">
-                  Breaks are automatically calculated between your work sessions. 
-                  Any gap between ending one work session and starting another is counted as a break.
-                </p>
-              </div>
-            </div>
-          </div>
+          <InfoPanel />
         </div>
       </main>
     </div>
