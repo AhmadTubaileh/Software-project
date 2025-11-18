@@ -9,6 +9,7 @@ const posRoutes = require('./routes/pos');
 const contractRoutes = require('./routes/contracts');
 const customerRoutes = require('./routes/customers');
 const paymentRoutes = require('./routes/payments'); // Updated import
+const taskRoutes = require('./routes/tasks');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -26,12 +27,13 @@ app.use('/api/pos', posRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/payments', paymentRoutes); // Same route path
+app.use('/api/tasks', taskRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 
     message: 'Server is running!',
-    routes: ['/api/employees', '/api/auth', '/api/items', '/api/pos', '/api/contracts', '/api/customers', '/api/payments']
+    routes: ['/api/employees', '/api/auth', '/api/items', '/api/pos', '/api/contracts', '/api/customers', '/api/payments','/api/tasks']
   });
 });
 

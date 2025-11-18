@@ -8,7 +8,9 @@ import Employees from './pages/Employees.jsx';
 import Items from './pages/Items.jsx';
 import ContractApplication from './pages/ContractApplication.jsx';
 import ContractManagement from './pages/ContractManagement.jsx';
-import PaymentProcessing from './pages/PaymentProcessing.jsx'; // NEW
+import PaymentProcessing from './pages/PaymentProcessing.jsx';
+import TaskManagement from './pages/TaskManagement.jsx'; // NEW
+import MyTasks from './pages/MyTasks.jsx'; // NEW
 
 function App() {
   return (
@@ -20,7 +22,9 @@ function App() {
         <Route path="/items" element={<Items />} />
         <Route path="/contract-application" element={<ContractApplication />} />
         <Route path="/contract-management" element={<ContractManagement />} />
-        <Route path="/payment-processing" element={<PaymentProcessing />} /> {/* NEW */}
+        <Route path="/payment-processing" element={<PaymentProcessing />} />
+        <Route path="/task-management" element={<TaskManagement />} /> {/* NEW */}
+        <Route path="/my-tasks" element={<MyTasks />} /> {/* NEW */}
       </Routes>
     </Router>
   );
