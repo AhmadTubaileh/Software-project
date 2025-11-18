@@ -2,398 +2,349 @@ const db = require('../config/database');
 
 class Contract {
   // Get items available for installment
- static getInstallmentItems() {
-  return new Promise((resolve, reject) => {
-    const query = `
-      SELECT 
-        i.*
-      FROM items i
-      WHERE i.available = 1 
-      AND i.installment = 1
-      AND i.quantity > 0
-      ORDER BY i.name
-    `;
-    
-    db.query(query, (err, results) => {
-      if (err) {
-        reject(err);
-        return;
-      }
+  static getInstallmentItems() {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT 
+          i.*
+        FROM items i
+        WHERE i.available = 1 
+        AND i.installment = 1
+        AND i.quantity > 0
+        ORDER BY i.name
+      `;
       
-      // Convert BLOB images to base64
-      const items = results.map(item => {
-        if (item.item_image) {
-          try {
-            item.item_image = Buffer.from(item.item_image).toString('base64');
-          } catch (error) {
-            console.error('Error serializing image:', error);
-            item.item_image = null;
-          }
+      db.query(query, (err, results) => {
+        if (err) {
+          reject(err);
+          return;
         }
-        return item;
+        
+        // Convert BLOB images to base64
+        const items = results.map(item => {
+          if (item.item_image) {
+            try {
+              item.item_image = Buffer.from(item.item_image).toString('base64');
+            } catch (error) {
+              console.error('Error serializing image:', error);
+              item.item_image = null;
+            }
+          }
+          return item;
+        });
+        
+        resolve(items);
       });
-      
-      resolve(items);
     });
-  });
-}
+  }
 
   // Apply for new contract
   static apply(applicationData) {
-  return new Promise((resolve, reject) => {
-    const { customer_data, sponsors_data, contract_data } = applicationData;
+    return new Promise((resolve, reject) => {
+      const { customer_data, sponsors_data, contract_data } = applicationData;
 
-    db.query('START TRANSACTION', (startErr) => {
-      if (startErr) {
-        reject(startErr);
-        return;
-      }
-
-      let customerId;
-
-      // 1. Check if customer exists
-      const customerCheckQuery = 'SELECT id FROM contract_customers WHERE id_card_number = ?';
-      db.query(customerCheckQuery, [customer_data.id_card_number], (err, customerResults) => {
-        if (err) {
-          return rollbackAndReject(err, reject);
+      db.query('START TRANSACTION', (startErr) => {
+        if (startErr) {
+          reject(startErr);
+          return;
         }
 
-        if (customerResults.length > 0) {
-          customerId = customerResults[0].id;
-          // Update customer
-          const updateCustomerQuery = `
-            UPDATE contract_customers 
-            SET full_name = ?, phone = ?, address = ?, email = ?, 
-                id_card_image = COALESCE(?, id_card_image)
-            WHERE id = ?
-          `;
-          
-          db.query(updateCustomerQuery, [
-            customer_data.full_name,
-            customer_data.phone,
-            customer_data.address,
-            customer_data.email,
-            customer_data.id_card_image,
-            customerId
-          ], (updateErr) => {
-            if (updateErr) {
-              return rollbackAndReject(updateErr, reject);
-            }
-            proceedWithContract();
-          });
-        } else {
-          // Create new customer
-          const insertCustomerQuery = `
-            INSERT INTO contract_customers 
-            (full_name, phone, id_card_number, address, email, id_card_image) 
-            VALUES (?, ?, ?, ?, ?, ?)
-          `;
-          
-          db.query(insertCustomerQuery, [
-            customer_data.full_name,
-            customer_data.phone,
-            customer_data.id_card_number,
-            customer_data.address,
-            customer_data.email,
-            customer_data.id_card_image
-          ], (insertErr, insertResult) => {
-            if (insertErr) {
-              return rollbackAndReject(insertErr, reject);
-            }
-            customerId = insertResult.insertId;
-            proceedWithContract();
-          });
-        }
+        let customerId;
 
-        function proceedWithContract() {
-          // 2. Check item availability (considering current quantity only)
-          const checkAvailabilityQuery = `
-            SELECT quantity FROM items WHERE id = ?
-          `;
-          
-          db.query(checkAvailabilityQuery, [contract_data.item_id], (availErr, availabilityResults) => {
-            if (availErr) {
-              return rollbackAndReject(availErr, reject);
-            }
+        // 1. Check if customer exists
+        const customerCheckQuery = 'SELECT id FROM contract_customers WHERE id_card_number = ?';
+        db.query(customerCheckQuery, [customer_data.id_card_number], (err, customerResults) => {
+          if (err) {
+            return rollbackAndReject(err, reject);
+          }
 
-            if (availabilityResults.length === 0) {
-              return rollbackAndReject(new Error('Item not found'), reject);
-            }
+          if (customerResults.length > 0) {
+            customerId = customerResults[0].id;
+            // Update customer
+            const updateCustomerQuery = `
+              UPDATE contract_customers 
+              SET full_name = ?, phone = ?, address = ?, email = ?, 
+                  id_card_image = COALESCE(?, id_card_image)
+              WHERE id = ?
+            `;
+            
+            db.query(updateCustomerQuery, [
+              customer_data.full_name,
+              customer_data.phone,
+              customer_data.address,
+              customer_data.email,
+              customer_data.id_card_image,
+              customerId
+            ], (updateErr) => {
+              if (updateErr) {
+                return rollbackAndReject(updateErr, reject);
+              }
+              proceedWithContract();
+            });
+          } else {
+            // Create new customer
+            const insertCustomerQuery = `
+              INSERT INTO contract_customers 
+              (full_name, phone, id_card_number, address, email, id_card_image) 
+              VALUES (?, ?, ?, ?, ?, ?)
+            `;
+            
+            db.query(insertCustomerQuery, [
+              customer_data.full_name,
+              customer_data.phone,
+              customer_data.id_card_number,
+              customer_data.address,
+              customer_data.email,
+              customer_data.id_card_image
+            ], (insertErr, insertResult) => {
+              if (insertErr) {
+                return rollbackAndReject(insertErr, reject);
+              }
+              customerId = insertResult.insertId;
+              proceedWithContract();
+            });
+          }
 
-            const availableQuantity = availabilityResults[0].quantity;
-            if (availableQuantity <= 0) {
-              return rollbackAndReject(new Error('Item is out of stock'), reject);
-            }
-
-            // 3. DECREASE ITEM QUANTITY IMMEDIATELY
-            const decreaseQuantityQuery = 'UPDATE items SET quantity = quantity - 1 WHERE id = ?';
-            db.query(decreaseQuantityQuery, [contract_data.item_id], (decreaseErr) => {
-              if (decreaseErr) {
-                return rollbackAndReject(decreaseErr, reject);
+          function proceedWithContract() {
+            // 2. Check item availability (considering current quantity only)
+            const checkAvailabilityQuery = `
+              SELECT quantity FROM items WHERE id = ?
+            `;
+            
+            db.query(checkAvailabilityQuery, [contract_data.item_id], (availErr, availabilityResults) => {
+              if (availErr) {
+                return rollbackAndReject(availErr, reject);
               }
 
-              // 4. Create inventory log for quantity deduction
-              const inventoryQuery = `
-                INSERT INTO inventory_logs 
-                (item_id, worker_id, change_type, quantity_changed) 
-                VALUES (?, ?, 'sale', -1)
-              `;
-              
-              db.query(inventoryQuery, [
-                contract_data.item_id,
-                contract_data.worker_id
-              ], (inventoryErr) => {
-                if (inventoryErr) {
-                  return rollbackAndReject(inventoryErr, reject);
+              if (availabilityResults.length === 0) {
+                return rollbackAndReject(new Error('Item not found'), reject);
+              }
+
+              const availableQuantity = availabilityResults[0].quantity;
+              if (availableQuantity <= 0) {
+                return rollbackAndReject(new Error('Item is out of stock'), reject);
+              }
+
+              // 3. DECREASE ITEM QUANTITY IMMEDIATELY
+              const decreaseQuantityQuery = 'UPDATE items SET quantity = quantity - 1 WHERE id = ?';
+              db.query(decreaseQuantityQuery, [contract_data.item_id], (decreaseErr) => {
+                if (decreaseErr) {
+                  return rollbackAndReject(decreaseErr, reject);
                 }
 
-                // 5. Create sale record
-                const saleQuery = `
-                  INSERT INTO sales 
-                  (user_id, customer_id, item_id, sale_type, total_price, sale_id) 
-                  VALUES (?, NULL, ?, 'installment', ?, ?)
+                // 4. Create inventory log for quantity deduction
+                const inventoryQuery = `
+                  INSERT INTO inventory_logs 
+                  (item_id, worker_id, change_type, quantity_changed) 
+                  VALUES (?, ?, 'sale', -1)
                 `;
                 
-                const saleId = `S${Date.now()}`;
-                db.query(saleQuery, [
-                  contract_data.worker_id,
+                db.query(inventoryQuery, [
                   contract_data.item_id,
-                  contract_data.total_price,
-                  saleId
-                ], (saleErr, saleResult) => {
-                  if (saleErr) {
-                    return rollbackAndReject(saleErr, reject);
+                  contract_data.worker_id
+                ], (inventoryErr) => {
+                  if (inventoryErr) {
+                    return rollbackAndReject(inventoryErr, reject);
                   }
 
-                  const saleInsertId = saleResult.insertId;
-
-                  // 6. Create installment contract
-                  const contractQuery = `
-                    INSERT INTO installment_contracts 
-                    (sale_id, user_id, customer_id, item_id, total_price, down_payment, months, monthly_payment, start_date, status) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                  // 5. Create sale record
+                  const saleQuery = `
+                    INSERT INTO sales 
+                    (user_id, customer_id, item_id, sale_type, total_price, sale_id) 
+                    VALUES (?, NULL, ?, 'installment', ?, ?)
                   `;
                   
-                  db.query(contractQuery, [
-                    saleInsertId,
+                  const saleId = `S${Date.now()}`;
+                  db.query(saleQuery, [
                     contract_data.worker_id,
-                    customerId,
                     contract_data.item_id,
                     contract_data.total_price,
-                    contract_data.down_payment,
-                    contract_data.months,
-                    contract_data.monthly_payment,
-                    contract_data.start_date
-                  ], (contractErr, contractResult) => {
-                    if (contractErr) {
-                      return rollbackAndReject(contractErr, reject);
+                    saleId
+                  ], (saleErr, saleResult) => {
+                    if (saleErr) {
+                      return rollbackAndReject(saleErr, reject);
                     }
 
-                    const contractId = contractResult.insertId;
+                    const saleInsertId = saleResult.insertId;
 
-                    // 7. Create contract approval record
-                    const approvalQuery = `
-                      INSERT INTO contract_approvals 
-                      (contract_id, approver_id, status) 
-                      VALUES (?, ?, 'pending_review')
+                    // 6. Create installment contract
+                    const contractQuery = `
+                      INSERT INTO installment_contracts 
+                      (sale_id, user_id, customer_id, item_id, total_price, down_payment, months, monthly_payment, start_date, status) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
                     `;
                     
-                    db.query(approvalQuery, [
-                      contractId,
-                      contract_data.worker_id
-                    ], (approvalErr) => {
-                      if (approvalErr) {
-                        return rollbackAndReject(approvalErr, reject);
+                    db.query(contractQuery, [
+                      saleInsertId,
+                      contract_data.worker_id,
+                      customerId,
+                      contract_data.item_id,
+                      contract_data.total_price,
+                      contract_data.down_payment,
+                      contract_data.months,
+                      contract_data.monthly_payment,
+                      contract_data.start_date
+                    ], (contractErr, contractResult) => {
+                      if (contractErr) {
+                        return rollbackAndReject(contractErr, reject);
                       }
 
-                      // 8. Create sponsor records
-                      let sponsorsProcessed = 0;
-                      if (sponsors_data.length === 0) {
-                        return finalizeContract();
-                      }
+                      const contractId = contractResult.insertId;
 
-                      sponsors_data.forEach((sponsor) => {
-                        const sponsorQuery = `
-                          INSERT INTO contract_sponsors 
-                          (contract_id, full_name, phone, id_card_number, relationship, address, id_card_image) 
-                          VALUES (?, ?, ?, ?, ?, ?, ?)
-                        `;
-                        
-                        db.query(sponsorQuery, [
-                          contractId,
-                          sponsor.full_name,
-                          sponsor.phone,
-                          sponsor.id_card_number,
-                          sponsor.relationship,
-                          sponsor.address,
-                          sponsor.id_card_image
-                        ], (sponsorErr) => {
-                          if (sponsorErr) {
-                            return rollbackAndReject(sponsorErr, reject);
-                          }
-                          
-                          sponsorsProcessed++;
-                          if (sponsorsProcessed === sponsors_data.length) {
-                            finalizeContract();
-                          }
-                        });
-                      });
+                      // 7. Create contract approval record
+                      const approvalQuery = `
+                        INSERT INTO contract_approvals 
+                        (contract_id, approver_id, status) 
+                        VALUES (?, ?, 'pending_review')
+                      `;
+                      
+                      db.query(approvalQuery, [
+                        contractId,
+                        contract_data.worker_id
+                      ], (approvalErr) => {
+                        if (approvalErr) {
+                          return rollbackAndReject(approvalErr, reject);
+                        }
 
-                      function finalizeContract() {
-                        // Commit transaction
-                        db.query('COMMIT', (commitErr) => {
-                          if (commitErr) {
-                            return rollbackAndReject(commitErr, reject);
-                          }
+                        // 8. Create sponsor records
+                        let sponsorsProcessed = 0;
+                        if (sponsors_data.length === 0) {
+                          return finalizeContract();
+                        }
+
+                        sponsors_data.forEach((sponsor) => {
+                          const sponsorQuery = `
+                            INSERT INTO contract_sponsors 
+                            (contract_id, full_name, phone, id_card_number, relationship, address, id_card_image) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                          `;
                           
-                          resolve({
+                          db.query(sponsorQuery, [
                             contractId,
-                            saleId: saleInsertId
+                            sponsor.full_name,
+                            sponsor.phone,
+                            sponsor.id_card_number,
+                            sponsor.relationship,
+                            sponsor.address,
+                            sponsor.id_card_image
+                          ], (sponsorErr) => {
+                            if (sponsorErr) {
+                              return rollbackAndReject(sponsorErr, reject);
+                            }
+                            
+                            sponsorsProcessed++;
+                            if (sponsorsProcessed === sponsors_data.length) {
+                              finalizeContract();
+                            }
                           });
                         });
-                      }
+
+                        function finalizeContract() {
+                          // Commit transaction
+                          db.query('COMMIT', (commitErr) => {
+                            if (commitErr) {
+                              return rollbackAndReject(commitErr, reject);
+                            }
+                            
+                            resolve({
+                              contractId,
+                              saleId: saleInsertId
+                            });
+                          });
+                        }
+                      });
                     });
                   });
                 });
               });
             });
+          }
+        });
+
+        // Helper function to rollback and reject
+        function rollbackAndReject(error, rejectCallback) {
+          db.query('ROLLBACK', () => {
+            rejectCallback(error);
           });
         }
       });
-
-      // Helper function to rollback and reject
-      function rollbackAndReject(error, rejectCallback) {
-        db.query('ROLLBACK', () => {
-          rejectCallback(error);
-        });
-      }
     });
-  });
-}
+  }
 
-  // Approve contract - create payment schedule with different first payment
-static approve(contractId, approverId) {
-  return new Promise((resolve, reject) => {
-    db.query('START TRANSACTION', (startErr) => {
-      if (startErr) {
-        reject(startErr);
-        return;
-      }
-
-      // 1. Get contract details WITH ITEM PAYMENT INFO
-      const getContractQuery = `
-        SELECT 
-          ic.*, 
-          cc.full_name as customer_name, 
-          i.name as item_name,
-          i.installment_first_payment,
-          i.installment_per_month,
-          i.installment_months
-        FROM installment_contracts ic
-        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
-        LEFT JOIN items i ON ic.item_id = i.id
-        WHERE ic.id = ? AND ic.status = "pending"
-      `;
-      db.query(getContractQuery, [contractId], (err, contractResults) => {
-        if (err) {
-          return rollbackAndReject(err, reject);
+  // Approve contract - create payment schedule using CONTRACT DATA
+  static approve(contractId, approverId) {
+    return new Promise((resolve, reject) => {
+      db.query('START TRANSACTION', (startErr) => {
+        if (startErr) {
+          reject(startErr);
+          return;
         }
 
-        if (contractResults.length === 0) {
-          return rollbackAndReject(new Error('Contract not found or already processed'), reject);
-        }
-
-        const contract = contractResults[0];
-        const itemId = contract.item_id;
-
-        // 2. Update contract status to 'active'
-        const updateContractQuery = 'UPDATE installment_contracts SET status = "active" WHERE id = ?';
-        db.query(updateContractQuery, [contractId], (updateErr) => {
-          if (updateErr) {
-            return rollbackAndReject(updateErr, reject);
+        // 1. Get contract details - USE CONTRACT DATA FROM installment_contracts
+        const getContractQuery = `
+          SELECT 
+            ic.*, 
+            cc.full_name as customer_name, 
+            i.name as item_name
+          FROM installment_contracts ic
+          LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+          LEFT JOIN items i ON ic.item_id = i.id
+          WHERE ic.id = ? AND ic.status = "pending"
+        `;
+        db.query(getContractQuery, [contractId], (err, contractResults) => {
+          if (err) {
+            return rollbackAndReject(err, reject);
           }
 
-          // 3. Update approval status to 'approved'
-          const updateApprovalQuery = `
-            UPDATE contract_approvals 
-            SET status = 'approved', approver_id = ?, updated_at = NOW() 
-            WHERE contract_id = ?
-          `;
-          db.query(updateApprovalQuery, [approverId, contractId], (approvalErr) => {
-            if (approvalErr) {
-              return rollbackAndReject(approvalErr, reject);
+          if (contractResults.length === 0) {
+            return rollbackAndReject(new Error('Contract not found or already processed'), reject);
+          }
+
+          const contract = contractResults[0];
+
+          // 2. Update contract status to 'active'
+          const updateContractQuery = 'UPDATE installment_contracts SET status = "active" WHERE id = ?';
+          db.query(updateContractQuery, [contractId], (updateErr) => {
+            if (updateErr) {
+              return rollbackAndReject(updateErr, reject);
             }
 
-            // 4. DO NOT decrease item quantity - item stays reserved for installment
-            // Create inventory log for approved installment contract (using 'sale' type with 0 quantity change)
-            const createInventoryLog = () => {
-              const inventoryQuery = `
-                INSERT INTO inventory_logs 
-                (item_id, worker_id, change_type, quantity_changed) 
-                VALUES (?, ?, 'sale', 0)
-              `;
-              db.query(inventoryQuery, [itemId, approverId], (inventoryErr) => {
-                if (inventoryErr) {
-                  return rollbackAndReject(inventoryErr, reject);
-                }
+            // 3. Update approval status to 'approved'
+            const updateApprovalQuery = `
+              UPDATE contract_approvals 
+              SET status = 'approved', approver_id = ?, updated_at = NOW() 
+              WHERE contract_id = ?
+            `;
+            db.query(updateApprovalQuery, [approverId, contractId], (approvalErr) => {
+              if (approvalErr) {
+                return rollbackAndReject(approvalErr, reject);
+              }
 
-                // 5. Create payment schedule in installment_payments table WITH DIFFERENT FIRST PAYMENT
-                const createPaymentSchedule = () => {
-                  const firstPayment = parseFloat(contract.installment_first_payment) || parseFloat(contract.down_payment);
-                  const monthlyPayment = parseFloat(contract.installment_per_month) || parseFloat(contract.monthly_payment);
-                  const months = parseInt(contract.installment_months) || parseInt(contract.months);
-                  const startDate = new Date(contract.start_date);
-                  
-                  let paymentsCreated = 0;
-                  const totalPayments = months;
-
-                  // If no payments to create (months = 0), commit transaction
-                  if (months <= 0) {
-                    // Define commitTransaction here where contract is accessible
-                    const commitTransaction = () => {
-                      db.query('COMMIT', (commitErr) => {
-                        if (commitErr) {
-                          return rollbackAndReject(commitErr, reject);
-                        }
-                        
-                        resolve({
-                          success: true,
-                          message: 'Contract approved successfully and payment schedule created',
-                          contractId: contractId,
-                          paymentsCreated: contract.installment_months || contract.months,
-                          firstPaymentAmount: contract.installment_first_payment || contract.down_payment,
-                          monthlyPaymentAmount: contract.installment_per_month || contract.monthly_payment
-                        });
-                      });
-                    };
-                    commitTransaction();
-                    return;
+              // 4. Create inventory log for approved installment contract
+              const createInventoryLog = () => {
+                const inventoryQuery = `
+                  INSERT INTO inventory_logs 
+                  (item_id, worker_id, change_type, quantity_changed) 
+                  VALUES (?, ?, 'sale', 0)
+                `;
+                db.query(inventoryQuery, [contract.item_id, approverId], (inventoryErr) => {
+                  if (inventoryErr) {
+                    return rollbackAndReject(inventoryErr, reject);
                   }
 
-                  // Create first payment (different amount)
-                  const firstDueDate = new Date(startDate);
-                  firstDueDate.setMonth(firstDueDate.getMonth() + 1);
-                  
-                  const firstPaymentQuery = `
-                    INSERT INTO installment_payments 
-                    (sale_id, month_number, due_date, amount_due, amount_paid, status) 
-                    VALUES (?, ?, ?, ?, 0.00, 'pending')
-                  `;
-                  
-                  db.query(firstPaymentQuery, [
-                    contract.sale_id,
-                    1, // First month
-                    firstDueDate.toISOString().split('T')[0],
-                    firstPayment
-                  ], (firstPaymentErr) => {
-                    if (firstPaymentErr) {
-                      return rollbackAndReject(firstPaymentErr, reject);
-                    }
+                  // 5. Create payment schedule in installment_payments table USING CONTRACT DATA
+                  const createPaymentSchedule = () => {
+                    // USE CONTRACT DATA from installment_contracts table
+                    const firstPayment = parseFloat(contract.down_payment);
+                    const monthlyPayment = parseFloat(contract.monthly_payment);
+                    const months = parseInt(contract.months);
+                    const startDate = new Date(contract.start_date);
                     
-                    paymentsCreated++;
-                    
-                    // If only one payment, commit transaction
-                    if (months === 1) {
+                    let paymentsCreated = 0;
+                    const totalPayments = months;
+
+                    // If no payments to create (months = 0), commit transaction
+                    if (months <= 0) {
                       const commitTransaction = () => {
                         db.query('COMMIT', (commitErr) => {
                           if (commitErr) {
@@ -404,9 +355,9 @@ static approve(contractId, approverId) {
                             success: true,
                             message: 'Contract approved successfully and payment schedule created',
                             contractId: contractId,
-                            paymentsCreated: contract.installment_months || contract.months,
-                            firstPaymentAmount: contract.installment_first_payment || contract.down_payment,
-                            monthlyPaymentAmount: contract.installment_per_month || contract.monthly_payment
+                            paymentsCreated: contract.months,
+                            firstPaymentAmount: contract.down_payment,
+                            monthlyPaymentAmount: contract.monthly_payment
                           });
                         });
                       };
@@ -414,157 +365,201 @@ static approve(contractId, approverId) {
                       return;
                     }
 
-                    // Create remaining payments (regular monthly amount)
-                    for (let month = 2; month <= months; month++) {
-                      const dueDate = new Date(startDate);
-                      dueDate.setMonth(dueDate.getMonth() + month);
+                    // Create first payment (different amount)
+                    const firstDueDate = new Date(startDate);
+                    firstDueDate.setMonth(firstDueDate.getMonth() + 1);
+                    
+                    const firstPaymentQuery = `
+                      INSERT INTO installment_payments 
+                      (sale_id, month_number, due_date, amount_due, amount_paid, status) 
+                      VALUES (?, ?, ?, ?, 0.00, 'pending')
+                    `;
+                    
+                    db.query(firstPaymentQuery, [
+                      contract.sale_id,
+                      1, // First month
+                      firstDueDate.toISOString().split('T')[0],
+                      firstPayment
+                    ], (firstPaymentErr) => {
+                      if (firstPaymentErr) {
+                        return rollbackAndReject(firstPaymentErr, reject);
+                      }
                       
-                      const paymentQuery = `
-                        INSERT INTO installment_payments 
-                        (sale_id, month_number, due_date, amount_due, amount_paid, status) 
-                        VALUES (?, ?, ?, ?, 0.00, 'pending')
-                      `;
+                      paymentsCreated++;
                       
-                      db.query(paymentQuery, [
-                        contract.sale_id,
-                        month,
-                        dueDate.toISOString().split('T')[0],
-                        monthlyPayment
-                      ], (paymentErr) => {
-                        if (paymentErr) {
-                          return rollbackAndReject(paymentErr, reject);
-                        }
-                        
-                        paymentsCreated++;
-                        if (paymentsCreated === totalPayments) {
-                          // All payments created, commit transaction
-                          const commitTransaction = () => {
-                            db.query('COMMIT', (commitErr) => {
-                              if (commitErr) {
-                                return rollbackAndReject(commitErr, reject);
-                              }
-                              
-                              resolve({
-                                success: true,
-                                message: 'Contract approved successfully and payment schedule created',
-                                contractId: contractId,
-                                paymentsCreated: contract.installment_months || contract.months,
-                                firstPaymentAmount: contract.installment_first_payment || contract.down_payment,
-                                monthlyPaymentAmount: contract.installment_per_month || contract.monthly_payment
-                              });
+                      // If only one payment, commit transaction
+                      if (months === 1) {
+                        const commitTransaction = () => {
+                          db.query('COMMIT', (commitErr) => {
+                            if (commitErr) {
+                              return rollbackAndReject(commitErr, reject);
+                            }
+                            
+                            resolve({
+                              success: true,
+                              message: 'Contract approved successfully and payment schedule created',
+                              contractId: contractId,
+                              paymentsCreated: contract.months,
+                              firstPaymentAmount: contract.down_payment,
+                              monthlyPaymentAmount: contract.monthly_payment
                             });
-                          };
-                          commitTransaction();
-                        }
-                      });
-                    }
-                  });
-                };
+                          });
+                        };
+                        commitTransaction();
+                        return;
+                      }
 
-                // Start creating payment schedule
-                createPaymentSchedule();
-              });
-            };
+                      // Create remaining payments (regular monthly amount)
+                      for (let month = 2; month <= months; month++) {
+                        const dueDate = new Date(startDate);
+                        dueDate.setMonth(dueDate.getMonth() + month);
+                        
+                        const paymentQuery = `
+                          INSERT INTO installment_payments 
+                          (sale_id, month_number, due_date, amount_due, amount_paid, status) 
+                          VALUES (?, ?, ?, ?, 0.00, 'pending')
+                        `;
+                        
+                        db.query(paymentQuery, [
+                          contract.sale_id,
+                          month,
+                          dueDate.toISOString().split('T')[0],
+                          monthlyPayment
+                        ], (paymentErr) => {
+                          if (paymentErr) {
+                            return rollbackAndReject(paymentErr, reject);
+                          }
+                          
+                          paymentsCreated++;
+                          if (paymentsCreated === totalPayments) {
+                            // All payments created, commit transaction
+                            const commitTransaction = () => {
+                              db.query('COMMIT', (commitErr) => {
+                                if (commitErr) {
+                                  return rollbackAndReject(commitErr, reject);
+                                }
+                                
+                                resolve({
+                                  success: true,
+                                  message: 'Contract approved successfully and payment schedule created',
+                                  contractId: contractId,
+                                  paymentsCreated: contract.months,
+                                  firstPaymentAmount: contract.down_payment,
+                                  monthlyPaymentAmount: contract.monthly_payment
+                                });
+                              });
+                            };
+                            commitTransaction();
+                          }
+                        });
+                      }
+                    });
+                  };
 
-            // Start the process
-            createInventoryLog();
+                  // Start creating payment schedule
+                  createPaymentSchedule();
+                });
+              };
+
+              // Start the process
+              createInventoryLog();
+            });
           });
         });
-      });
 
-      // Helper function to rollback and reject
-      function rollbackAndReject(error, rejectCallback) {
-        db.query('ROLLBACK', () => {
-          rejectCallback(error);
-        });
-      }
+        // Helper function to rollback and reject
+        function rollbackAndReject(error, rejectCallback) {
+          db.query('ROLLBACK', () => {
+            rejectCallback(error);
+          });
+        }
+      });
     });
-  });
-}
+  }
 
   // Reject contract - increase item quantity by 1 (release reservation)
- static reject(contractId, approverId, reason) {
-  return new Promise((resolve, reject) => {
-    db.query('START TRANSACTION', (startErr) => {
-      if (startErr) {
-        reject(startErr);
-        return;
-      }
-
-      // 1. Get contract details to find the item_id
-      const getContractQuery = 'SELECT item_id FROM installment_contracts WHERE id = ? AND status = "pending"';
-      db.query(getContractQuery, [contractId], (err, contractResults) => {
-        if (err) {
-          return rollbackAndReject(err, reject);
+  static reject(contractId, approverId, reason) {
+    return new Promise((resolve, reject) => {
+      db.query('START TRANSACTION', (startErr) => {
+        if (startErr) {
+          reject(startErr);
+          return;
         }
 
-        if (contractResults.length === 0) {
-          return rollbackAndReject(new Error('Contract not found or already processed'), reject);
-        }
-
-        const itemId = contractResults[0].item_id;
-
-        // 2. Update contract status to 'rejected'
-        const updateContractQuery = 'UPDATE installment_contracts SET status = "rejected" WHERE id = ?';
-        db.query(updateContractQuery, [contractId], (updateErr) => {
-          if (updateErr) {
-            return rollbackAndReject(updateErr, reject);
+        // 1. Get contract details to find the item_id
+        const getContractQuery = 'SELECT item_id FROM installment_contracts WHERE id = ? AND status = "pending"';
+        db.query(getContractQuery, [contractId], (err, contractResults) => {
+          if (err) {
+            return rollbackAndReject(err, reject);
           }
 
-          // 3. Update approval status to 'rejected'
-          const updateApprovalQuery = `
-            UPDATE contract_approvals 
-            SET status = 'rejected', approver_id = ?, reason = ?, updated_at = NOW() 
-            WHERE contract_id = ?
-          `;
-          db.query(updateApprovalQuery, [approverId, reason, contractId], (approvalErr) => {
-            if (approvalErr) {
-              return rollbackAndReject(approvalErr, reject);
+          if (contractResults.length === 0) {
+            return rollbackAndReject(new Error('Contract not found or already processed'), reject);
+          }
+
+          const itemId = contractResults[0].item_id;
+
+          // 2. Update contract status to 'rejected'
+          const updateContractQuery = 'UPDATE installment_contracts SET status = "rejected" WHERE id = ?';
+          db.query(updateContractQuery, [contractId], (updateErr) => {
+            if (updateErr) {
+              return rollbackAndReject(updateErr, reject);
             }
 
-            // 4. INCREASE item quantity by 1 (return the item)
-            const increaseQuantityQuery = 'UPDATE items SET quantity = quantity + 1 WHERE id = ?';
-            db.query(increaseQuantityQuery, [itemId], (quantityErr) => {
-              if (quantityErr) {
-                return rollbackAndReject(quantityErr, reject);
+            // 3. Update approval status to 'rejected'
+            const updateApprovalQuery = `
+              UPDATE contract_approvals 
+              SET status = 'rejected', approver_id = ?, reason = ?, updated_at = NOW() 
+              WHERE contract_id = ?
+            `;
+            db.query(updateApprovalQuery, [approverId, reason, contractId], (approvalErr) => {
+              if (approvalErr) {
+                return rollbackAndReject(approvalErr, reject);
               }
 
-              // 5. Create inventory log for return
-              const inventoryQuery = `
-                INSERT INTO inventory_logs 
-                (item_id, worker_id, change_type, quantity_changed) 
-                VALUES (?, ?, 'return', 1)
-              `;
-              db.query(inventoryQuery, [itemId, approverId], (inventoryErr) => {
-                if (inventoryErr) {
-                  return rollbackAndReject(inventoryErr, reject);
+              // 4. INCREASE item quantity by 1 (return the item)
+              const increaseQuantityQuery = 'UPDATE items SET quantity = quantity + 1 WHERE id = ?';
+              db.query(increaseQuantityQuery, [itemId], (quantityErr) => {
+                if (quantityErr) {
+                  return rollbackAndReject(quantityErr, reject);
                 }
 
-                // Commit transaction
-                db.query('COMMIT', (commitErr) => {
-                  if (commitErr) {
-                    return rollbackAndReject(commitErr, reject);
+                // 5. Create inventory log for return
+                const inventoryQuery = `
+                  INSERT INTO inventory_logs 
+                  (item_id, worker_id, change_type, quantity_changed) 
+                  VALUES (?, ?, 'return', 1)
+                `;
+                db.query(inventoryQuery, [itemId, approverId], (inventoryErr) => {
+                  if (inventoryErr) {
+                    return rollbackAndReject(inventoryErr, reject);
                   }
-                  
-                  resolve({
-                    success: true,
-                    message: 'Contract rejected successfully - item quantity increased'
+
+                  // Commit transaction
+                  db.query('COMMIT', (commitErr) => {
+                    if (commitErr) {
+                      return rollbackAndReject(commitErr, reject);
+                    }
+                    
+                    resolve({
+                      success: true,
+                      message: 'Contract rejected successfully - item quantity increased'
+                    });
                   });
                 });
               });
             });
           });
         });
-      });
 
-      function rollbackAndReject(error, rejectCallback) {
-        db.query('ROLLBACK', () => {
-          rejectCallback(error);
-        });
-      }
+        function rollbackAndReject(error, rejectCallback) {
+          db.query('ROLLBACK', () => {
+            rejectCallback(error);
+          });
+        }
+      });
     });
-  });
-}
+  }
 
   // Get all pending contracts for admin review
   static getPendingContracts() {
