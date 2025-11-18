@@ -11,6 +11,9 @@ import ContractManagement from './pages/ContractManagement.jsx';
 import PaymentProcessing from './pages/PaymentProcessing.jsx';
 import TaskManagement from './pages/TaskManagement.jsx'; // NEW
 import MyTasks from './pages/MyTasks.jsx'; // NEW
+import TimeTracking from './pages/TimeTracking.jsx';
+import DutyHoursReport from './pages/DutyHoursReport.jsx';
+import AdminDutyHours from './pages/AdminDutyHours.jsx';
 
 function App() {
   return (
@@ -25,6 +28,9 @@ function App() {
         <Route path="/payment-processing" element={<PaymentProcessing />} />
         <Route path="/task-management" element={<TaskManagement />} /> {/* NEW */}
         <Route path="/my-tasks" element={<MyTasks />} /> {/* NEW */}
+        <Route path="/time-tracking" element={<TimeTracking />} />
+        <Route path="/duty-hours-report" element={<DutyHoursReport />} />
+        <Route path="/admin-duty-hours" element={<AdminDutyHours />} />
       </Routes>
     </Router>
   );

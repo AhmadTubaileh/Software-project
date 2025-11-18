@@ -8,8 +8,9 @@ const itemsRoutes = require('./routes/items');
 const posRoutes = require('./routes/pos');
 const contractRoutes = require('./routes/contracts');
 const customerRoutes = require('./routes/customers');
-const paymentRoutes = require('./routes/payments'); // Updated import
+const paymentRoutes = require('./routes/payments');
 const taskRoutes = require('./routes/tasks');
+const dutyHoursRoutes = require('./routes/dutyHours'); // NEW
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -26,14 +27,25 @@ app.use('/api/items', itemsRoutes);
 app.use('/api/pos', posRoutes);
 app.use('/api/contracts', contractRoutes);
 app.use('/api/customers', customerRoutes);
-app.use('/api/payments', paymentRoutes); // Same route path
+app.use('/api/payments', paymentRoutes);
 app.use('/api/tasks', taskRoutes);
+app.use('/api/duty-hours', dutyHoursRoutes); // NEW
 
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ 
     message: 'Server is running!',
-    routes: ['/api/employees', '/api/auth', '/api/items', '/api/pos', '/api/contracts', '/api/customers', '/api/payments','/api/tasks']
+    routes: [
+      '/api/employees', 
+      '/api/auth', 
+      '/api/items', 
+      '/api/pos', 
+      '/api/contracts', 
+      '/api/customers', 
+      '/api/payments',
+      '/api/tasks',
+      '/api/duty-hours' // NEW
+    ]
   });
 });
 
@@ -41,4 +53,6 @@ app.get('/api/health', (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
   console.log(`💰 Payment System: http://localhost:${PORT}/api/payments`);
+  console.log(`🕒 Time Tracking: http://localhost:${PORT}/api/duty-hours`); // NEW
+  console.log(`✅ All Routes: http://localhost:${PORT}/api/health`);
 });
