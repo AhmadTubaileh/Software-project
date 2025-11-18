@@ -8,16 +8,18 @@ function AdminSidebar() {
   const { clearSession, currentUser } = useLocalSession();
 
   // Updated menuItems array with Payment Processing
-  const menuItems = [
-    { name: 'Dashboard', path: '/', icon: '📊' },
-    { name: 'POS', path: '/pos', icon: '💳' },
-    { name: 'Employees', path: '/employees', icon: '👨‍💼' },
-    { name: 'Items', path: '/items', icon: '📦' },
-    { name: 'New Contract', path: '/contract-application', icon: '📝' },
-    { name: 'Manage Contracts', path: '/contract-management', icon: '⚡' },
-    { name: 'Payment Processing', path: '/payment-processing', icon: '💰' }, // NEW
-  ];
-
+  // Updated menuItems array in AdminSidebar
+const menuItems = [
+  { name: 'Dashboard', path: '/', icon: '📊' },
+  { name: 'POS', path: '/pos', icon: '💳' },
+  { name: 'Employees', path: '/employees', icon: '👨‍💼' },
+  { name: 'Items', path: '/items', icon: '📦' },
+  { name: 'New Contract', path: '/contract-application', icon: '📝' },
+  { name: 'Manage Contracts', path: '/contract-management', icon: '⚡' },
+  { name: 'Payment Processing', path: '/payment-processing', icon: '💰' },
+  { name: 'Task Management', path: '/task-management', icon: '✅' }, // NEW
+  { name: 'My Tasks', path: '/my-tasks', icon: '📋' }, // NEW
+];
   const isActive = (path) => location.pathname === path;
 
   const handleLogout = () => {
