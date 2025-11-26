@@ -82,7 +82,6 @@ function DutyHoursReport() {
           <DateFilters
             filter={filter}
             setFilter={setFilter}
-            onGenerateReport={fetchDutyHours}
             isLoading={isLoading}
           />
 
