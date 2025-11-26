@@ -9,7 +9,8 @@ import SummaryStats from '../components/MyTasks/SummaryStats.jsx';
 
 function MyTasks() {
   const [tasks, setTasks] = useState([]);
-  const [filter, setFilter] = useState('all'); // 'all', 'pending', 'in_progress', 'completed'
+  const [filter, setFilter] = useState('all');
+  const [openDropdownId, setOpenDropdownId] = useState(null);
   const { currentUser } = useLocalSession();
 
   // Fetch tasks assigned to current user
@@ -53,10 +54,20 @@ function MyTasks() {
       }
 
       toast.success('Task status updated!');
-      fetchMyTasks(); // Refresh the list
+      setOpenDropdownId(null);
+      fetchMyTasks();
     } catch (error) {
       console.error('Error updating task status:', error);
       toast.error(error.message || 'Failed to update task status');
+    }
+  };
+
+  // Handle dropdown open/close
+  const handleDropdownToggle = (taskId, isOpen) => {
+    if (isOpen) {
+      setOpenDropdownId(taskId);
+    } else {
+      setOpenDropdownId(null);
     }
   };
 
@@ -104,12 +115,15 @@ function MyTasks() {
           />
 
           {/* Tasks Grid */}
-          <div className="space-y-4">
+          <div className="space-y-4 relative">
             {filteredTasks.map((task) => (
               <TaskCard
                 key={task.id}
                 task={task}
                 onStatusChange={handleStatusChange}
+                onDropdownToggle={handleDropdownToggle}
+                isDropdownOpen={openDropdownId === task.id}
+                hasOpenDropdown={!!openDropdownId}
               />
             ))}
 
