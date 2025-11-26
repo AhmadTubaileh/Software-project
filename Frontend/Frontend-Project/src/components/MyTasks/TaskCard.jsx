@@ -25,12 +25,18 @@ const statusStyles = {
   }
 };
 
-const TaskCard = ({ task, onStatusChange }) => {
+const TaskCard = ({ task, onStatusChange, onDropdownToggle, isDropdownOpen, hasOpenDropdown }) => {
   const styles = statusStyles[task.status];
 
   return (
     <div
-      className={`bg-gradient-to-r ${styles.gradient} rounded-2xl p-6 border transition-all duration-300 hover:scale-[1.02] hover:shadow-xl group`}
+      className={`bg-gradient-to-r ${styles.gradient} rounded-2xl p-6 border transition-all duration-300 group relative ${
+        hasOpenDropdown && !isDropdownOpen 
+          ? 'opacity-30 pointer-events-none' 
+          : 'hover:scale-[1.02] hover:shadow-xl'
+      } ${
+        isDropdownOpen ? 'z-30 scale-[1.02] shadow-2xl' : 'z-10'
+      }`}
     >
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">
@@ -67,6 +73,8 @@ const TaskCard = ({ task, onStatusChange }) => {
           <StatusDropdown 
             task={task} 
             onStatusChange={onStatusChange}
+            onDropdownToggle={onDropdownToggle}
+            isOpen={isDropdownOpen}
           />
         </div>
       </div>
