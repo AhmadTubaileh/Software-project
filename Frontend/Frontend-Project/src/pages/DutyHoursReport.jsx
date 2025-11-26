@@ -4,7 +4,7 @@ import AdminSidebar from '../components/AdminSidebar.jsx';
 import toast, { Toaster } from 'react-hot-toast';
 import DateFilters from '../components/DutyHoursReport/DateFilters.jsx';
 import SummaryCards from '../components/DutyHoursReport/SummaryCards.jsx';
-import SessionGroup from '../components/DutyHoursReport/SessionGroup.jsx';
+import DutyHoursTable from '../components/DutyHoursReport/DutyHoursTable.jsx';
 
 function DutyHoursReport() {
   const [sessions, setSessions] = useState([]);
@@ -55,13 +55,6 @@ function DutyHoursReport() {
   };
 
   const totals = calculateTotals();
-  
-  const groupedSessions = sessions.reduce((groups, session) => {
-    const date = session.date;
-    if (!groups[date]) groups[date] = [];
-    groups[date].push(session);
-    return groups;
-  }, {});
 
   return (
     <div className="min-h-screen bg-[#0e1830] text-white">
@@ -76,7 +69,7 @@ function DutyHoursReport() {
             <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
               My Duty Hours
             </h1>
-            <p className="text-gray-400">View your work and break sessions</p>
+            <p className="text-gray-400">View your work sessions in table format</p>
           </div>
 
           <DateFilters
@@ -87,30 +80,11 @@ function DutyHoursReport() {
 
           <SummaryCards totals={totals} />
 
-          <div className="space-y-6">
-            {Object.entries(groupedSessions).map(([date, dateSessions]) => (
-              <SessionGroup
-                key={date}
-                date={date}
-                sessions={dateSessions}
-              />
-            ))}
-
-            {sessions.length === 0 && !isLoading && (
-              <div className="text-center py-12 text-gray-400">
-                <div className="text-6xl mb-4">📊</div>
-                <h3 className="text-xl font-semibold mb-2">No sessions found</h3>
-                <p>No duty hours recorded for the selected date range</p>
-              </div>
-            )}
-
-            {isLoading && (
-              <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-                <p className="mt-4 text-gray-400">Loading duty hours...</p>
-              </div>
-            )}
-          </div>
+          <DutyHoursTable 
+            sessions={sessions} 
+            currentUser={currentUser}
+            isLoading={isLoading}
+          />
         </div>
       </main>
     </div>
