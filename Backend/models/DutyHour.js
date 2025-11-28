@@ -1,7 +1,7 @@
 const db = require('../config/database');
 
 class DutyHour {
-  // Get user's duty hours with date range
+  // Get user's duty hours
   static getByUserId(userId, startDate, endDate, callback) {
     let query = `
       SELECT dh.*, u.username 
@@ -20,12 +20,13 @@ class DutyHour {
     db.query(query, params, callback);
   }
 
-  // Get all duty hours for admin
-  static getAll(userId, startDate, endDate, callback) {
+  // Get all duty hours for admin with updater info
+  static getAllWithUpdater(userId, startDate, endDate, callback) {
     let query = `
-      SELECT dh.*, u.username, u.user_type 
+      SELECT dh.*, u.username, u.user_type, updater.username as updater_username
       FROM duty_hours dh 
       LEFT JOIN users u ON dh.user_id = u.id 
+      LEFT JOIN users updater ON dh.update_by = updater.id
       WHERE u.user_type BETWEEN 0 AND 9
     `;
     const params = [];
@@ -42,12 +43,6 @@ class DutyHour {
 
     query += ' ORDER BY dh.date DESC, dh.in_time DESC';
     db.query(query, params, callback);
-  }
-
-  // Get workers list
-  static getWorkers(callback) {
-    const query = 'SELECT id, username, user_type FROM users WHERE user_type BETWEEN 0 AND 9 ORDER BY username';
-    db.query(query, callback);
   }
 
   // Get active session for user
@@ -72,6 +67,12 @@ class DutyHour {
   static delete(id, callback) {
     const query = 'DELETE FROM duty_hours WHERE id = ?';
     db.query(query, [id], callback);
+  }
+
+  // Get workers list
+  static getWorkers(callback) {
+    const query = 'SELECT id, username, user_type FROM users WHERE user_type BETWEEN 0 AND 9 ORDER BY username';
+    db.query(query, callback);
   }
 }
 

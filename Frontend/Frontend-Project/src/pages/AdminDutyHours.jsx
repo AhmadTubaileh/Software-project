@@ -5,28 +5,32 @@ import toast, { Toaster } from 'react-hot-toast';
 import EmployeeDropdown from '../components/AdminDutyHours/EmployeeDropdown.jsx';
 import DateInput from '../components/AdminDutyHours/DateInput.jsx';
 import SummaryCards from '../components/AdminDutyHours/SummaryCards.jsx';
-import SessionsTable from '../components/AdminDutyHours/SessionsTable.jsx';
+import AdminDutyHoursTable from '../components/AdminDutyHours/AdminDutyHoursTable.jsx';
 import EditSessionModal from '../components/AdminDutyHours/EditSessionModal.jsx';
 import CreateSessionModal from '../components/AdminDutyHours/CreateSessionModal.jsx';
+import CreateSessionFromRowModal from '../components/AdminDutyHours/CreateSessionFromRowModal.jsx';
 import FiltersSection from '../components/AdminDutyHours/FiltersSection.jsx';
+import DayActionsModal from '../components/AdminDutyHours/DayActionsModal.jsx';
 
 function AdminDutyHours() {
   const [sessions, setSessions] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [filter, setFilter] = useState({
     userId: '',
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date().toISOString().split('T')[0]
+    startDate: '2025-11-01',  // FIXED: Set to include your data
+    endDate: '2025-11-30'     // FIXED: Set to include your data
   });
   const [isLoading, setIsLoading] = useState(false);
   const [editingSession, setEditingSession] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateFromRowModal, setShowCreateFromRowModal] = useState(false);
+  const [selectedRowData, setSelectedRowData] = useState(null);
+  const [dayActions, setDayActions] = useState(null);
   const [newSession, setNewSession] = useState({
     user_id: '', session_type: 'work', in_time: '', out_time: '', date: new Date().toISOString().split('T')[0], notes: ''
   });
   const { currentUser } = useLocalSession();
 
-  // Enhanced API call with error handling
   const apiCall = async (url, options = {}) => {
     try {
       const response = await fetch(url, {
@@ -37,28 +41,13 @@ function AdminDutyHours() {
         ...options,
       });
 
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        if (text.includes('<!DOCTYPE') || text.includes('<html')) {
-          throw new Error('SERVER_NOT_RUNNING');
-        }
-        throw new Error('INVALID_RESPONSE');
-      }
-
-      const data = await response.json();
-      
       if (!response.ok) {
-        throw new Error(data.error || `HTTP ${response.status}`);
+        const error = await response.json();
+        throw new Error(error.error || `HTTP ${response.status}`);
       }
 
-      return data;
+      return await response.json();
     } catch (error) {
-      if (error.message === 'SERVER_NOT_RUNNING') {
-        throw new Error('Backend server not responding. Please check if server is running.');
-      } else if (error.message === 'INVALID_RESPONSE') {
-        throw new Error('Server returned invalid response.');
-      }
       throw error;
     }
   };
@@ -66,6 +55,7 @@ function AdminDutyHours() {
   const fetchWorkers = useCallback(async () => {
     try {
       const data = await apiCall('http://localhost:5000/api/duty-hours/admin/workers');
+      console.log('Workers fetched:', data);
       setWorkers(data);
     } catch (error) {
       console.error('Error fetching workers:', error);
@@ -81,7 +71,12 @@ function AdminDutyHours() {
       if (userId) url += `user_id=${userId}&`;
       if (startDate && endDate) url += `start_date=${startDate}&end_date=${endDate}`;
 
+      console.log('Fetching from URL:', url);
+      
       const data = await apiCall(url);
+      console.log('Sessions fetched:', data);
+      console.log('Number of sessions:', data.length);
+      
       setSessions(data);
     } catch (error) {
       console.error('Error fetching duty hours:', error);
@@ -93,8 +88,11 @@ function AdminDutyHours() {
 
   useEffect(() => {
     fetchWorkers();
+  }, [fetchWorkers]);
+
+  useEffect(() => {
     fetchDutyHours();
-  }, [fetchWorkers, fetchDutyHours]);
+  }, [fetchDutyHours]);
 
   const handleDeleteSession = async (sessionId) => {
     if (!confirm('Are you sure you want to delete this session?')) return;
@@ -109,31 +107,71 @@ function AdminDutyHours() {
 
   const handleUpdateSession = async (sessionData) => {
     try {
+      const updateData = {
+        ...sessionData,
+        update_by: currentUser.id
+      };
+
       await apiCall(`http://localhost:5000/api/duty-hours/${sessionData.id}`, {
         method: 'PUT',
-        body: JSON.stringify(sessionData),
+        body: JSON.stringify(updateData),
       });
       toast.success('Session updated successfully!');
       setEditingSession(null);
+      setDayActions(null);
       fetchDutyHours();
     } catch (error) {
+      console.error('Error updating session:', error);
       toast.error(error.message);
     }
   };
 
   const handleCreateSession = async (sessionData) => {
     try {
+      const createData = {
+        ...sessionData,
+        update_by: currentUser.id
+      };
+
       await apiCall('http://localhost:5000/api/duty-hours/admin/create', {
         method: 'POST',
-        body: JSON.stringify(sessionData),
+        body: JSON.stringify(createData),
       });
       toast.success('Session created successfully!');
       setShowCreateModal(false);
+      setShowCreateFromRowModal(false);
+      setDayActions(null);
       setNewSession({ user_id: '', session_type: 'work', in_time: '', out_time: '', date: new Date().toISOString().split('T')[0], notes: '' });
       fetchDutyHours();
     } catch (error) {
+      console.error('Error creating session:', error);
       toast.error(error.message);
     }
+  };
+
+  const handleDayAction = (dayData) => {
+    setDayActions(dayData);
+  };
+
+  const handleEditSession = (sessionData) => {
+    setEditingSession(sessionData);
+    setDayActions(null);
+  };
+
+  const handleAddSession = (dayData) => {
+    setNewSession(prev => ({
+      ...prev,
+      user_id: dayData.userId,
+      date: dayData.rawDate
+    }));
+    setShowCreateModal(true);
+    setDayActions(null);
+  };
+
+  const handleAddSessionFromRow = (rowData) => {
+    setSelectedRowData(rowData);
+    setShowCreateFromRowModal(true);
+    setDayActions(null);
   };
 
   const calculateTotals = () => {
@@ -177,16 +215,15 @@ function AdminDutyHours() {
             filter={filter}
             setFilter={setFilter}
             workers={workers}
-            fetchDutyHours={fetchDutyHours}
             isLoading={isLoading}
           />
 
           <SummaryCards totals={totals} />
 
-          <SessionsTable
+          <AdminDutyHoursTable
             sessions={sessions}
             isLoading={isLoading}
-            onEditSession={setEditingSession}
+            onDayAction={handleDayAction}
             onDeleteSession={handleDeleteSession}
           />
         </div>
@@ -197,6 +234,7 @@ function AdminDutyHours() {
           session={editingSession}
           onUpdate={handleUpdateSession}
           onClose={() => setEditingSession(null)}
+          currentUser={currentUser}
         />
       )}
 
@@ -207,6 +245,27 @@ function AdminDutyHours() {
           workers={workers}
           onCreate={handleCreateSession}
           onClose={() => setShowCreateModal(false)}
+          currentUser={currentUser}
+        />
+      )}
+
+      {showCreateFromRowModal && (
+        <CreateSessionFromRowModal
+          rowData={selectedRowData}
+          workers={workers}
+          onCreate={handleCreateSession}
+          onClose={() => setShowCreateFromRowModal(false)}
+          currentUser={currentUser}
+        />
+      )}
+
+      {dayActions && (
+        <DayActionsModal
+          dayData={dayActions}
+          onEditSession={handleEditSession}
+          onAddSession={handleAddSessionFromRow}
+          onDeleteSession={handleDeleteSession}
+          onClose={() => setDayActions(null)}
         />
       )}
     </div>

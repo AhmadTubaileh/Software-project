@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from 'react';
 
-const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onClose, currentUser }) => {
+const CreateSessionFromRowModal = ({ rowData, workers, onCreate, onClose, currentUser }) => {
+  const [newSession, setNewSession] = useState({
+    user_id: '',
+    session_type: 'work',
+    date: '',
+    in_time: '',
+    out_time: '',
+    notes: ''
+  });
+
   const [timeSlots, setTimeSlots] = useState({
     inTime: { hour: '09', minute: '00', period: 'AM' },
     outTime: { hour: '05', minute: '00', period: 'PM' }
@@ -15,23 +24,27 @@ const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onCl
     
     try {
       const date = new Date(dateString);
-      date.setDate(date.getDate() + 1);
+      date.setDate(date.getDate() );
       return date.toISOString().split('T')[0];
     } catch (error) {
       return dateString;
     }
   };
 
-  // Initialize with default date (+1 day from today)
+  // Initialize with row data
   useEffect(() => {
-    const today = new Date();
-    const defaultDate = addOneDay(today.toISOString().split('T')[0]);
-    
-    setNewSession(prev => ({
-      ...prev,
-      date: defaultDate
-    }));
-  }, [setNewSession]);
+    if (rowData) {
+      const tableDateParts = rowData.date.split('/');
+      const backendDate = `${tableDateParts[2]}-${tableDateParts[1]}-${tableDateParts[0]}`;
+      const defaultDate = addOneDay(backendDate);
+
+      setNewSession(prev => ({
+        ...prev,
+        user_id: rowData.userId.toString(),
+        date: defaultDate
+      }));
+    }
+  }, [rowData]);
 
   // Parse time string (HH:MM:SS) to time object
   const parseTimeString = (timeString) => {
@@ -77,14 +90,6 @@ const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onCl
     }));
   };
 
-  // Handle date change
-  const handleDateChange = (e) => {
-    setNewSession(prev => ({
-      ...prev,
-      date: e.target.value
-    }));
-  };
-
   // Handle other input changes
   const handleInputChange = (field, value) => {
     setNewSession(prev => ({
@@ -96,14 +101,6 @@ const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onCl
   // Validate form
   const validateForm = () => {
     const newErrors = {};
-
-    if (!newSession.user_id) {
-      newErrors.user_id = 'Employee is required';
-    }
-
-    if (!newSession.date) {
-      newErrors.date = 'Date is required';
-    }
 
     const inTimeStr = timeToTimeString(timeSlots.inTime);
     const outTimeStr = timeToTimeString(timeSlots.outTime);
@@ -172,7 +169,7 @@ const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onCl
     { value: 'PM', label: 'PM' }
   ];
 
-  // Professional Dropdown Components
+  // Professional Dropdown Component
   const TimeDropdown = ({ value, onChange, options, placeholder, className = "" }) => (
     <select
       value={value}
@@ -195,29 +192,6 @@ const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onCl
     </select>
   );
 
-  const EmployeeDropdown = ({ value, onChange, options, placeholder, className = "" }) => (
-    <select
-      value={value}
-      onChange={onChange}
-      className={`w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2.5 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 appearance-none cursor-pointer ${className}`}
-      style={{
-        backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e")`,
-        backgroundPosition: 'right 0.5rem center',
-        backgroundRepeat: 'no-repeat',
-        backgroundSize: '1.5em 1.5em',
-        paddingRight: '2.5rem'
-      }}
-      required
-    >
-      <option value="" disabled className="bg-gray-800">{placeholder}</option>
-      {options.map(worker => (
-        <option key={worker.id} value={worker.id} className="bg-gray-800">
-          {worker.username} (Level {worker.user_type})
-        </option>
-      ))}
-    </select>
-  );
-
   // Format date for display
   const formatDisplayDate = (dateString) => {
     if (!dateString) return 'No date set';
@@ -233,6 +207,12 @@ const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onCl
     });
   };
 
+  // Get original row date for display
+  const getOriginalRowDate = () => {
+    if (!rowData?.date) return '';
+    return rowData.date;
+  };
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-900 rounded-xl border border-gray-700/50 shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -244,10 +224,10 @@ const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onCl
             </div>
             <div>
               <h2 className="text-xl font-semibold text-white">
-                Create New Session
+                Create Session
               </h2>
               <p className="text-gray-400 text-sm">
-                Add a new duty session for an employee
+                {rowData?.userName || 'Employee'} • Based on selected row
               </p>
             </div>
           </div>
@@ -267,19 +247,26 @@ const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onCl
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             {/* Employee & Session Type */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Employee Selection */}
+              {/* Employee Info */}
               <div className="space-y-3">
                 <label className="block text-sm font-medium text-gray-300">
-                  Employee * {errors.user_id && (
-                    <span className="text-red-400 text-xs ml-2">• {errors.user_id}</span>
-                  )}
+                  Employee
                 </label>
-                <EmployeeDropdown
-                  value={newSession.user_id}
-                  onChange={(e) => handleInputChange('user_id', e.target.value)}
-                  options={workers}
-                  placeholder="Select Employee"
-                />
+                <div className="bg-gray-800/50 border-2 border-gray-600/50 rounded-lg p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-white font-semibold text-lg">
+                        {rowData?.userName || 'Unknown'}
+                      </div>
+                      <div className="text-gray-400 text-sm mt-1">
+                        ID: {rowData?.userId}
+                      </div>
+                    </div>
+                    <div className="w-8 h-8 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                      <span className="text-blue-400 text-sm">👤</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* Session Type */}
@@ -314,26 +301,22 @@ const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onCl
               </div>
             </div>
 
-            {/* Date Selection */}
+            {/* Date Information */}
             <div className="space-y-3">
               <label className="block text-sm font-medium text-gray-300">
-                Session Date * {errors.date && (
-                  <span className="text-red-400 text-xs ml-2">• {errors.date}</span>
-                )}
+                Session Date
               </label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <input
-                  type="date"
-                  value={newSession.date}
-                  onChange={handleDateChange}
-                  className="w-full bg-gray-800/50 border-2 border-gray-600/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                  required
-                />
-                <div className="bg-gray-800/50 border-2 border-gray-600/50 rounded-lg p-3">
-                  <div className="text-white font-semibold text-sm">
-                    {formatDisplayDate(newSession.date)}
+              <div className="bg-gray-800/50 border-2 border-gray-600/50 rounded-lg p-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-400">Original Date</div>
+                    <div className="text-white font-semibold">{getOriginalRowDate()}</div>
                   </div>
-                  
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-400">Selected Date</div>
+                    <div className="text-green-400 font-semibold">{formatDisplayDate(newSession.date)}</div>
+                    <div className="text-xs text-gray-500">{newSession.date}</div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -349,7 +332,7 @@ const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onCl
                 {/* Start Time */}
                 <div className="space-y-3">
                   <label className="block text-sm font-medium text-gray-300">
-                    Start Time * {errors.in_time && (
+                    Start Time {errors.in_time && (
                       <span className="text-red-400 text-xs ml-2">• {errors.in_time}</span>
                     )}
                   </label>
@@ -513,4 +496,4 @@ const CreateSessionModal = ({ newSession, setNewSession, workers, onCreate, onCl
   );
 };
 
-export default CreateSessionModal;
+export default CreateSessionFromRowModal;
