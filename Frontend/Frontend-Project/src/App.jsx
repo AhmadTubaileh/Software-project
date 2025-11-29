@@ -9,11 +9,13 @@ import Items from './pages/Items.jsx';
 import ContractApplication from './pages/ContractApplication.jsx';
 import ContractManagement from './pages/ContractManagement.jsx';
 import PaymentProcessing from './pages/PaymentProcessing.jsx';
-import TaskManagement from './pages/TaskManagement.jsx'; // NEW
-import MyTasks from './pages/MyTasks.jsx'; // NEW
+import MyTasks from './pages/MyTasks.jsx';
 import TimeTracking from './pages/TimeTracking.jsx';
 import DutyHoursReport from './pages/DutyHoursReport.jsx';
 import AdminDutyHours from './pages/AdminDutyHours.jsx';
+import ProjectManagement from './pages/ProjectManagement.jsx'; // NEW
+import ProjectDetails from './pages/ProjectDetails.jsx'; // NEW
+import TaskArchive from './pages/TaskArchive.jsx'; // NEW
 
 function App() {
   return (
@@ -26,11 +28,13 @@ function App() {
         <Route path="/contract-application" element={<ContractApplication />} />
         <Route path="/contract-management" element={<ContractManagement />} />
         <Route path="/payment-processing" element={<PaymentProcessing />} />
-        <Route path="/task-management" element={<TaskManagement />} /> {/* NEW */}
-        <Route path="/my-tasks" element={<MyTasks />} /> {/* NEW */}
+        <Route path="/my-tasks" element={<MyTasks />} />
         <Route path="/time-tracking" element={<TimeTracking />} />
         <Route path="/duty-hours-report" element={<DutyHoursReport />} />
         <Route path="/admin-duty-hours" element={<AdminDutyHours />} />
+        <Route path="/project-management" element={<ProjectManagement />} /> {/* NEW */}
+        <Route path="/project/:id" element={<ProjectDetails />} /> {/* NEW */}
+        <Route path="/task-archive" element={<TaskArchive />} /> {/* NEW */}
       </Routes>
     </Router>
   );

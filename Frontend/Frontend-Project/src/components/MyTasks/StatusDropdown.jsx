@@ -11,6 +11,11 @@ const statusStyles = {
     text: 'text-blue-300',
     dot: 'bg-blue-400'
   },
+  ready_for_review: {
+    container: 'bg-purple-500/20 border-purple-500/30',
+    text: 'text-purple-300',
+    dot: 'bg-purple-400'
+  },
   completed: {
     container: 'bg-green-500/20 border-green-500/30',
     text: 'text-green-300',
@@ -20,34 +25,30 @@ const statusStyles = {
 
 const statusOptions = [
   { 
-    value: 'pending', 
-    label: 'Pending', 
-    emoji: '⏳',
-    description: 'Task is waiting to be started',
-    color: 'yellow'
-  },
-  { 
     value: 'in_progress', 
-    label: 'In Progress', 
+    label: 'Start Working', 
     emoji: '🔄',
-    description: 'Currently working on this task',
-    color: 'blue'
+    description: 'Begin working on this task',
+    color: 'blue',
+    allowedFrom: ['pending']
   },
   { 
-    value: 'completed', 
-    label: 'Completed', 
-    emoji: '✅',
-    description: 'Task has been finished',
-    color: 'green'
+    value: 'ready_for_review', 
+    label: 'Submit for Review', 
+    emoji: '📤',
+    description: 'Mark task as completed for review',
+    color: 'purple',
+    allowedFrom: ['in_progress']
   }
 ];
 
-const StatusDropdown = ({ task, onStatusChange, onDropdownToggle, isOpen }) => {
+const StatusDropdown = ({ task, onStatusChange, onDropdownToggle, isOpen, currentUser }) => {
   const dropdownRef = useRef(null);
-  const currentStatus = statusOptions.find(opt => opt.value === task.status);
+  const currentStatus = statusOptions.find(opt => opt.value === task.status) || 
+                       { value: task.status, label: task.status.replace('_', ' '), emoji: '📝' };
 
   const handleTriggerClick = (e) => {
-    e.stopPropagation(); // Prevent event bubbling
+    e.stopPropagation();
     onDropdownToggle(task.id, !isOpen);
   };
 
@@ -66,7 +67,6 @@ const StatusDropdown = ({ task, onStatusChange, onDropdownToggle, isOpen }) => {
 
     if (isOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      // Prevent body scroll when dropdown is open
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'unset';
@@ -78,42 +78,50 @@ const StatusDropdown = ({ task, onStatusChange, onDropdownToggle, isOpen }) => {
     };
   }, [isOpen, task.id, onDropdownToggle]);
 
+  const availableOptions = statusOptions.filter(option => 
+    option.allowedFrom.includes(task.status)
+  );
+
   return (
     <div className="relative" ref={dropdownRef}>
       {/* Dropdown Trigger */}
       <button
         onClick={handleTriggerClick}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all duration-200 hover:scale-105 hover:shadow-lg ${
-          statusStyles[task.status].container
-        } ${statusStyles[task.status].text} group relative z-30`}
+        disabled={availableOptions.length === 0}
+        className={`flex items-center gap-2 px-4 py-2 rounded-xl border transition-all duration-200 ${
+          availableOptions.length === 0 
+            ? 'bg-gray-500/20 border-gray-500/30 text-gray-400 cursor-not-allowed' 
+            : `hover:scale-105 hover:shadow-lg ${statusStyles[task.status].container} ${statusStyles[task.status].text}`
+        } group relative z-30`}
       >
         <span className="text-sm">{currentStatus.emoji}</span>
         <span className="font-medium text-sm capitalize">
           {task.status.replace('_', ' ')}
         </span>
-        <svg 
-          className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-          fill="none" 
-          stroke="currentColor" 
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        {availableOptions.length > 0 && (
+          <svg 
+            className={`w-4 h-4 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+            fill="none" 
+            stroke="currentColor" 
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
+        )}
       </button>
 
       {/* Dropdown Menu with Backdrop */}
-      {isOpen && (
+      {isOpen && availableOptions.length > 0 && (
         <>
-          {/* Invisible backdrop that covers entire screen but allows dropdown clicks */}
           <div 
             className="fixed inset-0 z-40 bg-transparent"
             onClick={() => onDropdownToggle(task.id, false)}
           />
           
-          {/* Dropdown Menu - Higher z-index than backdrop */}
+          {/* Dropdown Menu */}
           <div 
             className="absolute top-full right-0 mt-2 w-64 bg-gray-800 border border-gray-600 rounded-xl shadow-2xl z-50 overflow-hidden"
-            onClick={(e) => e.stopPropagation()} // Prevent closing when clicking inside dropdown
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="p-3 border-b border-gray-600 bg-gray-750">
               <h4 className="font-semibold text-white text-sm">Update Status</h4>
@@ -121,7 +129,7 @@ const StatusDropdown = ({ task, onStatusChange, onDropdownToggle, isOpen }) => {
             </div>
             
             <div className="p-2 space-y-1 bg-gray-800">
-              {statusOptions.map((option) => (
+              {availableOptions.map((option) => (
                 <button
                   key={option.value}
                   onClick={() => handleOptionClick(option.value)}
