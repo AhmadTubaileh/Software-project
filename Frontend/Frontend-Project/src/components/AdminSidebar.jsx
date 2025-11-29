@@ -7,8 +7,9 @@ function AdminSidebar() {
   const location = useLocation();
   const { clearSession, currentUser } = useLocalSession();
   const navRef = useRef(null);
+  const [projects, setProjects] = useState([]);
   
-  // Use localStorage to persist expanded sections state - DEFAULT ALL CLOSED
+  // Use localStorage to persist expanded sections state
   const [expandedSections, setExpandedSections] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('admin-sidebar-expanded');
@@ -16,6 +17,7 @@ function AdminSidebar() {
         'Main': false,
         'Sales': false,
         'Management': false,
+        'Projects': false,
         'Personal': false
       };
     }
@@ -23,9 +25,29 @@ function AdminSidebar() {
       'Main': false,
       'Sales': false,
       'Management': false,
+      'Projects': false,
       'Personal': false
     };
   });
+
+  // Fetch user's projects
+  useEffect(() => {
+    if (currentUser?.id) {
+      fetchUserProjects();
+    }
+  }, [currentUser]);
+
+  const fetchUserProjects = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/projects/user/${currentUser.id}`);
+      if (response.ok) {
+        const data = await response.json();
+        setProjects(data);
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+    }
+  };
 
   // Save to localStorage whenever expandedSections changes
   useEffect(() => {
@@ -34,34 +56,7 @@ function AdminSidebar() {
     }
   }, [expandedSections]);
 
-  // Save scroll position before navigation
-  useEffect(() => {
-    const saveScrollPosition = () => {
-      if (navRef.current) {
-        sessionStorage.setItem('sidebar-scroll-position', navRef.current.scrollTop.toString());
-      }
-    };
-
-    // Save scroll position when location changes
-    saveScrollPosition();
-  }, [location.pathname]);
-
-  // Restore scroll position after render
-  useEffect(() => {
-    const restoreScrollPosition = () => {
-      const savedPosition = sessionStorage.getItem('sidebar-scroll-position');
-      if (navRef.current && savedPosition) {
-        // Use requestAnimationFrame to ensure DOM is ready
-        requestAnimationFrame(() => {
-          navRef.current.scrollTop = parseInt(savedPosition, 10);
-        });
-      }
-    };
-
-    restoreScrollPosition();
-  }, [location.pathname]); // Re-run when path changes
-
-  // Grouped menu items
+  // Grouped menu items - UPDATED WITH DIRECT PROJECT LINKS
   const menuSections = [
     {
       name: 'Main',
@@ -83,14 +78,21 @@ function AdminSidebar() {
         { name: 'Employees', path: '/employees', icon: '👨‍💼' },
         { name: 'Items', path: '/items', icon: '📦' },
         { name: 'Manage Contracts', path: '/contract-management', icon: '⚡' },
-        { name: 'Task Management', path: '/task-management', icon: '✅' },
+        { name: 'Project Management', path: '/project-management', icon: '🏗️' },
+        { name: 'Task Archive', path: '/task-archive', icon: '📚' },
         { name: 'Manage Duty Hours', path: '/admin-duty-hours', icon: '👨‍💼' }
+      ]
+    },
+    {
+      name: 'Projects',
+      items: [
+        { name: 'My Tasks', path: '/my-tasks', icon: '📋' }
+        // Dynamic project links will be added below
       ]
     },
     {
       name: 'Personal',
       items: [
-        { name: 'My Tasks', path: '/my-tasks', icon: '📋' },
         { name: 'Time Tracking', path: '/time-tracking', icon: '⏰' },
         { name: 'My Duty Hours', path: '/duty-hours-report', icon: '📊' }
       ]
@@ -112,6 +114,7 @@ function AdminSidebar() {
       'Main': true,
       'Sales': true,
       'Management': true,
+      'Projects': true,
       'Personal': true
     });
   };
@@ -122,23 +125,16 @@ function AdminSidebar() {
       'Main': false,
       'Sales': false,
       'Management': false,
+      'Projects': false,
       'Personal': false
     });
   };
 
   const handleNavigation = (path) => {
-    // Save current state before navigation
-    const currentScrollTop = navRef.current?.scrollTop;
-    if (currentScrollTop !== undefined) {
-      sessionStorage.setItem('sidebar-scroll-position', currentScrollTop.toString());
-    }
-    
     navigate(path);
   };
 
   const handleLogout = () => {
-    // Clear scroll position on logout
-    sessionStorage.removeItem('sidebar-scroll-position');
     clearSession();
     if (window.toast) {
       window.toast.success('Logged out successfully!');
@@ -154,6 +150,7 @@ function AdminSidebar() {
     'Main': '🏠',
     'Sales': '💰',
     'Management': '⚙️',
+    'Projects': '🏗️',
     'Personal': '👤'
   };
 
@@ -161,6 +158,7 @@ function AdminSidebar() {
     'Main': 'from-blue-500/20 to-blue-600/20 border-blue-500/30',
     'Sales': 'from-green-500/20 to-emerald-500/20 border-green-500/30',
     'Management': 'from-purple-500/20 to-pink-500/20 border-purple-500/30',
+    'Projects': 'from-amber-500/20 to-orange-500/20 border-amber-500/30',
     'Personal': 'from-orange-500/20 to-amber-500/20 border-orange-500/30'
   };
 
@@ -194,6 +192,7 @@ function AdminSidebar() {
               </h3>
               <p className="text-xs text-gray-400 capitalize">
                 {currentUser?.role || 'Customer'}
+                {currentUser?.user_type !== undefined && ` • Level ${currentUser.user_type}`}
               </p>
             </div>
           </div>
@@ -243,7 +242,7 @@ function AdminSidebar() {
                   {section.name}
                 </span>
                 <span className="bg-black/30 text-xs px-1.5 py-0.5 rounded-full">
-                  {section.items.length}
+                  {section.name === 'Projects' ? projects.length : section.items.length}
                 </span>
               </div>
               <svg
@@ -262,6 +261,7 @@ function AdminSidebar() {
             <div className={`space-y-1 transition-all duration-300 overflow-hidden ${
               expandedSections[section.name] ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
             }`}>
+              {/* Static menu items */}
               {section.items.map((item) => (
                 <button
                   key={item.name}
@@ -299,6 +299,48 @@ function AdminSidebar() {
                   <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl" />
                 </button>
               ))}
+
+              {/* Dynamic project links - only for Projects section */}
+              {section.name === 'Projects' && projects.map((project) => (
+                <button
+                  key={project.id}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleNavigation(`/project/${project.id}`);
+                  }}
+                  className={`w-full text-left p-3 rounded-xl transition-all duration-300 group relative overflow-hidden ${
+                    isActive(`/project/${project.id}`)
+                      ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 shadow-lg shadow-blue-500/10'
+                      : 'hover:bg-gray-800/50 border border-transparent hover:border-gray-700/50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`text-2xl transition-transform duration-300 group-hover:scale-110 ${
+                      isActive(`/project/${project.id}`) ? 'text-blue-400' : 'text-gray-400 group-hover:text-white'
+                    }`}>
+                      📋
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-medium transition-colors duration-200 text-sm ${
+                          isActive(`/project/${project.id}`) ? 'text-white' : 'text-gray-300 group-hover:text-white'
+                        }`}>
+                          {project.title}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        {project.task_count} tasks • {project.member_count} members
+                      </div>
+                    </div>
+                    {isActive(`/project/${project.id}`) && (
+                      <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse flex-shrink-0" />
+                    )}
+                  </div>
+                  
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl" />
+                </button>
+              ))}
             </div>
           </div>
         ))}
@@ -316,24 +358,6 @@ function AdminSidebar() {
           <span className="font-medium">Logout</span>
         </button>
       </div>
-
-      {/* Custom Scrollbar Styling */}
-      <style jsx>{`
-        nav::-webkit-scrollbar {
-          width: 4px;
-        }
-        nav::-webkit-scrollbar-track {
-          background: rgba(75, 85, 99, 0.3);
-          border-radius: 10px;
-        }
-        nav::-webkit-scrollbar-thumb {
-          background: rgba(96, 165, 250, 0.5);
-          border-radius: 10px;
-        }
-        nav::-webkit-scrollbar-thumb:hover {
-          background: rgba(96, 165, 250, 0.7);
-        }
-      `}</style>
     </aside>
   );
 }

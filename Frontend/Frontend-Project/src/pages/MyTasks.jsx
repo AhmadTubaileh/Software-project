@@ -36,29 +36,90 @@ function MyTasks() {
     fetchMyTasks();
   }, [fetchMyTasks]);
 
-  // Update task status
+  // Update task status with smart workflow
   const handleStatusChange = async (taskId, newStatus) => {
     try {
-      const response = await fetch(`http://localhost:5000/api/tasks/${taskId}/status`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: newStatus }),
+      // Use the smart submission endpoint for ready_for_review
+      if (newStatus === 'ready_for_review') {
+        const response = await fetch(`http://localhost:5000/api/tasks/${taskId}/submit`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            user_id: currentUser.id 
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to submit task');
+        }
+
+        toast.success(data.message);
+        setOpenDropdownId(null);
+        fetchMyTasks();
+      } else {
+        // For other status changes, use the regular endpoint
+        const response = await fetch(`http://localhost:5000/api/tasks/${taskId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            status: newStatus,
+            user_id: currentUser.id 
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to update task status');
+        }
+
+        toast.success('Task status updated!');
+        setOpenDropdownId(null);
+        fetchMyTasks();
+      }
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      
+      // Check for duplicate member error and provide helpful message
+      if (error.message.includes('Duplicate entry') || error.message.includes('unique_project_user')) {
+        toast.error('Error in task workflow. Please contact administrator.');
+      } else {
+        toast.error(error.message || 'Failed to update task status');
+      }
+    }
+  };
+
+  // Handle file upload
+  const handleFileUpload = async (taskId, file) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('uploaded_by', currentUser.id);
+
+      const response = await fetch(`http://localhost:5000/api/tasks/${taskId}/files`, {
+        method: 'POST',
+        body: formData,
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to update task status');
+        throw new Error(data.error || 'Failed to upload file');
       }
 
-      toast.success('Task status updated!');
-      setOpenDropdownId(null);
-      fetchMyTasks();
+      toast.success('File uploaded successfully!');
+      fetchMyTasks(); // Refresh to show new files
+      return Promise.resolve();
     } catch (error) {
-      console.error('Error updating task status:', error);
-      toast.error(error.message || 'Failed to update task status');
+      console.error('Error uploading file:', error);
+      toast.error(error.message || 'Failed to upload file');
+      return Promise.reject(error);
     }
   };
 
@@ -71,18 +132,23 @@ function MyTasks() {
     }
   };
 
-  // Filter tasks based on selected filter
-  const filteredTasks = tasks.filter(task => 
-    filter === 'all' ? true : task.status === filter
-  );
+  // Filter tasks - EXCLUDE completed tasks and only show pending, in_progress, ready_for_review
+  const filteredTasks = tasks.filter(task => {
+    if (task.status === 'completed') return false; // Hide completed tasks
+    
+    if (filter === 'all') return true;
+    return task.status === filter;
+  });
 
-  // Calculate counts for each filter
+  // Calculate counts for each filter - EXCLUDE completed tasks
   const calculateCounts = () => {
+    const activeTasks = tasks.filter(task => task.status !== 'completed');
+    
     return {
-      all: tasks.length,
-      pending: tasks.filter(task => task.status === 'pending').length,
-      in_progress: tasks.filter(task => task.status === 'in_progress').length,
-      completed: tasks.filter(task => task.status === 'completed').length
+      all: activeTasks.length,
+      pending: activeTasks.filter(task => task.status === 'pending').length,
+      in_progress: activeTasks.filter(task => task.status === 'in_progress').length,
+      ready_for_review: activeTasks.filter(task => task.status === 'ready_for_review').length
     };
   };
 
@@ -105,7 +171,7 @@ function MyTasks() {
             <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
               My Tasks
             </h1>
-            <p className="text-gray-400">Tasks assigned to you - Stay organized and productive</p>
+            <p className="text-gray-400">Active tasks assigned to you - Stay organized and productive</p>
           </div>
 
           <FilterTabs
@@ -121,9 +187,11 @@ function MyTasks() {
                 key={task.id}
                 task={task}
                 onStatusChange={handleStatusChange}
+                onFileUpload={handleFileUpload}
                 onDropdownToggle={handleDropdownToggle}
                 isDropdownOpen={openDropdownId === task.id}
                 hasOpenDropdown={!!openDropdownId}
+                currentUser={currentUser}
               />
             ))}
 

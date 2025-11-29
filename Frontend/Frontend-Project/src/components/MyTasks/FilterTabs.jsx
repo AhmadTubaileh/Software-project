@@ -5,7 +5,8 @@ const FilterTabs = ({ filter, setFilter, counts }) => {
     { value: 'all', label: 'All Tasks', emoji: '📋', count: counts.all },
     { value: 'pending', label: 'Pending', emoji: '⏳', count: counts.pending },
     { value: 'in_progress', label: 'In Progress', emoji: '🔄', count: counts.in_progress },
-    { value: 'completed', label: 'Completed', emoji: '✅', count: counts.completed }
+    { value: 'ready_for_review', label: 'Ready for Review', emoji: '📤', count: counts.ready_for_review }
+    // Removed completed option
   ];
 
   return (

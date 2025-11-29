@@ -15,17 +15,17 @@ const EmptyState = ({ filter }) => {
           title: 'No tasks in progress',
           description: "No tasks are currently in progress. Start working on some pending tasks!"
         };
-      case 'completed':
+      case 'ready_for_review':
         return {
-          emoji: '✅',
-          title: 'No completed tasks',
-          description: "You haven't completed any tasks yet. Keep going!"
+          emoji: '📤',
+          title: 'No tasks ready for review',
+          description: "You haven't submitted any tasks for review yet."
         };
       default:
         return {
           emoji: '📋',
-          title: 'No tasks assigned',
-          description: "You're all caught up! No tasks have been assigned to you yet."
+          title: 'No active tasks',
+          description: "You're all caught up! No active tasks have been assigned to you."
         };
     }
   };
