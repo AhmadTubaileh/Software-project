@@ -134,6 +134,76 @@ class Project {
     `;
     db.query(query, callback);
   }
+
+  // NEW: Check if user is a member of the project (for chat permissions)
+  static isMember(projectId, userId, callback) {
+    const query = `
+      SELECT 1 FROM project_members 
+      WHERE project_id = ? AND user_id = ? 
+      UNION 
+      SELECT 1 FROM projects 
+      WHERE id = ? AND (created_by = ? OR team_leader_id = ?)
+      LIMIT 1
+    `;
+    db.query(query, [projectId, userId, projectId, userId, userId], callback);
+  }
+
+  // NEW: Update project status
+  static updateStatus(id, status, callback) {
+    const query = 'UPDATE projects SET status = ?, updated_at = NOW() WHERE id = ?';
+    db.query(query, [status, id], callback);
+  }
+
+  // NEW: Get project statistics
+  static getStats(projectId, callback) {
+    const query = `
+      SELECT 
+        COUNT(DISTINCT t.id) as total_tasks,
+        SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) as completed_tasks,
+        SUM(CASE WHEN t.status = 'in_progress' THEN 1 ELSE 0 END) as in_progress_tasks,
+        SUM(CASE WHEN t.status = 'pending' THEN 1 ELSE 0 END) as pending_tasks,
+        SUM(CASE WHEN t.status = 'ready_for_review' THEN 1 ELSE 0 END) as ready_for_review_tasks,
+        SUM(CASE WHEN t.status = 'approved' THEN 1 ELSE 0 END) as approved_tasks,
+        COUNT(DISTINCT pm.user_id) as total_members,
+        AVG(t.estimated_time_minutes) as avg_estimated_time,
+        AVG(t.actual_time_minutes) as avg_actual_time
+      FROM projects p
+      LEFT JOIN tasks t ON p.id = t.project_id AND t.is_deleted = 0
+      LEFT JOIN project_members pm ON p.id = pm.project_id
+      WHERE p.id = ?
+      GROUP BY p.id
+    `;
+    db.query(query, [projectId], callback);
+  }
+
+  // NEW: Check if user can manage project (admin, creator, or team leader)
+  static canManage(projectId, userId, callback) {
+    const query = `
+      SELECT 1 FROM projects 
+      WHERE id = ? AND (created_by = ? OR team_leader_id = ?)
+      UNION
+      SELECT 1 FROM users WHERE id = ? AND user_type = 0
+      LIMIT 1
+    `;
+    db.query(query, [projectId, userId, userId, userId], callback);
+  }
+
+  // NEW: Get project with detailed member information
+  static getWithDetails(projectId, callback) {
+    const query = `
+      SELECT 
+        p.*,
+        creator.username as created_by_name,
+        leader.username as team_leader_name,
+        creator.user_type as created_by_type,
+        leader.user_type as team_leader_type
+      FROM projects p
+      LEFT JOIN users creator ON p.created_by = creator.id
+      LEFT JOIN users leader ON p.team_leader_id = leader.id
+      WHERE p.id = ?
+    `;
+    db.query(query, [projectId], callback);
+  }
 }
 
 module.exports = Project;

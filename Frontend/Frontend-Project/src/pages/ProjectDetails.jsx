@@ -78,21 +78,24 @@ function ProjectDetails() {
     fetchMembers();
   }, [fetchProject, fetchWorkers, fetchMembers]);
 
-  // Check if user can manage tasks (admin or team leader)
+  // Check if user can manage tasks (admin, project creator, or team leader)
   const canManageTasks = currentUser && (
     currentUser.role === 'admin' || 
+    currentUser.id === project?.created_by ||
     currentUser.id === project?.team_leader_id
   );
 
-  // Check if user can manage members (admin or team leader)
+  // Check if user can manage members (admin, project creator, or team leader)
   const canManageMembers = currentUser && (
     currentUser.role === 'admin' || 
+    currentUser.id === project?.created_by ||
     currentUser.id === project?.team_leader_id
   );
 
-  // Check if user can see ready tasks (admin or team leader)
+  // Check if user can see ready tasks (admin, project creator, or team leader)
   const canSeeReadyTasks = currentUser && (
     currentUser.role === 'admin' || 
+    currentUser.id === project?.created_by ||
     currentUser.id === project?.team_leader_id
   );
 
@@ -345,13 +348,12 @@ function ProjectDetails() {
               <ProjectChat projectId={id} />
             )}
             
-            {activeTab === 'ready_tasks' && (
+            {activeTab === 'ready_tasks' && canSeeReadyTasks && (
               <ReadyTasksSection 
                 projectId={id}
                 currentUser={currentUser}
                 onTaskAction={(action, taskId, data) => {
                   // Handle task actions (approve/reject)
-                  // You'll need to implement this based on your API
                   console.log('Task action:', action, taskId, data);
                 }}
               />
