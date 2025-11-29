@@ -4,7 +4,11 @@ const TaskManagementSection = ({ tasks, workers, projects, projectMembers, onTas
   const [filter, setFilter] = useState('all');
   const [selectedProject, setSelectedProject] = useState('all');
 
+  // Filter out completed tasks and apply other filters
   const filteredTasks = tasks.filter(task => {
+    // Always hide completed tasks
+    if (task.status === 'completed') return false;
+    
     if (filter !== 'all' && task.status !== filter) return false;
     if (selectedProject !== 'all' && task.project_id !== parseInt(selectedProject)) return false;
     return true;
@@ -55,8 +59,8 @@ const TaskManagementSection = ({ tasks, workers, projects, projectMembers, onTas
     pending: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30',
     in_progress: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
     ready_for_review: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-    approved: 'bg-green-500/20 text-green-300 border-green-500/30',
-    completed: 'bg-gray-500/20 text-gray-300 border-gray-500/30'
+    approved: 'bg-green-500/20 text-green-300 border-green-500/30'
+    // Removed completed status
   };
 
   const priorityStyles = {
@@ -73,6 +77,21 @@ const TaskManagementSection = ({ tasks, workers, projects, projectMembers, onTas
       projectMembers[task.project_id].some(member => member.user_id === worker.id)
     );
   };
+
+  // Calculate counts for filter tabs (excluding completed tasks)
+  const calculateCounts = () => {
+    const activeTasks = tasks.filter(task => task.status !== 'completed');
+    
+    return {
+      all: activeTasks.length,
+      pending: activeTasks.filter(task => task.status === 'pending').length,
+      in_progress: activeTasks.filter(task => task.status === 'in_progress').length,
+      ready_for_review: activeTasks.filter(task => task.status === 'ready_for_review').length,
+      approved: activeTasks.filter(task => task.status === 'approved').length
+    };
+  };
+
+  const counts = calculateCounts();
 
   return (
     <div className="bg-gray-800/30 rounded-2xl p-6 border border-gray-700/50">
@@ -96,14 +115,43 @@ const TaskManagementSection = ({ tasks, workers, projects, projectMembers, onTas
             onChange={(e) => setFilter(e.target.value)}
             className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
           >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="in_progress">In Progress</option>
-            <option value="ready_for_review">Ready for Review</option>
-            <option value="approved">Approved</option>
-            <option value="completed">Completed</option>
+            <option value="all">All Status ({counts.all})</option>
+            <option value="pending">Pending ({counts.pending})</option>
+            <option value="in_progress">In Progress ({counts.in_progress})</option>
+            <option value="ready_for_review">Ready for Review ({counts.ready_for_review})</option>
+            <option value="approved">Approved ({counts.approved})</option>
+            {/* Removed completed option */}
           </select>
         </div>
+      </div>
+
+      {/* Filter Tabs for better UX */}
+      <div className="flex flex-wrap gap-2 mb-6 p-1 bg-gray-800/50 rounded-xl border border-gray-700/30 w-fit">
+        {[
+          { value: 'all', label: 'All Tasks', emoji: '📋', count: counts.all },
+          { value: 'pending', label: 'Pending', emoji: '⏳', count: counts.pending },
+          { value: 'in_progress', label: 'In Progress', emoji: '🔄', count: counts.in_progress },
+          { value: 'ready_for_review', label: 'Ready for Review', emoji: '📤', count: counts.ready_for_review },
+          { value: 'approved', label: 'Approved', emoji: '✅', count: counts.approved }
+        ].map((filterOption) => (
+          <button
+            key={filterOption.value}
+            onClick={() => setFilter(filterOption.value)}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 ${
+              filter === filterOption.value
+                ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 shadow-lg shadow-blue-500/10'
+                : 'hover:bg-gray-700/50 border border-transparent'
+            }`}
+          >
+            <span className="text-sm">{filterOption.emoji}</span>
+            <span className="text-sm font-medium">{filterOption.label}</span>
+            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+              filter === filterOption.value ? 'bg-blue-500/30 text-blue-200' : 'bg-gray-600 text-gray-300'
+            }`}>
+              {filterOption.count}
+            </span>
+          </button>
+        ))}
       </div>
 
       <div className="space-y-4">
@@ -235,8 +283,13 @@ const TaskManagementSection = ({ tasks, workers, projects, projectMembers, onTas
         {filteredTasks.length === 0 && (
           <div className="text-center py-12 text-gray-400">
             <div className="text-6xl mb-4">📋</div>
-            <h3 className="text-xl font-semibold mb-2">No tasks found</h3>
+            <h3 className="text-xl font-semibold mb-2">No active tasks found</h3>
             <p>No tasks match your current filters</p>
+            {tasks.some(task => task.status === 'completed') && (
+              <p className="text-sm text-gray-500 mt-2">
+                Completed tasks are hidden from this view. Check the Task Archive for completed tasks.
+              </p>
+            )}
           </div>
         )}
       </div>
