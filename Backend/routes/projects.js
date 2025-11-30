@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Project = require('../models/Project');
 const Task = require('../models/Task');
+const db = require('../config/database'); // Add this import
 
 // Get all non-deleted projects
 router.get('/', (req, res) => {
@@ -62,7 +63,7 @@ router.post('/', (req, res) => {
   });
 });
 
-// Update project
+// Update project - UPDATED to handle team_leader_id properly
 router.put('/:id', (req, res) => {
   const projectId = req.params.id;
   const { title, description, team_leader_id, status, is_deleted } = req.body;
@@ -70,17 +71,20 @@ router.put('/:id', (req, res) => {
   const projectData = {
     title,
     description,
-    team_leader_id,
+    team_leader_id: team_leader_id !== undefined ? team_leader_id : null, // Handle null values
     status,
-    is_deleted
+    is_deleted,
+    updated_at: new Date()
   };
 
-  // Remove undefined fields
+  // Remove undefined fields but keep null values for team_leader_id
   Object.keys(projectData).forEach(key => {
-    if (projectData[key] === undefined) {
+    if (projectData[key] === undefined && key !== 'team_leader_id') {
       delete projectData[key];
     }
   });
+
+  console.log('Updating project with data:', projectData); // Debug log
 
   Project.update(projectId, projectData, (err, results) => {
     if (err) {
@@ -275,7 +279,7 @@ router.put('/:id/status', (req, res) => {
     return res.status(400).json({ error: 'Invalid status' });
   }
 
-  const projectData = { status };
+  const projectData = { status, updated_at: new Date() };
 
   Project.update(projectId, projectData, (err, results) => {
     if (err) {
@@ -329,6 +333,162 @@ router.get('/:id/stats', (req, res) => {
       : 0;
 
     res.json(stats);
+  });
+});
+
+// NEW: Update member role
+router.put('/:projectId/members/:userId/role', (req, res) => {
+  const { projectId, userId } = req.params;
+  const { role } = req.body;
+
+  console.log(`Updating role for user ${userId} in project ${projectId} to ${role}`); // Debug log
+
+  if (!['member', 'team_leader'].includes(role)) {
+    return res.status(400).json({ error: 'Invalid role' });
+  }
+
+  const query = 'UPDATE project_members SET role = ? WHERE project_id = ? AND user_id = ?';
+  db.query(query, [role, projectId, userId], (err, results) => {
+    if (err) {
+      console.error('Error updating member role:', err);
+      return res.status(500).json({ error: 'Failed to update member role' });
+    }
+
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ error: 'Member not found in project' });
+    }
+
+    console.log(`Role updated successfully. Affected rows: ${results.affectedRows}`); // Debug log
+
+    res.json({ message: 'Member role updated successfully' });
+  });
+});
+
+// NEW: Remove member and unassign their tasks
+router.delete('/:projectId/members/:userId/remove-with-tasks', (req, res) => {
+  const { projectId, userId } = req.params;
+
+  // Start a transaction to ensure data consistency
+  db.beginTransaction((err) => {
+    if (err) {
+      console.error('Error starting transaction:', err);
+      return res.status(500).json({ error: 'Failed to remove member' });
+    }
+
+    // 1. Get all tasks assigned to this user in this project
+    const getTasksQuery = 'SELECT id FROM tasks WHERE project_id = ? AND assigned_to = ? AND is_deleted = 0';
+    db.query(getTasksQuery, [projectId, userId], (taskErr, taskResults) => {
+      if (taskErr) {
+        return db.rollback(() => {
+          console.error('Error fetching tasks:', taskErr);
+          res.status(500).json({ error: 'Failed to remove member' });
+        });
+      }
+
+      const taskIds = taskResults.map(task => task.id);
+      let unassignedTasks = 0;
+
+      if (taskIds.length > 0) {
+        // Process each task to remove files and unassign
+        let processedTasks = 0;
+        
+        taskIds.forEach((taskId) => {
+          // Remove associated files
+          const deleteFilesQuery = 'DELETE FROM task_files WHERE task_id = ?';
+          db.query(deleteFilesQuery, [taskId], (fileErr) => {
+            if (fileErr) {
+              return db.rollback(() => {
+                console.error('Error deleting files:', fileErr);
+                res.status(500).json({ error: 'Failed to remove member' });
+              });
+            }
+
+            // Unassign task and reset status
+            const updateTaskQuery = `
+              UPDATE tasks 
+              SET assigned_to = NULL, status = 'pending', rejection_notes = NULL 
+              WHERE id = ?
+            `;
+            db.query(updateTaskQuery, [taskId], (updateErr) => {
+              if (updateErr) {
+                return db.rollback(() => {
+                  console.error('Error updating task:', updateErr);
+                  res.status(500).json({ error: 'Failed to remove member' });
+                });
+              }
+
+              processedTasks++;
+              unassignedTasks++;
+
+              // When all tasks are processed, remove the member
+              if (processedTasks === taskIds.length) {
+                removeMember();
+              }
+            });
+          });
+        });
+      } else {
+        // If no tasks, just remove the member
+        removeMember();
+      }
+
+      function removeMember() {
+        // Remove member from project
+        const removeMemberQuery = 'DELETE FROM project_members WHERE project_id = ? AND user_id = ?';
+        db.query(removeMemberQuery, [projectId, userId], (removeErr, removeResults) => {
+          if (removeErr) {
+            return db.rollback(() => {
+              console.error('Error removing member:', removeErr);
+              res.status(500).json({ error: 'Failed to remove member' });
+            });
+          }
+
+          // Commit transaction
+          db.commit((commitErr) => {
+            if (commitErr) {
+              return db.rollback(() => {
+                console.error('Error committing transaction:', commitErr);
+                res.status(500).json({ error: 'Failed to remove member' });
+              });
+            }
+
+            res.json({ 
+              message: 'Member removed successfully', 
+              unassignedTasks 
+            });
+          });
+        });
+      }
+    });
+  });
+});
+
+// NEW: Update project team leader specifically
+router.put('/:id/team-leader', (req, res) => {
+  const projectId = req.params.id;
+  const { team_leader_id } = req.body;
+
+  console.log(`Updating team leader for project ${projectId} to:`, team_leader_id); // Debug log
+
+  const updateData = {
+    team_leader_id: team_leader_id || null,
+    updated_at: new Date()
+  };
+
+  const query = 'UPDATE projects SET ? WHERE id = ?';
+  db.query(query, [updateData, projectId], (err, results) => {
+    if (err) {
+      console.error('Error updating team leader:', err);
+      return res.status(500).json({ error: 'Failed to update team leader' });
+    }
+
+    if (results.affectedRows === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    console.log(`Team leader updated successfully. Affected rows: ${results.affectedRows}`); // Debug log
+
+    res.json({ message: 'Team leader updated successfully' });
   });
 });
 

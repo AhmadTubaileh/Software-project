@@ -43,8 +43,15 @@ class Project {
     db.query(query, projectData, callback);
   }
 
-  // Update project
+  // Update project - UPDATED to handle all fields including team_leader_id
   static update(id, projectData, callback) {
+    // Ensure updated_at is always set
+    if (!projectData.updated_at) {
+      projectData.updated_at = new Date();
+    }
+    
+    console.log('Project update data:', projectData); // Debug log
+    
     const query = 'UPDATE projects SET ? WHERE id = ?';
     db.query(query, [projectData, id], callback);
   }
@@ -203,6 +210,28 @@ class Project {
       WHERE p.id = ?
     `;
     db.query(query, [projectId], callback);
+  }
+
+  // NEW: Update team leader specifically
+  static updateTeamLeader(projectId, teamLeaderId, callback) {
+    const updateData = {
+      team_leader_id: teamLeaderId,
+      updated_at: new Date()
+    };
+    
+    const query = 'UPDATE projects SET ? WHERE id = ?';
+    db.query(query, [updateData, projectId], callback);
+  }
+
+  // NEW: Clear team leader
+  static clearTeamLeader(projectId, callback) {
+    const updateData = {
+      team_leader_id: null,
+      updated_at: new Date()
+    };
+    
+    const query = 'UPDATE projects SET ? WHERE id = ?';
+    db.query(query, [updateData, projectId], callback);
   }
 }
 
