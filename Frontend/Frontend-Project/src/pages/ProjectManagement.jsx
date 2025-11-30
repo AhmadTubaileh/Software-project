@@ -8,6 +8,7 @@ import AddTaskModal from '../components/ProjectManagement/AddTaskModal.jsx';
 import TaskManagementSection from '../components/ProjectManagement/TaskManagementSection.jsx';
 import RejectTaskModal from '../components/ProjectManagement/RejectTaskModal.jsx';
 import DeleteConfirmationModal from '../components/ProjectManagement/DeleteConfirmationModal.jsx';
+import ProjectMembersModal from '../components/ProjectManagement/ProjectMembersModal.jsx';
 
 function ProjectManagement() {
   const [projects, setProjects] = useState([]);
@@ -19,7 +20,9 @@ function ProjectManagement() {
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showMembersModal, setShowMembersModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [selectedProjectForMembers, setSelectedProjectForMembers] = useState(null);
   const [selectedTaskForReject, setSelectedTaskForReject] = useState(null);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [headerAddTaskData, setHeaderAddTaskData] = useState({
@@ -115,14 +118,24 @@ function ProjectManagement() {
     }
   }, [projects]);
 
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
+  // UPDATED: Complete refresh function
+  const refreshAllData = useCallback(async () => {
+    console.log('Refreshing all project data...');
+    setLoading(true);
+    try {
       await Promise.all([fetchProjects(), fetchTasks(), fetchWorkers()]);
+      // Project members will be fetched in the useEffect below
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      toast.error('Failed to refresh data');
+    } finally {
       setLoading(false);
-    };
-    loadData();
+    }
   }, [fetchProjects, fetchTasks, fetchWorkers]);
+
+  useEffect(() => {
+    refreshAllData();
+  }, [refreshAllData]);
 
   useEffect(() => {
     if (projects.length > 0) {
@@ -166,7 +179,7 @@ function ProjectManagement() {
 
       toast.success('Project created successfully!');
       setShowCreateModal(false);
-      fetchProjects(); // Refresh the list
+      refreshAllData(); // Use the new refresh function
     } catch (error) {
       console.error('Error creating project:', error);
       toast.error(error.message || 'Failed to create project');
@@ -201,8 +214,7 @@ function ProjectManagement() {
       toast.success('Member added successfully!');
       setHeaderAddMemberData({ projectId: '', workerId: '' });
       setShowHeaderAddMemberDropdown(false);
-      fetchProjects(); // Refresh projects to update member counts
-      fetchProjectMembers(); // Refresh project members
+      refreshAllData(); // Use the new refresh function
     } catch (error) {
       console.error('Error adding member:', error);
       toast.error(error.message || 'Failed to add member');
@@ -237,8 +249,7 @@ function ProjectManagement() {
       toast.success('Member added successfully!');
       setProjectCardAddMemberData({ projectId: '', workerId: '' });
       setShowProjectCardAddMemberDropdown(prev => ({ ...prev, [projectId]: false }));
-      fetchProjects(); // Refresh projects to update member counts
-      fetchProjectMembers(); // Refresh project members
+      refreshAllData(); // Use the new refresh function
     } catch (error) {
       console.error('Error adding member:', error);
       toast.error(error.message || 'Failed to add member');
@@ -275,7 +286,7 @@ function ProjectManagement() {
       setHeaderAddTaskData({ projectId: '', workerId: '' });
       setShowHeaderAddTaskDropdown(false);
       setShowAddTaskModal(false);
-      fetchTasks(); // Refresh tasks
+      refreshAllData(); // Use the new refresh function
     } catch (error) {
       console.error('Error creating task:', error);
       toast.error(error.message || 'Failed to create task');
@@ -306,7 +317,7 @@ function ProjectManagement() {
       toast.success('Task created successfully!');
       setShowAddTaskModal(false);
       setSelectedProject(null);
-      fetchTasks(); // Refresh tasks
+      refreshAllData(); // Use the new refresh function
     } catch (error) {
       console.error('Error creating task:', error);
       toast.error(error.message || 'Failed to create task');
@@ -374,8 +385,7 @@ function ProjectManagement() {
       toast.success(`Project deleted successfully! ${archiveData.archivedTasks} non-completed tasks were archived.`);
       setShowDeleteModal(false);
       setItemToDelete(null);
-      fetchProjects(); // Refresh the project list
-      fetchTasks(); // Refresh the tasks list
+      refreshAllData(); // Use the new refresh function
     } catch (error) {
       console.error('Error deleting project:', error);
       toast.error(error.message || 'Failed to delete project');
@@ -462,7 +472,7 @@ function ProjectManagement() {
       }
 
       toast.success(`Task ${action === 'approve' ? 'completed' : action + 'ed'} successfully!`);
-      fetchTasks(); // Refresh tasks
+      refreshAllData(); // Use the new refresh function
     } catch (error) {
       console.error(`Error ${action}ing task:`, error);
       toast.error(error.message || `Failed to ${action} task`);
@@ -485,7 +495,7 @@ function ProjectManagement() {
       toast.success('Task deleted successfully!');
       setShowDeleteModal(false);
       setItemToDelete(null);
-      fetchTasks(); // Refresh tasks
+      refreshAllData(); // Use the new refresh function
     } catch (error) {
       console.error('Error deleting task:', error);
       toast.error(error.message || 'Failed to delete task');
@@ -549,12 +559,30 @@ function ProjectManagement() {
       toast.success('Task rejected successfully!');
       setShowRejectModal(false);
       setSelectedTaskForReject(null);
-      fetchTasks(); // Refresh tasks
+      refreshAllData(); // Use the new refresh function
     } catch (error) {
       console.error('Error rejecting task:', error);
       toast.error(error.message || 'Failed to reject task');
     }
   };
+
+  // Handle showing members modal
+  const handleShowMembers = (project) => {
+    setSelectedProjectForMembers(project);
+    setShowMembersModal(true);
+  };
+
+  // UPDATED: Handle members updated callback - now properly refreshes all data
+  const handleMembersUpdated = useCallback(async () => {
+    console.log('Members updated - refreshing all data...');
+    await refreshAllData();
+    
+    // Force a complete re-render of projects
+    setProjects(prev => {
+      const updatedProjects = [...prev];
+      return updatedProjects;
+    });
+  }, [refreshAllData]);
 
   // Get workers for a specific project
   const getWorkersForProject = (projectId) => {
@@ -939,6 +967,16 @@ function ProjectManagement() {
                       </button>
                     </div>
 
+                    {/* Manage Team Button */}
+                    <button
+                      onClick={() => handleShowMembers(project)}
+                      className="w-full bg-purple-500/20 text-purple-300 border border-purple-500/30 rounded-lg py-2 px-3 text-sm hover:bg-purple-500/30 transition-colors flex items-center justify-center gap-2"
+                      title="Manage Team Members"
+                    >
+                      <span>👥</span>
+                      Manage Team
+                    </button>
+
                     <button
                       onClick={() => handleDeleteProject(project.id)}
                       className="px-3 py-2 bg-red-500/20 text-red-300 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
@@ -1028,6 +1066,18 @@ function ProjectManagement() {
             setShowDeleteModal(false);
             setItemToDelete(null);
           }}
+        />
+      )}
+
+      {/* Project Members Modal */}
+      {showMembersModal && selectedProjectForMembers && (
+        <ProjectMembersModal
+          project={selectedProjectForMembers}
+          onClose={() => {
+            setShowMembersModal(false);
+            setSelectedProjectForMembers(null);
+          }}
+          onMembersUpdated={handleMembersUpdated}
         />
       )}
     </div>

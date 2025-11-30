@@ -44,7 +44,7 @@ const TaskManagementSection = ({ tasks, workers, projects, projectMembers, onTas
   };
 
   const handleDelete = async (taskId) => {
-    if (!confirm('Are you sure you want to delete this task?')) return;
+    // Removed confirmation dialog
     await onTaskAction('delete', taskId);
   };
 
@@ -110,18 +110,7 @@ const TaskManagementSection = ({ tasks, workers, projects, projectMembers, onTas
               </option>
             ))}
           </select>
-          <select
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            className="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 transition-colors"
-          >
-            <option value="all">All Status ({counts.all})</option>
-            <option value="pending">Pending ({counts.pending})</option>
-            <option value="in_progress">In Progress ({counts.in_progress})</option>
-            <option value="ready_for_review">Ready for Review ({counts.ready_for_review})</option>
-            <option value="approved">Approved ({counts.approved})</option>
-            {/* Removed completed option */}
-          </select>
+          {/* Status filter dropdown removed as requested */}
         </div>
       </div>
 
@@ -157,6 +146,7 @@ const TaskManagementSection = ({ tasks, workers, projects, projectMembers, onTas
       <div className="space-y-4">
         {filteredTasks.map((task) => {
           const taskWorkers = getWorkersForTask(task);
+          const isUnassigned = task.assigned_to === null;
           
           return (
             <div
@@ -177,6 +167,13 @@ const TaskManagementSection = ({ tasks, workers, projects, projectMembers, onTas
                         {task.project_title}
                       </span>
                     )}
+                    {/* Warning indicator for unassigned tasks */}
+                    {isUnassigned && (
+                      <span className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-red-500/20 text-red-300 border border-red-500/30">
+                        <span>⚠️</span>
+                        <span>Unassigned</span>
+                      </span>
+                    )}
                   </div>
                   
                   <h3 className="text-lg font-semibold text-white mb-3">{task.task}</h3>
@@ -186,10 +183,11 @@ const TaskManagementSection = ({ tasks, workers, projects, projectMembers, onTas
                       <span>👤</span>
                       <span>Assigned to: 
                         <select
-                          value={task.assigned_to}
+                          value={task.assigned_to || ''}
                           onChange={(e) => handleReassign(task.id, e.target.value)}
                           className="ml-2 bg-gray-700 border border-gray-600 rounded px-2 py-1 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
                         >
+                          <option value="">Select Assignee</option>
                           {taskWorkers.map(worker => (
                             <option key={worker.id} value={worker.id}>
                               {worker.username}

@@ -57,10 +57,21 @@ const ReadyTasksSection = ({ projectId, currentUser, onTaskAction }) => {
     }
   };
 
-  const handleReject = async (taskId) => {
-    const notes = prompt('Enter rejection notes:');
-    if (!notes) return;
+  // UPDATED: Use the onTaskAction callback for rejection instead of browser prompt
+  const handleReject = (taskId) => {
+    if (onTaskAction) {
+      // Call the parent's reject handler which will open the modal
+      onTaskAction('reject', taskId, { currentStatus: 'ready_for_review' });
+    } else {
+      // Fallback to old method if no callback provided
+      const notes = prompt('Enter rejection notes:');
+      if (!notes) return;
+      handleRejectWithNotes(taskId, notes);
+    }
+  };
 
+  // Fallback reject method (old way)
+  const handleRejectWithNotes = async (taskId, notes) => {
     try {
       // First, delete associated files
       const filesResponse = await fetch(`http://localhost:5000/api/tasks/${taskId}/files`);
@@ -189,6 +200,7 @@ const ReadyTasksSection = ({ projectId, currentUser, onTaskAction }) => {
                   >
                     ✅ Approve
                   </button>
+                  {/* UPDATED: Use the new handleReject function that calls the parent callback */}
                   <button
                     onClick={() => handleReject(task.id)}
                     className="px-4 py-2 bg-red-500/20 text-red-300 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-colors"
