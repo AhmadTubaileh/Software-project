@@ -92,19 +92,40 @@ const ProjectMembersModal = ({ project, onClose, onMembersUpdated }) => {
     }
   };
 
+  // UPDATED: Handle member removal WITHOUT confirmation dialog
   const handleRemoveMember = async (memberId, memberName) => {
-    if (!confirm(`Are you sure you want to remove ${memberName} from this project? All tasks assigned to them will be unassigned.`)) {
-      return;
-    }
-
+    // Removed confirmation dialog - proceed directly with removal
     setUpdating(memberId);
     try {
       // Check if the member being removed is the team leader
       const memberToRemove = members.find(member => member.user_id === memberId);
       const isTeamLeader = memberToRemove?.role === 'team_leader';
 
+      // Calculate remaining members after removal
+      const remainingMembers = members.filter(member => member.user_id !== memberId);
+      const remainingMemberCount = remainingMembers.length;
+
+      // NEW LOGIC: Determine if we should auto-reassign or set to null
+      let reassignmentStrategy = 'null'; // Default: set to null for admin decision
+      
+      if (remainingMemberCount === 1) {
+        // Only one member remains - auto-reassign to that member
+        reassignmentStrategy = 'auto_reassign';
+      }
+      // For 2+ remaining members, keep the default 'null' strategy
+
+      console.log(`Removing member. Remaining members: ${remainingMemberCount}, Strategy: ${reassignmentStrategy}`);
+
+      // Use the updated endpoint that handles smart reassignment
       const response = await fetch(`http://localhost:5000/api/projects/${project.id}/members/${memberId}/remove-with-tasks`, {
         method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reassignment_strategy: reassignmentStrategy,
+          remaining_member_count: remainingMemberCount
+        }),
       });
 
       const data = await response.json();
@@ -124,7 +145,17 @@ const ProjectMembersModal = ({ project, onClose, onMembersUpdated }) => {
         });
       }
 
-      toast.success(`Member removed successfully! ${data.unassignedTasks} tasks were unassigned.`);
+      // Show appropriate success message based on reassignment
+      let successMessage = `Member removed successfully! `;
+      if (data.reassignedTasks > 0) {
+        successMessage += `${data.reassignedTasks} tasks were automatically reassigned to the remaining team member.`;
+      } else if (data.unassignedTasks > 0) {
+        successMessage += `${data.unassignedTasks} tasks were unassigned and need admin attention.`;
+      } else {
+        successMessage += `No tasks were affected.`;
+      }
+
+      toast.success(successMessage);
       
       // Remove from local state immediately
       setMembers(prevMembers => 
@@ -317,6 +348,19 @@ const ProjectMembersModal = ({ project, onClose, onMembersUpdated }) => {
               >
                 Close
               </button>
+            </div>
+            
+            {/* Task Reassignment Information */}
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3">
+              <div className="flex items-center gap-2 text-blue-300 mb-1">
+                <span>ℹ️</span>
+                <span className="text-sm font-medium">Task Reassignment Logic</span>
+              </div>
+              <div className="text-blue-200 text-xs space-y-1">
+                <p>• <strong>2 members total:</strong> Removing one automatically reassigns tasks to the remaining member</p>
+                <p>• <strong>3+ members total:</strong> Tasks become unassigned for admin review</p>
+                <p>• All reassigned tasks are reset to "pending" status</p>
+              </div>
             </div>
             
             {/* Team leader information */}
