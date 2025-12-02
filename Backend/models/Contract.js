@@ -26,7 +26,6 @@ class Contract {
         LEFT JOIN item_prices ip ON i.id = ip.item_id
         WHERE i.available = 1 
           AND i.installment = 1
-          AND i.quantity > 0
           AND ip.date = (
             SELECT MAX(date) 
             FROM item_prices 
@@ -59,7 +58,7 @@ class Contract {
     });
   }
 
-  // Apply for new contract with price_id
+  // Apply for new contract with price_id (single contract)
   static apply(applicationData) {
     return new Promise((resolve, reject) => {
       const { customer_data, sponsors_data, contract_data } = applicationData;
@@ -71,6 +70,8 @@ class Contract {
         }
 
         let customerId;
+        let saleInsertId;
+        let contractId;
 
         // 1. Check if customer exists
         const customerCheckQuery = 'SELECT id FROM contract_customers WHERE id_card_number = ?';
@@ -129,7 +130,7 @@ class Contract {
           function proceedWithContract() {
             // 2. Check item availability
             const checkAvailabilityQuery = `
-              SELECT quantity FROM items WHERE id = ?
+              SELECT quantity, name FROM items WHERE id = ?
             `;
             
             db.query(checkAvailabilityQuery, [contract_data.item_id], (availErr, availabilityResults) => {
@@ -142,8 +143,10 @@ class Contract {
               }
 
               const availableQuantity = availabilityResults[0].quantity;
+              const itemName = availabilityResults[0].name;
+              
               if (availableQuantity <= 0) {
-                return rollbackAndReject(new Error('Item is out of stock'), reject);
+                return rollbackAndReject(new Error(`Item "${itemName}" is out of stock`), reject);
               }
 
               // 3. DECREASE ITEM QUANTITY IMMEDIATELY
@@ -175,7 +178,7 @@ class Contract {
                     VALUES (?, NULL, ?, 'installment', ?, ?)
                   `;
                   
-                  const saleId = `S${Date.now()}`;
+                  const saleId = `S${Date.now()}_${Math.floor(Math.random() * 1000)}_${contract_data.contract_number || '1'}`;
                   db.query(saleQuery, [
                     contract_data.worker_id,
                     contract_data.item_id,
@@ -186,7 +189,7 @@ class Contract {
                       return rollbackAndReject(saleErr, reject);
                     }
 
-                    const saleInsertId = saleResult.insertId;
+                    saleInsertId = saleResult.insertId;
 
                     // 6. Create installment contract with price_id
                     const contractQuery = `
@@ -214,7 +217,7 @@ class Contract {
                         return rollbackAndReject(contractErr, reject);
                       }
 
-                      const contractId = contractResult.insertId;
+                      contractId = contractResult.insertId;
 
                       // 7. Create contract approval record
                       const approvalQuery = `
@@ -231,56 +234,66 @@ class Contract {
                           return rollbackAndReject(approvalErr, reject);
                         }
 
-                        // 8. Create sponsor records
-                        let sponsorsProcessed = 0;
-                        if (sponsors_data.length === 0) {
-                          return finalizeContract();
-                        }
-
-                        sponsors_data.forEach((sponsor) => {
-                          const sponsorQuery = `
-                            INSERT INTO contract_sponsors 
-                            (contract_id, full_name, phone, id_card_number, relationship, address, id_card_image) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
-                          `;
-                          
-                          db.query(sponsorQuery, [
-                            contractId,
-                            sponsor.full_name,
-                            sponsor.phone,
-                            sponsor.id_card_number,
-                            sponsor.relationship,
-                            sponsor.address,
-                            sponsor.id_card_image
-                          ], (sponsorErr) => {
-                            if (sponsorErr) {
-                              return rollbackAndReject(sponsorErr, reject);
-                            }
-                            
-                            sponsorsProcessed++;
-                            if (sponsorsProcessed === sponsors_data.length) {
-                              finalizeContract();
-                            }
-                          });
-                        });
-
-                        function finalizeContract() {
-                          // Commit transaction
-                          db.query('COMMIT', (commitErr) => {
-                            if (commitErr) {
-                              return rollbackAndReject(commitErr, reject);
-                            }
-                            
-                            resolve({
-                              contractId,
-                              saleId: saleInsertId
-                            });
-                          });
-                        }
+                        // 8. Create sponsor records for this contract
+                        createSponsors();
                       });
                     });
                   });
                 });
+              });
+            });
+          }
+
+          function createSponsors() {
+            if (!sponsors_data || sponsors_data.length === 0) {
+              return finalizeContract();
+            }
+
+            let sponsorsProcessed = 0;
+            
+            sponsors_data.forEach((sponsor) => {
+              const sponsorQuery = `
+                INSERT INTO contract_sponsors 
+                (contract_id, full_name, phone, id_card_number, relationship, address, id_card_image) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+              `;
+              
+              db.query(sponsorQuery, [
+                contractId,
+                sponsor.full_name,
+                sponsor.phone,
+                sponsor.id_card_number,
+                sponsor.relationship,
+                sponsor.address,
+                sponsor.id_card_image
+              ], (sponsorErr) => {
+                if (sponsorErr) {
+                  return rollbackAndReject(sponsorErr, reject);
+                }
+                
+                sponsorsProcessed++;
+                if (sponsorsProcessed === sponsors_data.length) {
+                  finalizeContract();
+                }
+              });
+            });
+          }
+
+          function finalizeContract() {
+            // Commit transaction
+            db.query('COMMIT', (commitErr) => {
+              if (commitErr) {
+                return rollbackAndReject(commitErr, reject);
+              }
+              
+              resolve({
+                contractId,
+                saleId: saleInsertId,
+                item_name: contract_data.item_name,
+                total_price: contract_data.total_price,
+                quantity: contract_data.quantity || 1,
+                contract_number: contract_data.contract_number || 1,
+                success: true
               });
             });
           }
@@ -293,6 +306,161 @@ class Contract {
           });
         }
       });
+    });
+  }
+
+  // Apply for multiple contracts (batch processing with quantity support)
+  static applyMultiple(contractsData) {
+    return new Promise((resolve, reject) => {
+      const results = [];
+      const errors = [];
+      let processed = 0;
+      const total = contractsData.length;
+
+      if (total === 0) {
+        return resolve({
+          success: false,
+          results: [],
+          errors: [{ error: 'No contracts to process' }],
+          total: 0,
+          successful: 0,
+          failed: 1
+        });
+      }
+
+      // Group contracts by item_id to check availability in bulk
+      const itemsToCheck = {};
+      contractsData.forEach((contractData, index) => {
+        const itemId = contractData.contract_data.item_id;
+        if (!itemsToCheck[itemId]) {
+          itemsToCheck[itemId] = {
+            count: 0,
+            contracts: [],
+            item_name: contractData.contract_data.item_name
+          };
+        }
+        itemsToCheck[itemId].count++;
+        itemsToCheck[itemId].contracts.push(index);
+      });
+
+      // Check all items availability first
+      const checkAvailability = () => {
+        const itemIds = Object.keys(itemsToCheck);
+        if (itemIds.length === 0) {
+          processContracts();
+          return;
+        }
+        
+        let checked = 0;
+        
+        itemIds.forEach(itemId => {
+          const query = 'SELECT quantity, name FROM items WHERE id = ?';
+          db.query(query, [itemId], (err, results) => {
+            checked++;
+            
+            if (err) {
+              console.error('Error checking item availability:', err);
+              // Mark all contracts for this item as failed
+              itemsToCheck[itemId].contracts.forEach(index => {
+                errors.push({
+                  index,
+                  item_name: itemsToCheck[itemId].item_name,
+                  error: 'Database error checking availability'
+                });
+              });
+            } else if (results.length === 0) {
+              // Item not found
+              itemsToCheck[itemId].contracts.forEach(index => {
+                errors.push({
+                  index,
+                  item_name: itemsToCheck[itemId].item_name,
+                  error: 'Item not found in database'
+                });
+              });
+            } else {
+              const available = results[0].quantity;
+              const itemName = results[0].name;
+              
+              if (available < itemsToCheck[itemId].count) {
+                // Not enough quantity
+                itemsToCheck[itemId].contracts.forEach(index => {
+                  errors.push({
+                    index,
+                    item_name: itemName,
+                    error: `Only ${available} available, requested ${itemsToCheck[itemId].count}`
+                  });
+                });
+              }
+            }
+            
+            if (checked === itemIds.length) {
+              // All items checked, proceed with processing
+              processContracts();
+            }
+          });
+        });
+      };
+
+      const processContracts = () => {
+        const processNext = () => {
+          if (processed >= total) {
+            resolve({
+              success: results.length > 0,
+              results,
+              errors,
+              total,
+              successful: results.length,
+              failed: errors.length
+            });
+            return;
+          }
+
+          // Skip contracts that already have errors
+          while (processed < total && errors.some(e => e.index === processed)) {
+            processed++;
+          }
+          
+          if (processed >= total) {
+            resolve({
+              success: results.length > 0,
+              results,
+              errors,
+              total,
+              successful: results.length,
+              failed: errors.length
+            });
+            return;
+          }
+
+          const contractData = contractsData[processed];
+          
+          Contract.apply(contractData)
+            .then(result => {
+              results.push({
+                index: processed,
+                item_name: contractData.contract_data.item_name,
+                contract_number: contractData.contract_data.contract_number,
+                ...result
+              });
+              processed++;
+              processNext();
+            })
+            .catch(error => {
+              errors.push({
+                index: processed,
+                item_name: contractData.contract_data.item_name,
+                error: error.message
+              });
+              processed++;
+              processNext();
+            });
+        };
+
+        processNext();
+      };
+
+      // Start by checking availability
+      checkAvailability();
     });
   }
 
@@ -803,6 +971,20 @@ class Contract {
           return;
         }
         resolve(results);
+      });
+    });
+  }
+
+  // Get item quantity by ID
+  static getItemQuantity(itemId) {
+    return new Promise((resolve, reject) => {
+      const query = 'SELECT quantity FROM items WHERE id = ?';
+      db.query(query, [itemId], (err, results) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(results[0]?.quantity || 0);
       });
     });
   }

@@ -4,7 +4,7 @@ import toast, { Toaster } from 'react-hot-toast';
 import IdVerificationStep from '../components/ContractSteps/IdVerificationStep';
 import CustomerInfoStep from '../components/ContractSteps/CustomerInfoStep';
 import SponsorsStep from '../components/ContractSteps/SponsorsStep';
-import ContractDetailsStep from '../components/ContractSteps/ContractDetailsStep';
+import ContractItemsStep from '../components/ContractSteps/ContractItemsStep';
 import AdminSidebar from '../components/AdminSidebar';
 import { useLocalSession } from '../hooks/useLocalSession';
 
@@ -15,7 +15,7 @@ const ContractApplication = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   
-  // Main form state
+  // Main form state - UPDATED FOR MULTIPLE ITEMS WITH QUANTITY
   const [formData, setFormData] = useState({
     // Step 1: ID Verification
     idCardNumber: '',
@@ -34,15 +34,8 @@ const ContractApplication = () => {
     // Step 3: Sponsors
     sponsors: [],
     
-    // Step 4: Contract Details
-    contract: {
-      item_id: '',
-      total_price: 0,
-      down_payment: 0,
-      months: 12,
-      monthly_payment: 0,
-      start_date: new Date().toISOString().split('T')[0]
-    }
+    // Step 4: Contract Items - ARRAY FOR MULTIPLE ITEMS WITH QUANTITY
+    contractItems: []
   });
 
   const updateFormData = useCallback((updates) => {
@@ -62,9 +55,21 @@ const ContractApplication = () => {
   }, [currentStep]);
 
   const handleSubmit = async () => {
+    if (formData.contractItems.length === 0) {
+      toast.error('Please add at least one item to the contract');
+      return;
+    }
+
+    // Calculate total number of contracts (considering quantity)
+    const totalContracts = formData.contractItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+    if (totalContracts === 0) {
+      toast.error('Please add at least one item to the contract');
+      return;
+    }
+
     setLoading(true);
     try {
-      // Create FormData to handle file uploads
+      // Create FormData for batch submission
       const submitData = new FormData();
       
       // Append customer data
@@ -73,11 +78,32 @@ const ContractApplication = () => {
       // Append sponsors data
       submitData.append('sponsors_data', JSON.stringify(formData.sponsors));
       
-      // Append contract data
-      submitData.append('contract_data', JSON.stringify({
-        ...formData.contract,
-        worker_id: currentUser.id
-      }));
+      // Append all contract items with quantity - UPDATED FOR MULTIPLE QUANTITY
+      const contractsData = [];
+      
+      formData.contractItems.forEach(item => {
+        // For each quantity unit, create a separate contract entry
+        for (let i = 0; i < item.quantity; i++) {
+          contractsData.push({
+            item_id: item.item_id,
+            item_name: item.item_name,
+            item_description: item.item_description,
+            price_id: item.price_id,
+            total_price: item.total_price,
+            down_payment: item.down_payment,
+            months: item.months,
+            monthly_payment: item.monthly_payment,
+            installment_last_payment: item.installment_last_payment,
+            start_date: item.start_date,
+            worker_id: currentUser.id,
+            quantity: 1, // Each entry is for 1 item
+            contract_number: i + 1, // Which copy this is (1st, 2nd, etc.)
+            original_quantity: item.quantity // Keep original for reference
+          });
+        }
+      });
+      
+      submitData.append('contracts_data', JSON.stringify(contractsData));
 
       // Append customer ID card image if exists
       if (formData.customer.id_card_image && formData.customer.id_card_image instanceof File) {
@@ -91,7 +117,12 @@ const ContractApplication = () => {
         }
       });
 
-      const response = await fetch('http://localhost:5000/api/contracts/apply', {
+      // Show loading message with details
+      toast.loading(`Submitting ${totalContracts} contract(s)...`, {
+        id: 'contract-submission'
+      });
+
+      const response = await fetch('http://localhost:5000/api/contracts/apply-multiple', {
         method: 'POST',
         body: submitData,
       });
@@ -99,17 +130,54 @@ const ContractApplication = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to submit contract');
+        throw new Error(data.error || 'Failed to submit contracts');
       }
 
-      toast.success('Contract application submitted successfully!');
-      navigate('/');
+      // Dismiss loading toast
+      toast.dismiss('contract-submission');
+
+      if (data.failed > 0) {
+        if (data.successful > 0) {
+          toast.success(`${data.successful} contract(s) submitted successfully!`);
+          
+          // Show details of failed contracts
+          if (data.errors && data.errors.length > 0) {
+            const failedItems = data.errors.map(err => err.item_name).join(', ');
+            toast.error(`${data.failed} contract(s) failed: ${failedItems}`);
+            
+            // Log detailed errors for debugging
+            console.error('Failed contracts details:', data.errors);
+          }
+        } else {
+          throw new Error('All contracts failed: ' + (data.errors?.map(e => e.error).join(', ') || 'Unknown error'));
+        }
+      } else {
+        toast.success(`${data.successful} contract(s) submitted successfully!`);
+      }
+
+      // Show summary
+      if (data.results && data.results.length > 0) {
+        const uniqueItems = [...new Set(data.results.map(r => r.item_name))];
+        toast.success(`Created contracts for: ${uniqueItems.join(', ')}`);
+      }
+
+      // Redirect to contract management page after delay
+      setTimeout(() => {
+        navigate('/contract-management');
+      }, 3000);
+      
     } catch (error) {
       console.error('Contract submission error:', error);
-      toast.error(error.message || 'Failed to submit contract application');
+      toast.dismiss('contract-submission');
+      toast.error(error.message || 'Failed to submit contract applications');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Calculate total contracts (considering quantity)
+  const calculateTotalContracts = () => {
+    return formData.contractItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
   };
 
   const renderStep = () => {
@@ -142,7 +210,7 @@ const ContractApplication = () => {
         );
       case 4:
         return (
-          <ContractDetailsStep
+          <ContractItemsStep
             formData={formData}
             updateFormData={updateFormData}
             prevStep={prevStep}
@@ -167,6 +235,9 @@ const ContractApplication = () => {
     );
   }
 
+  // Calculate progress based on steps completed
+  const totalContracts = calculateTotalContracts();
+
   return (
     <div className="min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
@@ -183,8 +254,15 @@ const ContractApplication = () => {
               New Installment Contract
             </h1>
             <p className="text-gray-400 mt-2">
-              Apply for a new installment purchase contract
+              Apply for new installment purchase contract(s)
             </p>
+            {currentStep === 4 && totalContracts > 0 && (
+              <div className="mt-4 bg-blue-900/20 border border-blue-500 p-3 rounded-lg inline-block">
+                <p className="text-blue-300">
+                  <span className="font-bold">{totalContracts}</span> contract{totalContracts !== 1 ? 's' : ''} will be created
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Progress Steps */}
@@ -211,7 +289,7 @@ const ContractApplication = () => {
 
           {/* Step Labels */}
           <div className="flex justify-between mb-8 px-4">
-            {['ID Verification', 'Customer Info', 'Sponsors', 'Contract Details'].map((label, index) => (
+            {['ID Verification', 'Customer Info', 'Sponsors', 'Contract Items'].map((label, index) => (
               <div
                 key={label}
                 className={`text-sm font-medium ${
@@ -228,6 +306,26 @@ const ContractApplication = () => {
           <div className="bg-gray-800/50 rounded-xl p-6 border border-gray-700/50">
             {renderStep()}
           </div>
+
+          {/* Quick Stats Footer */}
+          {currentStep === 4 && formData.contractItems.length > 0 && (
+            <div className="mt-6 p-4 bg-gray-800/30 rounded-lg border border-gray-700">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-400">
+                  <span className="text-white font-semibold">{formData.contractItems.length}</span> unique product{formData.contractItems.length !== 1 ? 's' : ''}
+                </div>
+                <div className="text-sm text-gray-400">
+                  <span className="text-white font-semibold">{totalContracts}</span> total contract{totalContracts !== 1 ? 's' : ''}
+                </div>
+                <div className="text-sm text-gray-400">
+                  Customer: <span className="text-white font-semibold">{formData.customer.full_name || 'Not set'}</span>
+                </div>
+                <div className="text-sm text-gray-400">
+                  Sponsors: <span className="text-white font-semibold">{formData.sponsors.length}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
