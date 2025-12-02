@@ -7,6 +7,7 @@ class Item {
       SELECT 
         i.*,
         ip.price_cash,
+        ip.buy_price,
         ip.price_installment_total,
         ip.installment_first_payment,
         ip.installment_months,
@@ -42,6 +43,7 @@ class Item {
       SELECT 
         i.*,
         ip.price_cash,
+        ip.buy_price,
         ip.price_installment_total,
         ip.installment_first_payment,
         ip.installment_months,
@@ -100,6 +102,7 @@ class Item {
       }
       callback(null, results[0] || {
         price_cash: 0,
+        buy_price: 0,
         price_installment_total: null,
         installment_first_payment: null,
         installment_months: null,
@@ -162,18 +165,19 @@ class Item {
         // Insert into item_prices table
         const priceQuery = `
           INSERT INTO item_prices 
-          (item_id, user_id, price_cash, price_installment_total, 
+          (item_id, user_id, price_cash, buy_price, price_installment_total, 
            installment_first_payment, installment_months, installment_per_month, 
            installment_last_payment, on_sale_price) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         
-        console.log('Inserting price with user_id:', priceData.user_id);
+        console.log('Inserting price with buy_price:', priceData.buy_price);
         
         db.query(priceQuery, [
           itemId,
           priceData.user_id,
           priceData.price_cash,
+          priceData.buy_price || null,
           priceData.price_installment_total,
           priceData.installment_first_payment,
           priceData.installment_months,
@@ -247,17 +251,18 @@ class Item {
           if (latestPrice && latestPrice.id) {
             const priceQuery = `
               UPDATE item_prices 
-              SET price_cash = ?, price_installment_total = ?, 
+              SET price_cash = ?, buy_price = ?, price_installment_total = ?, 
                   installment_first_payment = ?, installment_months = ?, 
                   installment_per_month = ?, installment_last_payment = ?, 
                   on_sale_price = ?, user_id = ?
               WHERE id = ?
             `;
             
-            console.log('Updating price with user_id:', priceData.user_id);
+            console.log('Updating price with buy_price:', priceData.buy_price);
             
             db.query(priceQuery, [
               priceData.price_cash,
+              priceData.buy_price || null,
               priceData.price_installment_total,
               priceData.installment_first_payment,
               priceData.installment_months,
@@ -332,18 +337,19 @@ class Item {
   static createPrice(priceData, callback) {
     const query = `
       INSERT INTO item_prices 
-      (item_id, user_id, price_cash, price_installment_total, 
+      (item_id, user_id, price_cash, buy_price, price_installment_total, 
        installment_first_payment, installment_months, installment_per_month, 
        installment_last_payment, on_sale_price) 
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
-    console.log('Creating new price row with user_id:', priceData.user_id);
+    console.log('Creating new price row with buy_price:', priceData.buy_price);
     
     db.query(query, [
       priceData.item_id,
       priceData.user_id,
       priceData.price_cash,
+      priceData.buy_price || null,
       priceData.price_installment_total,
       priceData.installment_first_payment,
       priceData.installment_months,

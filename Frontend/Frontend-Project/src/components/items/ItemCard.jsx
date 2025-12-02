@@ -12,6 +12,16 @@ function ItemCard({ item, onEdit, onUpdate, onDelete, onViewImage, onViewPriceHi
 
   const imageSrc = getImageSrc();
 
+  // Calculate profit
+  const calculateProfit = () => {
+    if (!item.price_cash || !item.buy_price) return null;
+    const profit = parseFloat(item.price_cash) - parseFloat(item.buy_price);
+    const profitPercentage = (profit / parseFloat(item.buy_price)) * 100;
+    return { profit, profitPercentage };
+  };
+
+  const profit = calculateProfit();
+
   // Format date
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
@@ -63,9 +73,25 @@ function ItemCard({ item, onEdit, onUpdate, onDelete, onViewImage, onViewPriceHi
         <div className="space-y-2 text-sm">
           {/* Price Information */}
           <div className="flex justify-between">
-            <span className="text-gray-400">Cash Price:</span>
+            <span className="text-gray-400">Sell Price:</span>
             <span className="text-white">${item.price_cash}</span>
           </div>
+          
+          <div className="flex justify-between">
+            <span className="text-gray-400">Buy Price:</span>
+            <span className="text-orange-400">${item.buy_price}</span>
+          </div>
+          
+          {/* Profit Display */}
+          {profit && (
+            <div className="flex justify-between bg-gray-900 p-2 rounded">
+              <span className="text-gray-400">Profit:</span>
+              <div className="text-right">
+                <span className="text-green-400 font-medium">${profit.profit.toFixed(2)}</span>
+                <span className="text-green-300 text-xs ml-2">({profit.profitPercentage.toFixed(1)}%)</span>
+              </div>
+            </div>
+          )}
           
           {item.on_sale_price && (
             <div className="flex justify-between">

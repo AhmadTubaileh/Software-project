@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 
 function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     price_cash: '',
+    buy_price: '',
     price_installment_total: '',
     installment_first_payment: '',
     installment_months: '',
@@ -28,6 +30,7 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
         name: item.name || '',
         description: item.description || '',
         price_cash: item.price_cash || '',
+        buy_price: item.buy_price || '',
         price_installment_total: item.price_installment_total || '',
         installment_first_payment: item.installment_first_payment || '',
         installment_months: item.installment_months || '',
@@ -56,6 +59,7 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
         name: '',
         description: '',
         price_cash: '',
+        buy_price: '',
         price_installment_total: '',
         installment_first_payment: '',
         installment_months: '',
@@ -96,12 +100,25 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
     const monthlyPayment = Math.floor(rawMonthly / 10) * 10;
     
     // Calculate last payment
-    const lastPayment = remaining - (monthlyPayment * equalMonths);
+    let lastPayment = remaining - (monthlyPayment * equalMonths);
     
-    setCalculatedPayments({
-      installment_per_month: monthlyPayment.toFixed(2),
-      installment_last_payment: lastPayment.toFixed(2)
-    });
+    // NEW LOGIC: If last payment is 0, take 10 from each monthly payment
+    if (lastPayment === 0) {
+      // Take 10 from each monthly payment
+      const adjustedMonthly = monthlyPayment - 10;
+      // Add (10 * equalMonths) to last payment
+      lastPayment = 10 * equalMonths;
+      
+      setCalculatedPayments({
+        installment_per_month: adjustedMonthly.toFixed(2),
+        installment_last_payment: lastPayment.toFixed(2)
+      });
+    } else {
+      setCalculatedPayments({
+        installment_per_month: monthlyPayment.toFixed(2),
+        installment_last_payment: lastPayment.toFixed(2)
+      });
+    }
   };
 
   // Trigger calculation when installment fields change
@@ -145,6 +162,7 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
       submitData.append('name', formData.name);
       submitData.append('description', formData.description);
       submitData.append('price_cash', formData.price_cash);
+      submitData.append('buy_price', formData.buy_price);
       submitData.append('available', formData.available);
       submitData.append('quantity', formData.quantity);
       submitData.append('installment', formData.installment);
@@ -259,6 +277,22 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Buy Price (Cost) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  name="buy_price"
+                  value={formData.buy_price}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
                   Quantity *
                 </label>
                 <input
@@ -272,6 +306,37 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
                 />
               </div>
             </div>
+
+            {/* Profit Calculation Display */}
+            {(formData.price_cash && formData.buy_price) && (
+              <div className="bg-gray-800 p-3 rounded border border-gray-700">
+                <h4 className="text-sm font-medium text-gray-300 mb-2">Profit Calculation:</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-400">Sell Price:</span>
+                    <p className="text-white">${parseFloat(formData.price_cash).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Cost Price:</span>
+                    <p className="text-white">${parseFloat(formData.buy_price).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Profit:</span>
+                    <p className="text-green-400 font-medium">
+                      ${(parseFloat(formData.price_cash) - parseFloat(formData.buy_price)).toFixed(2)}
+                    </p>
+                  </div>
+                  <div>
+                    <span className="text-gray-400">Profit %:</span>
+                    <p className="text-green-400 font-medium">
+                      {formData.buy_price > 0 
+                        ? (((parseFloat(formData.price_cash) - parseFloat(formData.buy_price)) / parseFloat(formData.buy_price)) * 100).toFixed(1) + '%'
+                        : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Sale Price */}
             <div>
@@ -370,7 +435,10 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
                         </div>
                       </div>
                       <p className="text-xs text-gray-500 mt-2">
-                        Note: Monthly payment is rounded down to nearest $10
+                        <strong>Note:</strong> 
+                        <br/>1. Monthly payment is rounded down to nearest $10
+                        <br/>2. If last payment would be $0, $10 is taken from each monthly payment
+                        <br/>3. Final payment is never $0
                       </p>
                     </div>
                   )}

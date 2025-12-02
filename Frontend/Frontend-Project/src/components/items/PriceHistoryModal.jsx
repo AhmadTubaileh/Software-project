@@ -52,19 +52,21 @@ function PriceHistoryModal({ isOpen, itemId, priceHistory, loading, onClose }) {
           {!loading && priceHistory.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-left text-gray-400">
-                <thead className="text-xs uppercase bg-gray-800 text-gray-400">
-                  <tr>
-                    <th className="px-6 py-3">Date</th>
-                    <th className="px-6 py-3">Updated By</th>
-                    <th className="px-6 py-3">Cash Price</th>
-                    <th className="px-6 py-3">Installment Total</th>
-                    <th className="px6 py-3">Down Payment</th>
-                    <th className="px-6 py-3">Months</th>
-                    <th className="px-6 py-3">Monthly</th>
-                    <th className="px-6 py-3">Last Payment</th>
-                    <th className="px-6 py-3">Sale Price</th>
-                  </tr>
-                </thead>
+                
+                    <thead className="text-xs uppercase bg-gray-800 text-gray-400">
+                    <tr>
+                        <th className="px-6 py-3">Date</th>
+                        <th className="px-6 py-3">Updated By</th>
+                        <th className="px-6 py-3">Sell Price</th>
+                        <th className="px-6 py-3">Buy Price</th>
+                        <th className="px-6 py-3">Installment Total</th>
+                        <th className="px6 py-3">Down Payment</th>
+                        <th className="px-6 py-3">Months</th>
+                        <th className="px-6 py-3">Monthly</th>
+                        <th className="px-6 py-3">Last Payment</th>
+                        <th className="px-6 py-3">Sale Price</th>
+                    </tr>
+                    </thead>
                 <tbody>
                   {priceHistory.map((price, index) => (
                     <tr 

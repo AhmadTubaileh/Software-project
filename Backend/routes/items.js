@@ -3,7 +3,7 @@ const router = express.Router();
 const Item = require('../models/Item');
 const upload = require('../middleware/upload');
 
-// Helper: calculate installment payments
+// Helper: calculate installment payments with new logic
 function calculateInstallmentPayments(price_installment_total, installment_first_payment, installment_months) {
   if (!price_installment_total || !installment_first_payment || !installment_months) {
     return { installment_per_month: null, installment_last_payment: null };
@@ -28,7 +28,26 @@ function calculateInstallmentPayments(price_installment_total, installment_first
   const monthlyPayment = Math.floor(rawMonthly / 10) * 10;
   
   // Calculate last payment
-  const lastPayment = remaining - (monthlyPayment * equalMonths);
+  let lastPayment = remaining - (monthlyPayment * equalMonths);
+  
+  // NEW LOGIC: If last payment is 0, take 10 from each monthly payment
+  if (lastPayment === 0) {
+    // Take 10 from each monthly payment
+    const adjustedMonthly = monthlyPayment - 10;
+    // Add (10 * equalMonths) to last payment
+    lastPayment = 10 * equalMonths;
+    
+    console.log('Adjusted installment calculation:');
+    console.log('Original monthly:', monthlyPayment);
+    console.log('Original last:', 0);
+    console.log('Adjusted monthly:', adjustedMonthly);
+    console.log('Adjusted last:', lastPayment);
+    
+    return {
+      installment_per_month: adjustedMonthly,
+      installment_last_payment: lastPayment
+    };
+  }
   
   return {
     installment_per_month: monthlyPayment,
@@ -80,14 +99,14 @@ router.get('/:id/prices', (req, res) => {
 // POST /api/items - Create new item with initial price
 router.post('/', upload.single('item_image'), (req, res) => {
   try {
-    // Get user ID from request body - FIXED
+    // Get user ID from request body
     const userId = req.body.currentUserId || req.body.user_id || 1;
     
     console.log('Creating item with user ID:', userId);
     console.log('Request body fields:', Object.keys(req.body));
     
     // Validate required fields
-    const requiredFields = ['name', 'description', 'price_cash', 'available', 'installment', 'quantity'];
+    const requiredFields = ['name', 'description', 'price_cash', 'buy_price', 'available', 'installment', 'quantity'];
     for (const field of requiredFields) {
       if (!req.body[field]) {
         console.log(`Missing field: ${field}`);
@@ -113,11 +132,12 @@ router.post('/', upload.single('item_image'), (req, res) => {
     // Parse price data
     const priceData = {
       price_cash: parseFloat(req.body.price_cash) || 0,
+      buy_price: parseFloat(req.body.buy_price) || 0,
       price_installment_total: req.body.price_installment_total ? parseFloat(req.body.price_installment_total) : null,
       installment_first_payment: req.body.installment_first_payment ? parseFloat(req.body.installment_first_payment) : null,
       installment_months: req.body.installment_months ? parseInt(req.body.installment_months) : null,
       on_sale_price: req.body.on_sale_price ? parseFloat(req.body.on_sale_price) : null,
-      user_id: parseInt(userId) // Ensure it's an integer
+      user_id: parseInt(userId)
     };
 
     console.log('Price data before calculation:', priceData);
@@ -134,6 +154,11 @@ router.post('/', upload.single('item_image'), (req, res) => {
       
       priceData.installment_per_month = installment_per_month;
       priceData.installment_last_payment = installment_last_payment;
+      
+      console.log('Installment calculation result:', {
+        monthly: priceData.installment_per_month,
+        last: priceData.installment_last_payment
+      });
     }
 
     console.log('Price data after calculation:', priceData);
@@ -188,7 +213,6 @@ router.post('/', upload.single('item_image'), (req, res) => {
 router.put('/:id', upload.single('item_image'), (req, res) => {
   try {
     const itemId = req.params.id;
-    // Get user ID from request body - FIXED
     const userId = req.body.currentUserId || req.body.user_id || 1;
     
     console.log('Editing item ID:', itemId, 'by user ID:', userId);
@@ -237,6 +261,7 @@ router.put('/:id', upload.single('item_image'), (req, res) => {
         // Parse price data (update existing)
         const priceData = {
           price_cash: req.body.price_cash !== undefined ? parseFloat(req.body.price_cash) : latestPrice.price_cash,
+          buy_price: req.body.buy_price !== undefined ? parseFloat(req.body.buy_price) : latestPrice.buy_price,
           price_installment_total: req.body.price_installment_total !== undefined 
             ? parseFloat(req.body.price_installment_total) 
             : latestPrice.price_installment_total,
@@ -249,7 +274,7 @@ router.put('/:id', upload.single('item_image'), (req, res) => {
           on_sale_price: req.body.on_sale_price !== undefined
             ? parseFloat(req.body.on_sale_price)
             : latestPrice.on_sale_price,
-          user_id: parseInt(userId) // Ensure it's an integer
+          user_id: parseInt(userId)
         };
 
         // Calculate installment payments if needed
@@ -263,6 +288,11 @@ router.put('/:id', upload.single('item_image'), (req, res) => {
           
           priceData.installment_per_month = installment_per_month;
           priceData.installment_last_payment = installment_last_payment;
+          
+          console.log('Installment calculation result:', {
+            monthly: priceData.installment_per_month,
+            last: priceData.installment_last_payment
+          });
         }
 
         // Update item and price
@@ -315,7 +345,6 @@ router.put('/:id', upload.single('item_image'), (req, res) => {
 router.post('/:id/update-price', upload.single('item_image'), (req, res) => {
   try {
     const itemId = req.params.id;
-    // Get user ID from request body - FIXED
     const userId = req.body.currentUserId || req.body.user_id || 1;
     
     console.log('Updating price for item ID:', itemId, 'by user ID:', userId);
@@ -363,11 +392,12 @@ router.post('/:id/update-price', upload.single('item_image'), (req, res) => {
       const priceData = {
         item_id: parseInt(itemId),
         price_cash: parseFloat(req.body.price_cash) || 0,
+        buy_price: parseFloat(req.body.buy_price) || 0,
         price_installment_total: req.body.price_installment_total ? parseFloat(req.body.price_installment_total) : null,
         installment_first_payment: req.body.installment_first_payment ? parseFloat(req.body.installment_first_payment) : null,
         installment_months: req.body.installment_months ? parseInt(req.body.installment_months) : null,
         on_sale_price: req.body.on_sale_price ? parseFloat(req.body.on_sale_price) : null,
-        user_id: parseInt(userId) // Ensure it's an integer
+        user_id: parseInt(userId)
       };
 
       // Calculate installment payments
@@ -381,6 +411,11 @@ router.post('/:id/update-price', upload.single('item_image'), (req, res) => {
         
         priceData.installment_per_month = installment_per_month;
         priceData.installment_last_payment = installment_last_payment;
+        
+        console.log('Installment calculation result:', {
+          monthly: priceData.installment_per_month,
+          last: priceData.installment_last_payment
+        });
       }
 
       console.log('Creating new price entry:', priceData);
