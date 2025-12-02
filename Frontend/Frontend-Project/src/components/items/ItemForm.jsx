@@ -1,24 +1,28 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-function ItemForm({ isOpen, item, onSubmit, onCancel }) {
+function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
-    name: item?.name || '',
-    description: item?.description || '',
-    price_cash: item?.price_cash || '',
-    price_installment_total: item?.price_installment_total || '',
-    installment_first_payment: item?.installment_first_payment || '',
-    installment_months: item?.installment_months || '',
-    installment_per_month: item?.installment_per_month || '',
-    available: item?.available !== undefined ? item.available : 1,
-    quantity: item?.quantity || 0,
-    installment: item?.installment !== undefined ? item.installment : 1,
+    name: '',
+    description: '',
+    price_cash: '',
+    price_installment_total: '',
+    installment_first_payment: '',
+    installment_months: '',
+    available: 1,
+    quantity: 0,
+    installment: 1,
+    on_sale_price: '',
     item_image: null
   });
   const [previewImage, setPreviewImage] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [calculatedPayments, setCalculatedPayments] = useState({
+    installment_per_month: '',
+    installment_last_payment: ''
+  });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (item) {
       setFormData({
         name: item.name || '',
@@ -27,12 +31,20 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
         price_installment_total: item.price_installment_total || '',
         installment_first_payment: item.installment_first_payment || '',
         installment_months: item.installment_months || '',
-        installment_per_month: item.installment_per_month || '',
         available: item.available !== undefined ? item.available : 1,
         quantity: item.quantity || 0,
         installment: item.installment !== undefined ? item.installment : 1,
+        on_sale_price: item.on_sale_price || '',
         item_image: null
       });
+      
+      // Set calculated payments
+      if (item.installment_per_month || item.installment_last_payment) {
+        setCalculatedPayments({
+          installment_per_month: item.installment_per_month || '',
+          installment_last_payment: item.installment_last_payment || ''
+        });
+      }
       
       // Set preview if item has image
       if (item.item_image) {
@@ -47,16 +59,57 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
         price_installment_total: '',
         installment_first_payment: '',
         installment_months: '',
-        installment_per_month: '',
         available: 1,
         quantity: 0,
         installment: 1,
+        on_sale_price: '',
         item_image: null
       });
       setPreviewImage(null);
+      setCalculatedPayments({
+        installment_per_month: '',
+        installment_last_payment: ''
+      });
     }
     setSelectedFile(null);
   }, [item]);
+
+  // Calculate installment payments
+  const calculateInstallmentPayments = () => {
+    const total = parseFloat(formData.price_installment_total);
+    const downPayment = parseFloat(formData.installment_first_payment);
+    const months = parseInt(formData.installment_months);
+
+    if (!total || !downPayment || !months || months <= 2) {
+      setCalculatedPayments({
+        installment_per_month: '0',
+        installment_last_payment: total ? (total - downPayment).toFixed(2) : '0'
+      });
+      return;
+    }
+
+    const remaining = total - downPayment;
+    const equalMonths = months - 2;
+    
+    // Calculate monthly payment (rounded down to nearest 10)
+    const rawMonthly = remaining / equalMonths;
+    const monthlyPayment = Math.floor(rawMonthly / 10) * 10;
+    
+    // Calculate last payment
+    const lastPayment = remaining - (monthlyPayment * equalMonths);
+    
+    setCalculatedPayments({
+      installment_per_month: monthlyPayment.toFixed(2),
+      installment_last_payment: lastPayment.toFixed(2)
+    });
+  };
+
+  // Trigger calculation when installment fields change
+  useEffect(() => {
+    if (formData.price_installment_total && formData.installment_first_payment && formData.installment_months) {
+      calculateInstallmentPayments();
+    }
+  }, [formData.price_installment_total, formData.installment_first_payment, formData.installment_months]);
 
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -92,22 +145,38 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
       submitData.append('name', formData.name);
       submitData.append('description', formData.description);
       submitData.append('price_cash', formData.price_cash);
-      submitData.append('price_installment_total', formData.price_installment_total);
-      submitData.append('installment_first_payment', formData.installment_first_payment);
-      submitData.append('installment_months', formData.installment_months);
-      submitData.append('installment_per_month', formData.installment_per_month);
       submitData.append('available', formData.available);
       submitData.append('quantity', formData.quantity);
       submitData.append('installment', formData.installment);
+      
+      // Append installment fields if installment is enabled
+      if (formData.installment && formData.price_installment_total) {
+        submitData.append('price_installment_total', formData.price_installment_total);
+        submitData.append('installment_first_payment', formData.installment_first_payment || '0');
+        submitData.append('installment_months', formData.installment_months || '0');
+        submitData.append('installment_per_month', calculatedPayments.installment_per_month || '0');
+        submitData.append('installment_last_payment', calculatedPayments.installment_last_payment || '0');
+      }
+      
+      // Append sale price if provided
+      if (formData.on_sale_price) {
+        submitData.append('on_sale_price', formData.on_sale_price);
+      }
       
       // Append image if selected
       if (selectedFile) {
         submitData.append('item_image', selectedFile);
       }
       
-      await onSubmit(submitData);
+      // ✅ CRITICAL: Add the current user's ID
+      if (currentUser && currentUser.id) {
+        submitData.append('currentUserId', currentUser.id);
+      }
+      
+      await onSubmit(submitData, isUpdateMode);
     } catch (error) {
       console.error('Form submission error:', error);
+      toast.error('Failed to save item');
     } finally {
       setIsSubmitting(false);
     }
@@ -121,7 +190,7 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-xl font-bold">
-              {item ? 'Edit Item' : 'Add New Item'}
+              {isUpdateMode ? 'Update Price' : (item ? 'Edit Item' : 'Add New Item')}
             </h2>
             <button
               type="button"
@@ -132,7 +201,17 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
             </button>
           </div>
 
+          {isUpdateMode && (
+            <div className="mb-4 p-3 bg-yellow-900 bg-opacity-30 border border-yellow-700 rounded">
+              <p className="text-yellow-300 text-sm">
+                <strong>Update Mode:</strong> This will create a new price entry in the history.
+                The current price will be preserved in the price history.
+              </p>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Basic Information */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">
                 Name *
@@ -194,67 +273,112 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Installment Total
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  name="price_installment_total"
-                  value={formData.price_installment_total}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  First Payment
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  name="installment_first_payment"
-                  value={formData.installment_first_payment}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Months
-                </label>
-                <input
-                  type="number"
-                  min="0"
-                  name="installment_months"
-                  value={formData.installment_months}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
-                  Monthly Payment
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  name="installment_per_month"
-                  value={formData.installment_per_month}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
+            {/* Sale Price */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Sale Price (Optional)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                name="on_sale_price"
+                value={formData.on_sale_price}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
+                placeholder="Enter discounted price"
+              />
             </div>
 
+            {/* Installment Section */}
+            <div className="border border-gray-700 rounded-md p-4">
+              <div className="flex items-center gap-2 mb-4">
+                <input
+                  type="checkbox"
+                  name="installment"
+                  checked={formData.installment == 1}
+                  onChange={handleInputChange}
+                  className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-700 rounded focus:ring-blue-500"
+                />
+                <span className="text-gray-300 font-medium">Installment Available</span>
+              </div>
+
+              {formData.installment && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">
+                        Total Installment Price
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        name="price_installment_total"
+                        value={formData.price_installment_total}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">
+                        Down Payment
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        name="installment_first_payment"
+                        value={formData.installment_first_payment}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">
+                        Number of Months
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        name="installment_months"
+                        value={formData.installment_months}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Calculated Payments */}
+                  {(calculatedPayments.installment_per_month || calculatedPayments.installment_last_payment) && (
+                    <div className="bg-gray-800 p-3 rounded border border-gray-700">
+                      <h4 className="text-sm font-medium text-gray-300 mb-2">Calculated Payments:</h4>
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="text-gray-400">Monthly Payment:</span>
+                          <p className="text-green-400 font-medium">
+                            ${calculatedPayments.installment_per_month}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Last Payment:</span>
+                          <p className="text-green-400 font-medium">
+                            ${calculatedPayments.installment_last_payment}
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Note: Monthly payment is rounded down to nearest $10
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Availability */}
             <div className="flex gap-6">
               <label className="flex items-center gap-2">
                 <input
@@ -266,19 +390,9 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
                 />
                 <span className="text-gray-300">Available</span>
               </label>
-
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  name="installment"
-                  checked={formData.installment == 1}
-                  onChange={handleInputChange}
-                  className="w-4 h-4 text-blue-600 bg-gray-800 border-gray-700 rounded focus:ring-blue-500"
-                />
-                <span className="text-gray-300">Installment Available</span>
-              </label>
             </div>
 
+            {/* Image Upload */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Product Image
@@ -300,6 +414,7 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
               )}
             </div>
 
+            {/* Submit Buttons */}
             <div className="flex gap-3 pt-4">
               <button
                 type="button"
@@ -312,9 +427,18 @@ function ItemForm({ isOpen, item, onSubmit, onCancel }) {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`flex-1 px-4 py-2 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isUpdateMode 
+                    ? 'bg-yellow-600 hover:bg-yellow-700' 
+                    : 'bg-blue-600 hover:bg-blue-700'
+                }`}
               >
-                {isSubmitting ? 'Saving...' : (item ? 'Update Item' : 'Add Item')}
+                {isSubmitting 
+                  ? 'Saving...' 
+                  : isUpdateMode 
+                    ? 'Update Price' 
+                    : (item ? 'Save Changes' : 'Add Item')
+                }
               </button>
             </div>
           </form>

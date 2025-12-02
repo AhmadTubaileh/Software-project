@@ -5,6 +5,7 @@ import ItemHeader from '../components/items/ItemHeader.jsx';
 import ItemCard from '../components/items/ItemCard.jsx';
 import ItemForm from '../components/items/ItemForm.jsx';
 import ImageModal from '../components/items/ImageModal.jsx';
+import PriceHistoryModal from '../components/items/PriceHistoryModal.jsx';
 import EmptyState from '../components/items/EmptyState.jsx';
 import toast, { Toaster } from 'react-hot-toast';
 
@@ -15,16 +16,20 @@ function Items() {
   const [availableFilter, setAvailableFilter] = useState('all');
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [isUpdateMode, setIsUpdateMode] = useState(false);
   const [viewingImage, setViewingImage] = useState(null);
+  const [viewingPriceHistory, setViewingPriceHistory] = useState(null);
+  const [priceHistory, setPriceHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const { currentUser } = useLocalSession();
 
-  // Access control
-  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'employee')) {
+  // Access control - only user_type 0-9 (workers) can access
+  if (!currentUser || currentUser.user_type > 9) {
     return (
       <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p>You need admin or employee privileges to access this page.</p>
+          <p>You need worker privileges to access this page.</p>
         </div>
       </div>
     );
@@ -51,6 +56,27 @@ function Items() {
     }
   }, []);
 
+  // Fetch price history
+  const fetchPriceHistory = async (itemId) => {
+    try {
+      setLoadingHistory(true);
+      const response = await fetch(`http://localhost:5000/api/items/${itemId}/prices`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      setPriceHistory(data);
+      setViewingPriceHistory(itemId);
+    } catch (error) {
+      console.error('Error fetching price history:', error);
+      toast.error('Failed to load price history');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
   // Load items on component mount
   useEffect(() => {
     fetchItems();
@@ -70,12 +96,21 @@ function Items() {
   // Handle add new item
   const handleAddItem = () => {
     setEditingItem(null);
+    setIsUpdateMode(false);
     setShowForm(true);
   };
 
   // Handle edit item
   const handleEditItem = (item) => {
     setEditingItem(item);
+    setIsUpdateMode(false);
+    setShowForm(true);
+  };
+
+  // Handle update price (create new price row)
+  const handleUpdateItem = (item) => {
+    setEditingItem(item);
+    setIsUpdateMode(true);
     setShowForm(true);
   };
 
@@ -113,19 +148,40 @@ function Items() {
     setViewingImage(item);
   };
 
+  // Handle viewing price history
+  const handleViewPriceHistory = (item) => {
+    fetchPriceHistory(item.id);
+  };
+
   // Handle closing image modal
   const handleCloseImageModal = () => {
     setViewingImage(null);
   };
 
-  // Handle form submission (both add and edit)
-  const handleFormSubmit = async (formData) => {
+  // Handle closing price history modal
+  const handleClosePriceHistoryModal = () => {
+    setViewingPriceHistory(null);
+    setPriceHistory([]);
+  };
+
+  // Handle form submission
+  const handleFormSubmit = async (formData, isUpdate) => {
     try {
-      const url = editingItem 
-        ? `http://localhost:5000/api/items/${editingItem.id}`
-        : 'http://localhost:5000/api/items';
+      let url, method;
       
-      const method = editingItem ? 'PUT' : 'POST';
+      if (isUpdate) {
+        // Update mode - create new price row
+        url = `http://localhost:5000/api/items/${editingItem.id}/update-price`;
+        method = 'POST';
+      } else if (editingItem) {
+        // Edit mode - update existing
+        url = `http://localhost:5000/api/items/${editingItem.id}`;
+        method = 'PUT';
+      } else {
+        // Add new item
+        url = 'http://localhost:5000/api/items';
+        method = 'POST';
+      }
 
       const response = await fetch(url, {
         method: method,
@@ -145,9 +201,17 @@ function Items() {
       }
 
       if (result.success) {
-        toast.success(editingItem ? 'Item updated successfully' : 'Item added successfully');
+        if (isUpdate) {
+          toast.success('Price updated successfully (new entry created)');
+        } else if (editingItem) {
+          toast.success('Item edited successfully');
+        } else {
+          toast.success('Item added successfully');
+        }
+        
         setShowForm(false);
         setEditingItem(null);
+        setIsUpdateMode(false);
         await fetchItems();
       } else {
         throw new Error(result.message || 'Operation failed');
@@ -163,6 +227,7 @@ function Items() {
   const handleFormCancel = () => {
     setShowForm(false);
     setEditingItem(null);
+    setIsUpdateMode(false);
   };
 
   // Handle search
@@ -212,10 +277,12 @@ function Items() {
 
           {/* Item Form Modal */}
           <ItemForm
-            isOpen={showForm || editingItem}  // ✅ FIXED: editingItem instead of editingEmployee
+            isOpen={showForm}
             item={editingItem}
-            onSubmit={handleFormSubmit}  // ✅ FIXED: Use existing function
-            onCancel={handleFormCancel}  // ✅ FIXED: Use existing function
+            isUpdateMode={isUpdateMode}
+            currentUser={currentUser}
+            onSubmit={handleFormSubmit}
+            onCancel={handleFormCancel}
           />
 
           {/* Image View Modal */}
@@ -228,6 +295,17 @@ function Items() {
             />
           )}
 
+          {/* Price History Modal */}
+          {viewingPriceHistory && (
+            <PriceHistoryModal
+              isOpen={!!viewingPriceHistory}
+              itemId={viewingPriceHistory}
+              priceHistory={priceHistory}
+              loading={loadingHistory}
+              onClose={handleClosePriceHistoryModal}
+            />
+          )}
+
           {/* Items Grid */}
           {!loading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -236,8 +314,10 @@ function Items() {
                   key={item.id}
                   item={item}
                   onEdit={handleEditItem}
+                  onUpdate={handleUpdateItem}
                   onDelete={handleDeleteItem}
                   onViewImage={handleViewImage}
+                  onViewPriceHistory={handleViewPriceHistory}
                 />
               ))}
             </div>
