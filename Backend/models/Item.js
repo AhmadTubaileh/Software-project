@@ -376,6 +376,27 @@ class Item {
       callback(null, result);
     });
   }
+  // Add this method to your existing Item.js model
+static getLatestPriceForContract(itemId) {
+  return new Promise((resolve, reject) => {
+    const query = `
+      SELECT 
+        ip.*
+      FROM item_prices ip
+      WHERE ip.item_id = ? 
+      ORDER BY ip.date DESC 
+      LIMIT 1
+    `;
+    
+    db.query(query, [itemId], (err, results) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(results[0] || null);
+    });
+  });
+}
 
   // Get user by ID - callback version
   static getUserById(userId, callback) {

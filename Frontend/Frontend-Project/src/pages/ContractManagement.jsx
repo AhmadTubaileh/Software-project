@@ -22,7 +22,7 @@ function ContractManagement() {
   const [contractDetails, setContractDetails] = useState(null);
   const [sponsors, setSponsors] = useState([]);
   const [viewingImage, setViewingImage] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('pending'); // Default to pending
+  const [statusFilter, setStatusFilter] = useState('pending');
   const { currentUser } = useLocalSession();
 
   // Access control
@@ -77,10 +77,6 @@ function ContractManagement() {
       }
       const contractData = await contractResponse.json();
       
-      console.log('Contract details:', contractData.contract);
-      console.log('Customer image exists:', !!contractData.contract.customer_id_card_image);
-      console.log('Customer image type:', typeof contractData.contract.customer_id_card_image);
-      
       setContractDetails(contractData.contract);
 
       // Fetch sponsors
@@ -99,29 +95,19 @@ function ContractManagement() {
     }
   };
 
-  // Convert image data to base64 - FIXED VERSION
+  // Convert image data to base64
   const convertImageToBase64 = (imageData) => {
     if (!imageData) {
-      console.log('No image data provided');
       return null;
     }
     
-    console.log('Image data type:', typeof imageData);
-    console.log('Image data sample:', typeof imageData === 'string' ? imageData.substring(0, 30) : 'Not a string');
-    
-    // If it's already a base64 string (from backend conversion)
     if (typeof imageData === 'string') {
-      // Check if it already has data URL prefix
       if (imageData.startsWith('data:')) {
-        console.log('✓ Image already has data URL prefix');
         return imageData;
       }
-      // Add data URL prefix if it's just base64
-      console.log('✓ Adding data URL prefix to base64 string');
       return `data:image/jpeg;base64,${imageData}`;
     }
     
-    console.log('✗ Unsupported image data type:', typeof imageData);
     return null;
   };
 
@@ -155,7 +141,7 @@ function ContractManagement() {
       toast.success('Contract approved successfully! Payment schedule created.');
       setShowApproveModal(false);
       setSelectedContract(null);
-      await fetchContracts(); // Refresh the list
+      await fetchContracts();
     } catch (error) {
       console.error('Approval error:', error);
       toast.error(error.message || 'Failed to approve contract');
@@ -194,7 +180,7 @@ function ContractManagement() {
       setShowRejectModal(false);
       setSelectedContract(null);
       setRejectionReason('');
-      await fetchContracts(); // Refresh the list
+      await fetchContracts();
     } catch (error) {
       console.error('Rejection error:', error);
       toast.error(error.message || 'Failed to reject contract');
@@ -219,15 +205,8 @@ function ContractManagement() {
 
   // Handle view image
   const handleViewImage = (person, type = 'customer') => {
-    console.log('=== HANDLE VIEW IMAGE DEBUG ===');
-    console.log('Person:', person.full_name, 'Type:', type);
-    console.log('Raw image data:', person.id_card_image);
-    console.log('Image data type:', typeof person.id_card_image);
-    console.log('Image data sample:', typeof person.id_card_image === 'string' ? person.id_card_image.substring(0, 50) : 'Not a string');
-    
     if (person.id_card_image) {
       const imageSrc = getImageSrc(person.id_card_image);
-      console.log('Generated image source:', imageSrc ? `Length: ${imageSrc.length}` : 'NULL');
       
       if (imageSrc) {
         setViewingImage({ 
@@ -235,16 +214,12 @@ function ContractManagement() {
           type,
           imageSrc: imageSrc 
         });
-        console.log('✓ Image modal should open');
       } else {
-        console.log('✗ Failed to generate image source');
         toast.error('Image format not supported');
       }
     } else {
-      console.log('✗ No ID card image available');
       toast.error('No ID card image available');
     }
-    console.log('=== END DEBUG ===');
   };
 
   const handleCloseImageModal = () => {
@@ -321,7 +296,7 @@ function ContractManagement() {
               setSelectedContract(contract);
               setShowRejectModal(true);
             }}
-            showActions={statusFilter === 'pending'} // Only show approve/reject for pending contracts
+            showActions={statusFilter === 'pending'}
           />
         </div>
       </main>

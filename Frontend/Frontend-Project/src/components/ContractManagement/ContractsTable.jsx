@@ -69,7 +69,10 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
                   Customer
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
-                  Financials
+                  Contract Financials
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Price Info
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-400 uppercase tracking-wider">
                   Status
@@ -113,10 +116,31 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
                       <p className="text-sm text-gray-400">
                         {contract.months} months × {formatCurrency(contract.monthly_payment)}/mo
                       </p>
+                      <p className="text-xs text-gray-400">
+                        Last: {formatCurrency(contract.installment_last_payment)}
+                      </p>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-xs">
+                      <p className="text-gray-400">
+                        Default: {formatCurrency(contract.price_installment_total || 0)}
+                      </p>
+                      <p className="text-gray-400">
+                        Cash: {formatCurrency(contract.price_cash || 0)}
+                      </p>
+                      <p className="text-gray-400">
+                        Buy: {formatCurrency(contract.buy_price || 0)}
+                      </p>
                     </div>
                   </td>
                   <td className="px-6 py-4">
                     {getStatusBadge(contract.status)}
+                    {contract.paid_payments > 0 && contract.total_payments > 0 && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        {contract.paid_payments}/{contract.total_payments} paid
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex space-x-2">

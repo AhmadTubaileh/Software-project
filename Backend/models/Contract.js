@@ -1,16 +1,37 @@
 const db = require('../config/database');
 
 class Contract {
-  // Get items available for installment
+  // Get items available for installment with latest prices
   static getInstallmentItems() {
     return new Promise((resolve, reject) => {
       const query = `
         SELECT 
-          i.*
+          i.id,
+          i.name,
+          i.description,
+          i.available,
+          i.installment,
+          i.quantity,
+          i.item_image,
+          ip.id as price_id,
+          ip.price_cash,
+          ip.price_installment_total,
+          ip.installment_first_payment,
+          ip.installment_months,
+          ip.installment_per_month,
+          ip.installment_last_payment,
+          ip.buy_price,
+          ip.on_sale_price
         FROM items i
+        LEFT JOIN item_prices ip ON i.id = ip.item_id
         WHERE i.available = 1 
-        AND i.installment = 1
-        AND i.quantity > 0
+          AND i.installment = 1
+          AND i.quantity > 0
+          AND ip.date = (
+            SELECT MAX(date) 
+            FROM item_prices 
+            WHERE item_id = i.id
+          )
         ORDER BY i.name
       `;
       
@@ -38,7 +59,7 @@ class Contract {
     });
   }
 
-  // Apply for new contract
+  // Apply for new contract with price_id
   static apply(applicationData) {
     return new Promise((resolve, reject) => {
       const { customer_data, sponsors_data, contract_data } = applicationData;
@@ -106,7 +127,7 @@ class Contract {
           }
 
           function proceedWithContract() {
-            // 2. Check item availability (considering current quantity only)
+            // 2. Check item availability
             const checkAvailabilityQuery = `
               SELECT quantity FROM items WHERE id = ?
             `;
@@ -167,11 +188,13 @@ class Contract {
 
                     const saleInsertId = saleResult.insertId;
 
-                    // 6. Create installment contract
+                    // 6. Create installment contract with price_id
                     const contractQuery = `
                       INSERT INTO installment_contracts 
-                      (sale_id, user_id, customer_id, item_id, total_price, down_payment, months, monthly_payment, start_date, status) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                      (sale_id, user_id, customer_id, item_id, price_id,
+                       total_price, down_payment, months, monthly_payment, 
+                       installment_last_payment, start_date, status) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
                     `;
                     
                     db.query(contractQuery, [
@@ -179,10 +202,12 @@ class Contract {
                       contract_data.worker_id,
                       customerId,
                       contract_data.item_id,
+                      contract_data.price_id,
                       contract_data.total_price,
                       contract_data.down_payment,
                       contract_data.months,
                       contract_data.monthly_payment,
+                      contract_data.installment_last_payment,
                       contract_data.start_date
                     ], (contractErr, contractResult) => {
                       if (contractErr) {
@@ -271,7 +296,210 @@ class Contract {
     });
   }
 
-  // Approve contract - create payment schedule using CONTRACT DATA
+  // Get pending contracts for admin review with price info
+  static getPendingContracts() {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT 
+          ic.*,
+          cc.full_name as customer_name,
+          cc.phone as customer_phone,
+          i.name as item_name,
+          ip.price_cash,
+          ip.price_installment_total,
+          ip.installment_first_payment,
+          ip.installment_months,
+          ip.installment_per_month,
+          ip.installment_last_payment,
+          ip.buy_price,
+          ip.on_sale_price,
+          i.quantity as item_quantity,
+          u.username as worker_name,
+          ca.status as approval_status
+        FROM installment_contracts ic
+        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+        LEFT JOIN items i ON ic.item_id = i.id
+        LEFT JOIN item_prices ip ON ic.price_id = ip.id
+        LEFT JOIN users u ON ic.user_id = u.id
+        LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+        WHERE ic.status = 'pending'
+        ORDER BY ic.created_at DESC
+      `;
+      
+      db.query(query, (err, results) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(results);
+      });
+    });
+  }
+
+  // Get all contracts with filters and price info
+  static getAllContracts(status = null) {
+    return new Promise((resolve, reject) => {
+      let query = `
+        SELECT 
+          ic.*,
+          cc.full_name as customer_name,
+          cc.phone as customer_phone,
+          i.name as item_name,
+          ip.price_cash,
+          ip.price_installment_total,
+          ip.installment_first_payment,
+          ip.installment_months,
+          ip.installment_per_month,
+          ip.installment_last_payment,
+          ip.buy_price,
+          ip.on_sale_price,
+          u.username as worker_name,
+          ca.status as approval_status,
+          ca.reason as rejection_reason,
+          ca.approver_id,
+          ca.updated_at as decision_date,
+          (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.sale_id = ic.sale_id) as total_payments,
+          (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.sale_id = ic.sale_id AND ipay.status = 'paid') as paid_payments
+        FROM installment_contracts ic
+        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+        LEFT JOIN items i ON ic.item_id = i.id
+        LEFT JOIN item_prices ip ON ic.price_id = ip.id
+        LEFT JOIN users u ON ic.user_id = u.id
+        LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+      `;
+      
+      const params = [];
+      if (status && status !== 'all') {
+        query += ' WHERE ic.status = ?';
+        params.push(status);
+      }
+      
+      query += ' ORDER BY ic.created_at DESC';
+
+      db.query(query, params, (err, results) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(results);
+      });
+    });
+  }
+
+  // Get contract details by ID with price info
+  static getById(contractId) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT 
+          ic.*,
+          cc.full_name as customer_name,
+          cc.phone as customer_phone,
+          cc.id_card_number as customer_id_card_number,
+          cc.id_card_image as customer_id_card_image,
+          cc.address as customer_address,
+          cc.email as customer_email,
+          i.name as item_name,
+          i.description as item_description,
+          ip.installment_first_payment as default_first_payment,
+          ip.installment_months as default_months,
+          ip.installment_per_month as default_monthly,
+          ip.installment_last_payment as default_last_payment,
+          ip.price_cash,
+          ip.price_installment_total as default_total_price,
+          ip.buy_price,
+          ip.on_sale_price,
+          u.username as worker_name,
+          ca.status as approval_status,
+          ca.reason as rejection_reason,
+          ca.approver_id,
+          ca.updated_at as decision_date
+        FROM installment_contracts ic
+        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+        LEFT JOIN items i ON ic.item_id = i.id
+        LEFT JOIN item_prices ip ON ic.price_id = ip.id
+        LEFT JOIN users u ON ic.user_id = u.id
+        LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+        WHERE ic.id = ?
+      `;
+      
+      db.query(query, [contractId], (err, results) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        const contract = results[0] || null;
+        
+        // Convert customer image if exists
+        if (contract && contract.customer_id_card_image) {
+          try {
+            if (Buffer.isBuffer(contract.customer_id_card_image)) {
+              contract.customer_id_card_image = contract.customer_id_card_image.toString('base64');
+            } else if (typeof contract.customer_id_card_image === 'string' && 
+                      !contract.customer_id_card_image.startsWith('data:')) {
+              // Keep as raw base64 - frontend will add data URL prefix
+            }
+          } catch (error) {
+            console.error('Error converting customer image:', error);
+            contract.customer_id_card_image = null;
+          }
+        }
+        
+        resolve(contract);
+      });
+    });
+  }
+
+  // Get sponsors for a contract
+  static getSponsors(contractId) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT 
+          id,
+          full_name,
+          phone,
+          id_card_number,
+          id_card_image,
+          relationship,
+          address
+        FROM contract_sponsors 
+        WHERE contract_id = ?
+        ORDER BY id
+      `;
+      
+      db.query(query, [contractId], (err, results) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        // Convert BLOB images to base64
+        const sponsors = results.map(sponsor => {
+          if (sponsor.id_card_image) {
+            try {
+              if (Buffer.isBuffer(sponsor.id_card_image)) {
+                sponsor.id_card_image = sponsor.id_card_image.toString('base64');
+              } else if (sponsor.id_card_image.type === 'Buffer' && sponsor.id_card_image.data) {
+                sponsor.id_card_image = Buffer.from(sponsor.id_card_image.data).toString('base64');
+              } else if (typeof sponsor.id_card_image === 'string') {
+                if (!sponsor.id_card_image.startsWith('data:')) {
+                  sponsor.id_card_image = `data:image/jpeg;base64,${sponsor.id_card_image}`;
+                }
+              }
+            } catch (error) {
+              console.error('Error converting sponsor image:', error);
+              sponsor.id_card_image = null;
+            }
+          }
+          return sponsor;
+        });
+        
+        resolve(sponsors);
+      });
+    });
+  }
+
+  // Approve contract - create payment schedule
   static approve(contractId, approverId) {
     return new Promise((resolve, reject) => {
       db.query('START TRANSACTION', (startErr) => {
@@ -280,7 +508,7 @@ class Contract {
           return;
         }
 
-        // 1. Get contract details - USE CONTRACT DATA FROM installment_contracts
+        // 1. Get contract details
         const getContractQuery = `
           SELECT 
             ic.*, 
@@ -291,6 +519,7 @@ class Contract {
           LEFT JOIN items i ON ic.item_id = i.id
           WHERE ic.id = ? AND ic.status = "pending"
         `;
+        
         db.query(getContractQuery, [contractId], (err, contractResults) => {
           if (err) {
             return rollbackAndReject(err, reject);
@@ -315,81 +544,89 @@ class Contract {
               SET status = 'approved', approver_id = ?, updated_at = NOW() 
               WHERE contract_id = ?
             `;
+            
             db.query(updateApprovalQuery, [approverId, contractId], (approvalErr) => {
               if (approvalErr) {
                 return rollbackAndReject(approvalErr, reject);
               }
 
-              // 4. Create inventory log for approved installment contract
-              const createInventoryLog = () => {
-                const inventoryQuery = `
-                  INSERT INTO inventory_logs 
-                  (item_id, worker_id, change_type, quantity_changed) 
-                  VALUES (?, ?, 'sale', 0)
+              // 4. Create payment schedule in installment_payments table
+              const createPaymentSchedule = () => {
+                const firstPayment = parseFloat(contract.down_payment);
+                const monthlyPayment = parseFloat(contract.monthly_payment);
+                const lastPayment = parseFloat(contract.installment_last_payment);
+                const months = parseInt(contract.months);
+                const startDate = new Date(contract.start_date);
+                
+                let paymentsCreated = 0;
+                const totalPayments = months;
+
+                // Create first payment (down payment)
+                const firstDueDate = new Date(startDate);
+                firstDueDate.setMonth(firstDueDate.getMonth() + 1);
+                
+                const firstPaymentQuery = `
+                  INSERT INTO installment_payments 
+                  (sale_id, month_number, due_date, amount_due, amount_paid, status) 
+                  VALUES (?, ?, ?, ?, 0.00, 'pending')
                 `;
-                db.query(inventoryQuery, [contract.item_id, approverId], (inventoryErr) => {
-                  if (inventoryErr) {
-                    return rollbackAndReject(inventoryErr, reject);
+                
+                db.query(firstPaymentQuery, [
+                  contract.sale_id,
+                  1,
+                  firstDueDate.toISOString().split('T')[0],
+                  firstPayment
+                ], (firstPaymentErr) => {
+                  if (firstPaymentErr) {
+                    return rollbackAndReject(firstPaymentErr, reject);
                   }
-
-                  // 5. Create payment schedule in installment_payments table USING CONTRACT DATA
-                  const createPaymentSchedule = () => {
-                    // USE CONTRACT DATA from installment_contracts table
-                    const firstPayment = parseFloat(contract.down_payment);
-                    const monthlyPayment = parseFloat(contract.monthly_payment);
-                    const months = parseInt(contract.months);
-                    const startDate = new Date(contract.start_date);
+                  
+                  paymentsCreated++;
+                  
+                  // Create monthly payments (months 2 to n-1)
+                  for (let month = 2; month < months; month++) {
+                    const dueDate = new Date(startDate);
+                    dueDate.setMonth(dueDate.getMonth() + month);
                     
-                    let paymentsCreated = 0;
-                    const totalPayments = months;
-
-                    // If no payments to create (months = 0), commit transaction
-                    if (months <= 0) {
-                      const commitTransaction = () => {
-                        db.query('COMMIT', (commitErr) => {
-                          if (commitErr) {
-                            return rollbackAndReject(commitErr, reject);
-                          }
-                          
-                          resolve({
-                            success: true,
-                            message: 'Contract approved successfully and payment schedule created',
-                            contractId: contractId,
-                            paymentsCreated: contract.months,
-                            firstPaymentAmount: contract.down_payment,
-                            monthlyPaymentAmount: contract.monthly_payment
-                          });
-                        });
-                      };
-                      commitTransaction();
-                      return;
-                    }
-
-                    // Create first payment (different amount)
-                    const firstDueDate = new Date(startDate);
-                    firstDueDate.setMonth(firstDueDate.getMonth() + 1);
-                    
-                    const firstPaymentQuery = `
+                    const paymentQuery = `
                       INSERT INTO installment_payments 
                       (sale_id, month_number, due_date, amount_due, amount_paid, status) 
                       VALUES (?, ?, ?, ?, 0.00, 'pending')
                     `;
                     
-                    db.query(firstPaymentQuery, [
+                    db.query(paymentQuery, [
                       contract.sale_id,
-                      1, // First month
-                      firstDueDate.toISOString().split('T')[0],
-                      firstPayment
-                    ], (firstPaymentErr) => {
-                      if (firstPaymentErr) {
-                        return rollbackAndReject(firstPaymentErr, reject);
+                      month,
+                      dueDate.toISOString().split('T')[0],
+                      monthlyPayment
+                    ], (paymentErr) => {
+                      if (paymentErr) {
+                        return rollbackAndReject(paymentErr, reject);
                       }
                       
                       paymentsCreated++;
-                      
-                      // If only one payment, commit transaction
-                      if (months === 1) {
-                        const commitTransaction = () => {
+                      if (paymentsCreated === totalPayments - 1) {
+                        // Create last payment
+                        const lastDueDate = new Date(startDate);
+                        lastDueDate.setMonth(lastDueDate.getMonth() + months);
+                        
+                        const lastPaymentQuery = `
+                          INSERT INTO installment_payments 
+                          (sale_id, month_number, due_date, amount_due, amount_paid, status) 
+                          VALUES (?, ?, ?, ?, 0.00, 'pending')
+                        `;
+                        
+                        db.query(lastPaymentQuery, [
+                          contract.sale_id,
+                          months,
+                          lastDueDate.toISOString().split('T')[0],
+                          lastPayment
+                        ], (lastErr) => {
+                          if (lastErr) {
+                            return rollbackAndReject(lastErr, reject);
+                          }
+                          
+                          // Commit transaction
                           db.query('COMMIT', (commitErr) => {
                             if (commitErr) {
                               return rollbackAndReject(commitErr, reject);
@@ -399,70 +636,60 @@ class Contract {
                               success: true,
                               message: 'Contract approved successfully and payment schedule created',
                               contractId: contractId,
-                              paymentsCreated: contract.months,
-                              firstPaymentAmount: contract.down_payment,
-                              monthlyPaymentAmount: contract.monthly_payment
+                              paymentsCreated: months,
+                              payments: {
+                                first: firstPayment,
+                                monthly: monthlyPayment,
+                                last: lastPayment
+                              }
                             });
                           });
-                        };
-                        commitTransaction();
-                        return;
-                      }
-
-                      // Create remaining payments (regular monthly amount)
-                      for (let month = 2; month <= months; month++) {
-                        const dueDate = new Date(startDate);
-                        dueDate.setMonth(dueDate.getMonth() + month);
-                        
-                        const paymentQuery = `
-                          INSERT INTO installment_payments 
-                          (sale_id, month_number, due_date, amount_due, amount_paid, status) 
-                          VALUES (?, ?, ?, ?, 0.00, 'pending')
-                        `;
-                        
-                        db.query(paymentQuery, [
-                          contract.sale_id,
-                          month,
-                          dueDate.toISOString().split('T')[0],
-                          monthlyPayment
-                        ], (paymentErr) => {
-                          if (paymentErr) {
-                            return rollbackAndReject(paymentErr, reject);
-                          }
-                          
-                          paymentsCreated++;
-                          if (paymentsCreated === totalPayments) {
-                            // All payments created, commit transaction
-                            const commitTransaction = () => {
-                              db.query('COMMIT', (commitErr) => {
-                                if (commitErr) {
-                                  return rollbackAndReject(commitErr, reject);
-                                }
-                                
-                                resolve({
-                                  success: true,
-                                  message: 'Contract approved successfully and payment schedule created',
-                                  contractId: contractId,
-                                  paymentsCreated: contract.months,
-                                  firstPaymentAmount: contract.down_payment,
-                                  monthlyPaymentAmount: contract.monthly_payment
-                                });
-                              });
-                            };
-                            commitTransaction();
-                          }
                         });
                       }
                     });
-                  };
-
-                  // Start creating payment schedule
-                  createPaymentSchedule();
+                  }
+                  
+                  // If only 2 months (down + last)
+                  if (months === 2) {
+                    const lastDueDate = new Date(startDate);
+                    lastDueDate.setMonth(lastDueDate.getMonth() + 2);
+                    
+                    const lastPaymentQuery = `
+                      INSERT INTO installment_payments 
+                      (sale_id, month_number, due_date, amount_due, amount_paid, status) 
+                      VALUES (?, ?, ?, ?, 0.00, 'pending')
+                    `;
+                    
+                    db.query(lastPaymentQuery, [
+                      contract.sale_id,
+                      2,
+                      lastDueDate.toISOString().split('T')[0],
+                      lastPayment
+                    ], (lastErr) => {
+                      if (lastErr) {
+                        return rollbackAndReject(lastErr, reject);
+                      }
+                      
+                      // Commit transaction
+                      db.query('COMMIT', (commitErr) => {
+                        if (commitErr) {
+                          return rollbackAndReject(commitErr, reject);
+                        }
+                        
+                        resolve({
+                          success: true,
+                          message: 'Contract approved successfully and payment schedule created',
+                          contractId: contractId,
+                          paymentsCreated: 2
+                        });
+                      });
+                    });
+                  }
                 });
               };
 
-              // Start the process
-              createInventoryLog();
+              // Start creating payment schedule
+              createPaymentSchedule();
             });
           });
         });
@@ -477,7 +704,7 @@ class Contract {
     });
   }
 
-  // Reject contract - increase item quantity by 1 (release reservation)
+  // Reject contract - increase item quantity by 1
   static reject(contractId, approverId, reason) {
     return new Promise((resolve, reject) => {
       db.query('START TRANSACTION', (startErr) => {
@@ -517,7 +744,7 @@ class Contract {
                 return rollbackAndReject(approvalErr, reject);
               }
 
-              // 4. INCREASE item quantity by 1 (return the item)
+              // 4. INCREASE item quantity by 1
               const increaseQuantityQuery = 'UPDATE items SET quantity = quantity + 1 WHERE id = ?';
               db.query(increaseQuantityQuery, [itemId], (quantityErr) => {
                 if (quantityErr) {
@@ -561,215 +788,6 @@ class Contract {
     });
   }
 
-  // Get all pending contracts for admin review
-  static getPendingContracts() {
-    return new Promise((resolve, reject) => {
-      const query = `
-        SELECT 
-          ic.*,
-          cc.full_name as customer_name,
-          cc.phone as customer_phone,
-          i.name as item_name,
-          i.price_cash,
-          i.price_installment_total,
-          i.installment_first_payment,
-          i.installment_per_month,
-          i.installment_months,
-          i.quantity as item_quantity,
-          u.username as worker_name,
-          ca.status as approval_status
-        FROM installment_contracts ic
-        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
-        LEFT JOIN items i ON ic.item_id = i.id
-        LEFT JOIN users u ON ic.user_id = u.id
-        LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
-        WHERE ic.status = 'pending'
-        ORDER BY ic.created_at DESC
-      `;
-      
-      db.query(query, (err, results) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(results);
-      });
-    });
-  }
-
-  // Get all contracts with filters
-  static getAllContracts(status = null) {
-    return new Promise((resolve, reject) => {
-      let query = `
-        SELECT 
-          ic.*,
-          cc.full_name as customer_name,
-          cc.phone as customer_phone,
-          i.name as item_name,
-          i.price_cash,
-          i.price_installment_total,
-          i.installment_first_payment,
-          i.installment_per_month,
-          i.installment_months,
-          u.username as worker_name,
-          ca.status as approval_status,
-          ca.reason as rejection_reason,
-          ca.approver_id,
-          ca.updated_at as decision_date,
-          (SELECT COUNT(*) FROM installment_payments ip WHERE ip.sale_id = ic.sale_id) as total_payments,
-          (SELECT COUNT(*) FROM installment_payments ip WHERE ip.sale_id = ic.sale_id AND ip.status = 'paid') as paid_payments
-        FROM installment_contracts ic
-        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
-        LEFT JOIN items i ON ic.item_id = i.id
-        LEFT JOIN users u ON ic.user_id = u.id
-        LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
-      `;
-      
-      const params = [];
-      if (status && status !== 'all') {
-        query += ' WHERE ic.status = ?';
-        params.push(status);
-      }
-      
-      query += ' ORDER BY ic.created_at DESC';
-
-      db.query(query, params, (err, results) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(results);
-      });
-    });
-  }
-
-  // Get contract details by ID - FIXED CUSTOMER IMAGE CONVERSION
-  static getById(contractId) {
-    return new Promise((resolve, reject) => {
-      const query = `
-        SELECT 
-          ic.*,
-          cc.full_name as customer_name,
-          cc.phone as customer_phone,
-          cc.id_card_number as customer_id_card_number,
-          cc.id_card_image as customer_id_card_image,
-          cc.address as customer_address,
-          cc.email as customer_email,
-          i.name as item_name,
-          i.description as item_description,
-          i.installment_first_payment,
-          i.installment_per_month,
-          i.installment_months,
-          u.username as worker_name,
-          ca.status as approval_status,
-          ca.reason as rejection_reason,
-          ca.approver_id,
-          ca.updated_at as decision_date
-        FROM installment_contracts ic
-        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
-        LEFT JOIN items i ON ic.item_id = i.id
-        LEFT JOIN users u ON ic.user_id = u.id
-        LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
-        WHERE ic.id = ?
-      `;
-      
-      db.query(query, [contractId], (err, results) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        
-        const contract = results[0] || null;
-        
-        // Convert customer image if exists - FIXED AND SIMPLIFIED VERSION
-        if (contract && contract.customer_id_card_image) {
-          try {
-            console.log('Customer image data type:', typeof contract.customer_id_card_image);
-            console.log('Customer image is Buffer?', Buffer.isBuffer(contract.customer_id_card_image));
-            
-            // Handle all possible image data formats consistently
-            if (Buffer.isBuffer(contract.customer_id_card_image)) {
-              // It's a Buffer - convert to base64 string
-              contract.customer_id_card_image = contract.customer_id_card_image.toString('base64');
-              console.log('✓ Converted customer image from Buffer to base64 string');
-            } 
-            // If it's already a string, ensure it's proper base64
-            else if (typeof contract.customer_id_card_image === 'string') {
-              // If it doesn't have data URL prefix, it's raw base64
-              if (!contract.customer_id_card_image.startsWith('data:')) {
-                console.log('✓ Customer image is raw base64 string, keeping as is');
-                // Keep as raw base64 - frontend will add data URL prefix
-              } else {
-                console.log('✓ Customer image already has data URL prefix');
-              }
-            }
-            
-            console.log('Customer image after conversion - length:', contract.customer_id_card_image?.length);
-          } catch (error) {
-            console.error('Error converting customer image:', error);
-            contract.customer_id_card_image = null;
-          }
-        } else {
-          console.log('No customer image found or image is null');
-        }
-        
-        resolve(contract);
-      });
-    });
-  }
-
-  // Get sponsors for a contract
-  static getSponsors(contractId) {
-    return new Promise((resolve, reject) => {
-      const query = `
-        SELECT 
-          id,
-          full_name,
-          phone,
-          id_card_number,
-          id_card_image,
-          relationship,
-          address
-        FROM contract_sponsors 
-        WHERE contract_id = ?
-        ORDER BY id
-      `;
-      
-      db.query(query, [contractId], (err, results) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        
-        // Convert BLOB images to base64 - FIXED VERSION
-        const sponsors = results.map(sponsor => {
-          if (sponsor.id_card_image) {
-            try {
-              console.log('Sponsor image data type:', typeof sponsor.id_card_image);
-              
-              // Handle BLOB data properly (same logic as customer)
-              if (Buffer.isBuffer(sponsor.id_card_image)) {
-                sponsor.id_card_image = sponsor.id_card_image.toString('base64');
-              } else if (sponsor.id_card_image.type === 'Buffer' && sponsor.id_card_image.data) {
-                sponsor.id_card_image = Buffer.from(sponsor.id_card_image.data).toString('base64');
-              } else if (typeof sponsor.id_card_image === 'string') {
-                if (!sponsor.id_card_image.startsWith('data:')) {
-                  sponsor.id_card_image = `data:image/jpeg;base64,${sponsor.id_card_image}`;
-                }
-              }
-            } catch (error) {
-              console.error('Error converting sponsor image:', error);
-              sponsor.id_card_image = null;
-            }
-          }
-          return sponsor;
-        });
-        
-        resolve(sponsors);
-      });
-    });
-  }
-
   // Get payment schedule for a contract
   static getPaymentSchedule(saleId) {
     return new Promise((resolve, reject) => {
@@ -785,20 +803,6 @@ class Contract {
           return;
         }
         resolve(results);
-      });
-    });
-  }
-
-  // Get reserved count for an item
-  static getReservedCount(itemId) {
-    return new Promise((resolve, reject) => {
-      const query = 'SELECT COUNT(*) as reserved_count FROM installment_contracts WHERE item_id = ? AND status = "pending"';
-      db.query(query, [itemId], (err, results) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(results[0].reserved_count);
       });
     });
   }
