@@ -68,12 +68,20 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
                     <p className="font-semibold">{formatDate(contractDetails.start_date)}</p>
                   </div>
                 </div>
+                <div>
+                  <label className="text-sm text-gray-400">Price Reference</label>
+                  <p className="font-semibold text-sm">
+                    {contractDetails.price_id 
+                      ? `Price ID: #${contractDetails.price_id}` 
+                      : 'No price reference (old contract)'}
+                  </p>
+                </div>
               </div>
             </div>
 
             {/* Financial Information */}
             <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
-              <h3 className="text-xl font-semibold mb-4 text-green-400">Financial Details</h3>
+              <h3 className="text-xl font-semibold mb-4 text-green-400">Contract Financial Details</h3>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -87,7 +95,7 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm text-gray-400">Financed Amount</label>
+                    <label className="text-sm text-gray-400">Remaining Amount</label>
                     <p className="font-semibold text-lg">
                       {formatCurrency(contractDetails.total_price - contractDetails.down_payment)}
                     </p>
@@ -103,10 +111,64 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
                     {formatCurrency(contractDetails.monthly_payment)}
                   </p>
                 </div>
+                <div>
+                  <label className="text-sm text-gray-400">Last Month Payment</label>
+                  <p className="font-semibold text-xl text-blue-400">
+                    {formatCurrency(contractDetails.installment_last_payment)}
+                  </p>
+                </div>
               </div>
             </div>
 
-            {/* Customer Information - FIXED IMAGE DISPLAY */}
+            {/* Default Price Information */}
+            <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
+              <h3 className="text-xl font-semibold mb-4 text-yellow-400">Default Price Information</h3>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm text-gray-400">Cash Price</label>
+                    <p className="font-semibold">{formatCurrency(contractDetails.price_cash || 0)}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-400">Buy Price</label>
+                    <p className="font-semibold">{formatCurrency(contractDetails.buy_price || 0)}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm text-gray-400">Default Installment Total</label>
+                    <p className="font-semibold">{formatCurrency(contractDetails.default_total_price || 0)}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-400">Default Down Payment</label>
+                    <p className="font-semibold">{formatCurrency(contractDetails.default_first_payment || 0)}</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm text-gray-400">Default Months</label>
+                    <p className="font-semibold">{contractDetails.default_months || 0}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-400">Default Monthly</label>
+                    <p className="font-semibold">{formatCurrency(contractDetails.default_monthly || 0)}</p>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">Default Last Payment</label>
+                  <p className="font-semibold">{formatCurrency(contractDetails.default_last_payment || 0)}</p>
+                </div>
+                {contractDetails.price_cash && contractDetails.buy_price && (
+                  <div className="mt-4 p-2 bg-gray-600/30 rounded">
+                    <p className="text-xs text-gray-400">
+                      Profit Margin: {formatCurrency((contractDetails.price_cash || 0) - (contractDetails.buy_price || 0))}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Customer Information */}
             <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
               <h3 className="text-xl font-semibold mb-4 text-purple-400">Customer Information</h3>
               <div className="space-y-4">
@@ -136,7 +198,7 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
                     <p className="font-semibold">{contractDetails.customer_address}</p>
                   </div>
                 )}
-                {/* Customer ID Card Image - FIXED TO WORK LIKE SPONSORS */}
+                {/* Customer ID Card Image */}
                 <div>
                   <label className="text-sm text-gray-400">ID Card Image</label>
                   {contractDetails.customer_id_card_image ? (
@@ -256,6 +318,56 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Payment Summary */}
+          <div className="mt-6 bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
+            <h3 className="text-xl font-semibold mb-4 text-green-400">Payment Summary</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center p-4 bg-gray-600/30 rounded-lg">
+                <p className="text-gray-400 text-sm">Down Payment</p>
+                <p className="text-2xl font-bold text-blue-400">
+                  {formatCurrency(contractDetails.down_payment)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">Month 1</p>
+              </div>
+              <div className="text-center p-4 bg-gray-600/30 rounded-lg">
+                <p className="text-gray-400 text-sm">Monthly Payments</p>
+                <p className="text-2xl font-bold text-green-400">
+                  {formatCurrency(contractDetails.monthly_payment)} × {Math.max(0, contractDetails.months - 2)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Months 2 to {contractDetails.months - 1}
+                </p>
+              </div>
+              <div className="text-center p-4 bg-gray-600/30 rounded-lg">
+                <p className="text-gray-400 text-sm">Last Payment</p>
+                <p className="text-2xl font-bold text-purple-400">
+                  {formatCurrency(contractDetails.installment_last_payment)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Month {contractDetails.months}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-600">
+              <div className="flex justify-between items-center">
+                <p className="text-gray-400">Total Contract Value:</p>
+                <p className="text-2xl font-bold text-white">
+                  {formatCurrency(contractDetails.total_price)}
+                </p>
+              </div>
+              <div className="mt-2 text-xs text-gray-500 text-center">
+                Verification: {formatCurrency(contractDetails.down_payment)} + 
+                ({formatCurrency(contractDetails.monthly_payment)} × {Math.max(0, contractDetails.months - 2)}) + 
+                {formatCurrency(contractDetails.installment_last_payment)} = 
+                {formatCurrency(
+                  contractDetails.down_payment + 
+                  (contractDetails.monthly_payment * Math.max(0, contractDetails.months - 2)) + 
+                  contractDetails.installment_last_payment
+                )}
+              </div>
             </div>
           </div>
         </div>

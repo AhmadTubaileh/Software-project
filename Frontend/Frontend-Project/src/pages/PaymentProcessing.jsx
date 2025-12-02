@@ -63,7 +63,7 @@ function PaymentProcessing() {
   const handleSelectContract = async (contract) => {
     setLoading(true);
     try {
-      // Load contract details
+      // Load contract details with price info
       const contractResponse = await fetch(`http://localhost:5000/api/contracts/${contract.id}`);
       if (!contractResponse.ok) {
         throw new Error('Failed to fetch contract details');
@@ -121,7 +121,7 @@ function PaymentProcessing() {
       
       // Refresh contract details and payments
       if (selectedContract) {
-        // Reload contract details to get updated status
+        // Reload contract details
         const contractResponse = await fetch(`http://localhost:5000/api/contracts/${selectedContract.id}`);
         if (contractResponse.ok) {
           const contractData = await contractResponse.json();
@@ -197,6 +197,10 @@ function PaymentProcessing() {
                         </p>
                         <p className="text-xs text-gray-500">
                           Contract #{contract.id} • Total: {formatCurrency(contract.total_price)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {contract.months} months × {formatCurrency(contract.monthly_payment)}/mo
+                          • Last: {formatCurrency(contract.installment_last_payment)}
                         </p>
                       </div>
                       <div className="text-right">

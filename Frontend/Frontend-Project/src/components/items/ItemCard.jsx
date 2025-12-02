@@ -1,6 +1,6 @@
 import React from 'react';
 
-function ItemCard({ item, onEdit, onDelete, onViewImage }) {
+function ItemCard({ item, onEdit, onUpdate, onDelete, onViewImage, onViewPriceHistory }) {
   const getImageSrc = () => {
     if (item.item_image) {
       return typeof item.item_image === 'string'
@@ -11,6 +11,27 @@ function ItemCard({ item, onEdit, onDelete, onViewImage }) {
   };
 
   const imageSrc = getImageSrc();
+
+  // Calculate profit
+  const calculateProfit = () => {
+    if (!item.price_cash || !item.buy_price) return null;
+    const profit = parseFloat(item.price_cash) - parseFloat(item.buy_price);
+    const profitPercentage = (profit / parseFloat(item.buy_price)) * 100;
+    return { profit, profitPercentage };
+  };
+
+  const profit = calculateProfit();
+
+  // Format date
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
 
   return (
     <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:scale-105 transform-gpu">
@@ -50,40 +71,75 @@ function ItemCard({ item, onEdit, onDelete, onViewImage }) {
         </div>
 
         <div className="space-y-2 text-sm">
+          {/* Price Information */}
           <div className="flex justify-between">
-            <span className="text-gray-400">Cash Price:</span>
+            <span className="text-gray-400">Sell Price:</span>
             <span className="text-white">${item.price_cash}</span>
           </div>
           
-          {item.price_installment_total && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">Installment Total:</span>
-              <span className="text-white">${item.price_installment_total}</span>
-            </div>
-          )}
-          
-          {item.installment_first_payment > 0 && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">First Payment:</span>
-              <span className="text-white">${item.installment_first_payment}</span>
-            </div>
-          )}
-          
-          {item.installment_per_month && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">Monthly Payment:</span>
-              <span className="text-white">${item.installment_per_month}</span>
-            </div>
-          )}
-          
-          {item.installment_months > 0 && (
-            <div className="flex justify-between">
-              <span className="text-gray-400">Installment Months:</span>
-              <span className="text-white">{item.installment_months}</span>
-            </div>
-          )}
-          
           <div className="flex justify-between">
+            <span className="text-gray-400">Buy Price:</span>
+            <span className="text-orange-400">${item.buy_price}</span>
+          </div>
+          
+          {/* Profit Display */}
+          {profit && (
+            <div className="flex justify-between bg-gray-900 p-2 rounded">
+              <span className="text-gray-400">Profit:</span>
+              <div className="text-right">
+                <span className="text-green-400 font-medium">${profit.profit.toFixed(2)}</span>
+                <span className="text-green-300 text-xs ml-2">({profit.profitPercentage.toFixed(1)}%)</span>
+              </div>
+            </div>
+          )}
+          
+          {item.on_sale_price && (
+            <div className="flex justify-between">
+              <span className="text-gray-400">Sale Price:</span>
+              <span className="text-green-400">${item.on_sale_price}</span>
+            </div>
+          )}
+          
+          {/* Installment Information */}
+          {item.price_installment_total && (
+            <div className="space-y-1 mt-2 pt-2 border-t border-gray-700">
+              <div className="flex justify-between">
+                <span className="text-gray-400">Installment Total:</span>
+                <span className="text-white">${item.price_installment_total}</span>
+              </div>
+              
+              {item.installment_first_payment > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Down Payment:</span>
+                  <span className="text-white">${item.installment_first_payment}</span>
+                </div>
+              )}
+              
+              {item.installment_months > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Months:</span>
+                  <span className="text-white">{item.installment_months}</span>
+                </div>
+              )}
+              
+              {item.installment_per_month > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Monthly Payment:</span>
+                  <span className="text-white">${item.installment_per_month}</span>
+                </div>
+              )}
+              
+              {item.installment_last_payment > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Last Payment:</span>
+                  <span className="text-white">${item.installment_last_payment}</span>
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* Stock Information */}
+          <div className="flex justify-between mt-2 pt-2 border-t border-gray-700">
             <span className="text-gray-400">Quantity:</span>
             <span className={`font-medium ${item.quantity > 0 ? 'text-green-400' : 'text-red-400'}`}>
               {item.quantity}
@@ -103,6 +159,18 @@ function ItemCard({ item, onEdit, onDelete, onViewImage }) {
               {item.installment ? 'Available' : 'Not Available'}
             </span>
           </div>
+          
+          {/* Updated Information */}
+          <div className="mt-2 pt-2 border-t border-gray-700">
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-400">Last Updated:</span>
+              <span className="text-gray-400">{formatDate(item.price_date)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-gray-400">By:</span>
+              <span className="text-gray-400">{item.updated_by || 'System'}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -115,12 +183,26 @@ function ItemCard({ item, onEdit, onDelete, onViewImage }) {
           Edit
         </button>
         <button
+          onClick={() => onUpdate(item)}
+          className="flex-1 bg-yellow-600 hover:bg-yellow-700 py-2 rounded text-sm transition-all duration-200 hover:scale-105"
+        >
+          Update
+        </button>
+        <button
           onClick={() => onDelete(item.id)}
           className="flex-1 bg-red-600 hover:bg-red-700 py-2 rounded text-sm transition-all duration-200 hover:scale-105"
         >
           Delete
         </button>
       </div>
+      
+      {/* Price History Button */}
+      <button
+        onClick={() => onViewPriceHistory(item)}
+        className="w-full mt-2 bg-purple-600 hover:bg-purple-700 py-2 rounded text-sm transition-all duration-200 hover:scale-105"
+      >
+        View Price History
+      </button>
     </div>
   );
 }

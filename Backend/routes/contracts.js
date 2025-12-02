@@ -4,7 +4,7 @@ const Contract = require('../models/Contract');
 const upload = require('../middleware/upload');
 const db = require('../config/database');
 
-// GET /api/contracts/items - Get items available for installment
+// GET /api/contracts/items - Get items available for installment with latest prices
 router.get('/items', async (req, res) => {
   try {
     const items = await Contract.getInstallmentItems();
@@ -80,7 +80,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// GET /api/contracts/:id/sponsors - Get sponsors for a contract (UPDATED)
+// GET /api/contracts/:id/sponsors - Get sponsors for a contract
 router.get('/:id/sponsors', async (req, res) => {
   try {
     const { id } = req.params;
@@ -108,17 +108,12 @@ router.get('/:id/sponsors', async (req, res) => {
         });
       }
 
-      // Convert BLOB images to base64 - FIXED VERSION
+      // Convert BLOB images to base64
       const sponsors = results.map(sponsor => {
         if (sponsor.id_card_image) {
           try {
-            console.log('Sponsor image data type:', typeof sponsor.id_card_image);
-            
-            // Handle BLOB data properly (same logic as customer)
             if (Buffer.isBuffer(sponsor.id_card_image)) {
               sponsor.id_card_image = sponsor.id_card_image.toString('base64');
-            } else if (sponsor.id_card_image.type === 'Buffer' && sponsor.id_card_image.data) {
-              sponsor.id_card_image = Buffer.from(sponsor.id_card_image.data).toString('base64');
             } else if (typeof sponsor.id_card_image === 'string') {
               if (!sponsor.id_card_image.startsWith('data:')) {
                 sponsor.id_card_image = `data:image/jpeg;base64,${sponsor.id_card_image}`;
@@ -175,7 +170,7 @@ router.get('/:id/payments', async (req, res) => {
   }
 });
 
-// POST /api/contracts/apply - Apply for new contract
+// POST /api/contracts/apply - Apply for new contract (single)
 router.post('/apply', upload.fields([
   { name: 'customer_id_card_image', maxCount: 1 },
   { name: 'sponsor_0_id_card_image', maxCount: 1 },
@@ -216,7 +211,9 @@ router.post('/apply', upload.fields([
       success: true,
       contractId: result.contractId,
       saleId: result.saleId,
-      message: 'Contract application submitted successfully and item reserved'
+      item_name: result.item_name,
+      total_price: result.total_price,
+      message: `Contract for ${result.item_name} submitted successfully and item reserved`
     });
 
   } catch (error) {
@@ -224,6 +221,80 @@ router.post('/apply', upload.fields([
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to submit contract application'
+    });
+  }
+});
+
+// POST /api/contracts/apply-multiple - Apply for multiple contracts
+router.post('/apply-multiple', upload.fields([
+  { name: 'customer_id_card_image', maxCount: 1 },
+  { name: 'sponsor_0_id_card_image', maxCount: 1 },
+  { name: 'sponsor_1_id_card_image', maxCount: 1 },
+  { name: 'sponsor_2_id_card_image', maxCount: 1 },
+  { name: 'sponsor_3_id_card_image', maxCount: 1 },
+  { name: 'sponsor_4_id_card_image', maxCount: 1 }
+]), async (req, res) => {
+  try {
+    // Parse the form data
+    const customer_data = JSON.parse(req.body.customer_data);
+    const sponsors_data = JSON.parse(req.body.sponsors_data);
+    const contracts_data = JSON.parse(req.body.contracts_data); // Array of contracts
+
+    if (!Array.isArray(contracts_data) || contracts_data.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'No contracts provided'
+      });
+    }
+
+    // Handle file uploads
+    if (req.files && req.files['customer_id_card_image']) {
+      customer_data.id_card_image = req.files['customer_id_card_image'][0].buffer;
+    }
+
+    // Handle sponsor file uploads
+    if (req.files) {
+      sponsors_data.forEach((sponsor, index) => {
+        const fileField = `sponsor_${index}_id_card_image`;
+        if (req.files[fileField]) {
+          sponsor.id_card_image = req.files[fileField][0].buffer;
+        }
+      });
+    }
+
+    // Prepare contracts for batch processing
+    const contractsToProcess = contracts_data.map(contract_data => ({
+      customer_data,
+      sponsors_data,
+      contract_data
+    }));
+
+    // Process contracts
+    const result = await Contract.applyMultiple(contractsToProcess);
+
+    if (result.successful === 0) {
+      return res.status(500).json({
+        success: false,
+        error: 'All contracts failed to submit',
+        details: result.errors
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `${result.successful} out of ${result.total} contract(s) submitted successfully`,
+      results: result.results,
+      errors: result.errors.length > 0 ? result.errors : null,
+      total: result.total,
+      successful: result.successful,
+      failed: result.failed
+    });
+
+  } catch (error) {
+    console.error('Multiple contract application error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to submit contract applications'
     });
   }
 });
