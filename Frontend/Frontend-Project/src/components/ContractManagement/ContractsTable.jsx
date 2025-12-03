@@ -18,7 +18,8 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
       'approved': { color: 'bg-green-600', text: 'Approved' },
       'rejected': { color: 'bg-red-600', text: 'Rejected' },
       'active': { color: 'bg-blue-600', text: 'Active' },
-      'completed': { color: 'bg-purple-600', text: 'Completed' }
+      'completed': { color: 'bg-purple-600', text: 'Completed' },
+      'deleted': { color: 'bg-gray-600', text: 'Deleted' }
     };
     
     const config = statusConfig[status] || statusConfig.pending;
@@ -91,6 +92,16 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
                       <p className="text-sm text-gray-400 mt-1">
                         Contract #{contract.id}
                       </p>
+                      {contract.original_contract_info && (
+                        <p className="text-xs text-blue-400 mt-1">
+                          ↻ Reapplication of #{contract.original_contract_info.id}
+                        </p>
+                      )}
+                      {contract.replacement_contract_info && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          ↪ Replaced by #{contract.replacement_contract_info.id}
+                        </p>
+                      )}
                       <p className="text-xs text-gray-500 mt-1">
                         Created: {formatDate(contract.created_at)}
                       </p>
@@ -141,6 +152,11 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
                         ❌ Rejected
                       </div>
                     )}
+                    {contract.status === 'deleted' && contract.replacement_contract_info && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        ↪ Replaced by #{contract.replacement_contract_info.id}
+                      </div>
+                    )}
                     {contract.paid_payments > 0 && contract.total_payments > 0 && (
                       <div className="text-xs text-gray-400 mt-1">
                         {contract.paid_payments}/{contract.total_payments} paid
@@ -176,7 +192,7 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
                       )}
 
                       {/* Edit & Reapply Button - ALL WORKERS on REJECTED contracts */}
-                      {contract.status === 'rejected' && (
+                      {contract.status === 'rejected' && !contract.replacement_contract_info && (
                         <button
                           onClick={() => onEditReapply(contract)}
                           className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-sm font-medium transition-colors duration-200"

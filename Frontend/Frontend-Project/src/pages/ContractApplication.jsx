@@ -73,7 +73,9 @@ const ContractApplication = () => {
         }));
       }
       
-      toast.success('Contract data loaded for editing. Make your changes and resubmit.');
+      toast.success('Contract data loaded for editing. Make your changes and resubmit.', {
+        duration: 4000
+      });
     } else {
       // Check sessionStorage for reapplication data
       const savedData = sessionStorage.getItem('reapplyContractData');
@@ -107,7 +109,9 @@ const ContractApplication = () => {
             }));
           }
           
-          toast.success('Contract data loaded for editing. Make your changes and resubmit.');
+          toast.success('Contract data loaded for editing. Make your changes and resubmit.', {
+            duration: 4000
+          });
           // Clear sessionStorage after loading
           sessionStorage.removeItem('reapplyContractData');
         } catch (error) {
@@ -133,6 +137,37 @@ const ContractApplication = () => {
     }
   }, [currentStep]);
 
+  // Function to reset form and clear reapplication data
+  const handleCancelEdit = () => {
+    // Clear all form data
+    setFormData({
+      idCardNumber: '',
+      existingCustomer: null,
+      customer: {
+        full_name: '',
+        phone: '',
+        id_card_number: '',
+        address: '',
+        email: '',
+        id_card_image: null
+      },
+      sponsors: [],
+      contractItems: []
+    });
+    
+    // Reset state
+    setIsReapplication(false);
+    setOriginalContractId(null);
+    setCurrentStep(1);
+    
+    // Clear any stored data
+    sessionStorage.removeItem('reapplyContractData');
+    
+    toast.success('Edit cancelled. Form cleared for new contract application.', {
+      duration: 4000
+    });
+  };
+
   const handleSubmit = async () => {
     if (formData.contractItems.length === 0) {
       toast.error('Please add at least one item to the contract');
@@ -157,7 +192,7 @@ const ContractApplication = () => {
       // Append sponsors data
       submitData.append('sponsors_data', JSON.stringify(formData.sponsors));
       
-      // Append all contract items with quantity - UPDATED FOR MULTIPLE QUANTITY
+      // Append all contract items with quantity - INCLUDING ORIGINAL CONTRACT ID
       const contractsData = [];
       
       formData.contractItems.forEach(item => {
@@ -232,13 +267,23 @@ const ContractApplication = () => {
           throw new Error('All contracts failed: ' + (data.errors?.map(e => e.error).join(', ') || 'Unknown error'));
         }
       } else {
-        toast.success(`${data.successful} contract(s) ${isReapplication ? 'resubmitted' : 'submitted'} successfully!`);
+        const successMessage = isReapplication 
+          ? `${data.successful} contract(s) resubmitted successfully! Original contract marked as deleted.`
+          : `${data.successful} contract(s) submitted successfully!`;
+        
+        toast.success(successMessage);
       }
 
       // Show summary
       if (data.results && data.results.length > 0) {
         const uniqueItems = [...new Set(data.results.map(r => r.item_name))];
         toast.success(`Created contracts for: ${uniqueItems.join(', ')}`);
+        
+        // If this was a reapplication, show relationship info
+        if (isReapplication) {
+          const newContractIds = data.results.map(r => r.contractId).join(', ');
+          toast.success(`New contract(s) #${newContractIds} created from original #${originalContractId}`);
+        }
       }
 
       // Redirect to contract management page after delay
@@ -300,6 +345,8 @@ const ContractApplication = () => {
             onSubmit={handleSubmit}
             loading={loading}
             isReapplication={isReapplication}
+            originalContractId={originalContractId}
+            onCancelEdit={handleCancelEdit}
           />
         );
       default:
@@ -332,29 +379,47 @@ const ContractApplication = () => {
       {/* Main Content */}
       <main className="ml-64 min-h-screen">
         <div className="p-6">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              {isReapplication ? 'Edit & Resubmit Contract' : 'New Installment Contract'}
-            </h1>
-            <p className="text-gray-400 mt-2">
-              {isReapplication 
-                ? 'Edit contract details and resubmit for approval'
-                : 'Apply for new installment purchase contract(s)'}
-            </p>
-            {isReapplication && originalContractId && (
-              <div className="mt-4 bg-yellow-900/20 border border-yellow-500 p-3 rounded-lg inline-block">
-                <p className="text-yellow-300">
-                  Editing contract #{originalContractId}. This will create a new contract submission.
-                </p>
-              </div>
-            )}
-            {currentStep === 4 && totalContracts > 0 && (
-              <div className="mt-4 bg-blue-900/20 border border-blue-500 p-3 rounded-lg inline-block">
-                <p className="text-blue-300">
-                  <span className="font-bold">{totalContracts}</span> contract{totalContracts !== 1 ? 's' : ''} will be created
-                </p>
-              </div>
+          {/* Header with Cancel Button */}
+          <div className="flex justify-between items-start mb-8">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                {isReapplication ? 'Edit & Resubmit Contract' : 'New Installment Contract'}
+              </h1>
+              <p className="text-gray-400 mt-2">
+                {isReapplication 
+                  ? 'Edit contract details and resubmit for approval'
+                  : 'Apply for new installment purchase contract(s)'}
+              </p>
+              {isReapplication && originalContractId && (
+                <div className="mt-4 bg-yellow-900/20 border border-yellow-500 p-3 rounded-lg inline-block">
+                  <p className="text-yellow-300">
+                    Editing contract #{originalContractId}. After resubmission, the original will be marked as deleted.
+                  </p>
+                </div>
+              )}
+              {currentStep === 4 && totalContracts > 0 && (
+                <div className="mt-4 bg-blue-900/20 border border-blue-500 p-3 rounded-lg inline-block">
+                  <p className="text-blue-300">
+                    <span className="font-bold">{totalContracts}</span> contract{totalContracts !== 1 ? 's' : ''} will be created
+                    {isReapplication && originalContractId && (
+                      <span className="block text-yellow-300 text-sm mt-1">
+                        Original contract #{originalContractId} will be marked as deleted
+                      </span>
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            {/* Cancel Edit Button - Only show when in reapplication mode */}
+            {isReapplication && (
+              <button
+                onClick={handleCancelEdit}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
+              >
+                <span>❌</span>
+                Cancel Edit
+              </button>
             )}
           </div>
 
@@ -417,6 +482,16 @@ const ContractApplication = () => {
                   Sponsors: <span className="text-white font-semibold">{formData.sponsors.length}</span>
                 </div>
               </div>
+              {isReapplication && originalContractId && (
+                <div className="mt-2 pt-2 border-t border-gray-700">
+                  <p className="text-yellow-400 text-sm">
+                    ⚠️ After successful submission: Original contract #{originalContractId} will be marked as deleted
+                  </p>
+                  <p className="text-red-400 text-xs mt-1">
+                    💡 Click "Cancel Edit" above to clear form and start fresh
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

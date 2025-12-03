@@ -301,7 +301,9 @@ function ContractManagement() {
           monthly_payment: contractData.contract.monthly_payment,
           installment_last_payment: contractData.contract.installment_last_payment,
           start_date: contractData.contract.start_date,
-          quantity: 1
+          quantity: 1,
+          // Include original contract ID for reapplication
+          original_contract_id: contract.id
         }],
         
         // Original contract ID for reference
@@ -353,7 +355,7 @@ function ContractManagement() {
             )}
           </div>
 
-          {/* Status Filter */}
+          {/* Status Filter - ADDED 'DELETED' */}
           <div className="mb-6">
             <div className="flex flex-wrap gap-2">
               {[
@@ -361,6 +363,7 @@ function ContractManagement() {
                 { value: 'active', label: 'Active', color: 'bg-green-600 hover:bg-green-700' },
                 { value: 'rejected', label: 'Rejected', color: 'bg-red-600 hover:bg-red-700' },
                 { value: 'completed', label: 'Completed', color: 'bg-blue-600 hover:bg-blue-700' },
+                { value: 'deleted', label: 'Deleted', color: 'bg-gray-600 hover:bg-gray-700' },
                 { value: 'all', label: 'All Contracts', color: 'bg-purple-600 hover:bg-purple-700' }
               ].map((filter) => (
                 <button
