@@ -131,177 +131,204 @@ class Item {
     });
   }
 
-  // Create item with initial price (transaction) - callback version
+  // Create item with initial price (transaction) - FIXED
   static createWithPrice(itemData, priceData, callback) {
-    db.beginTransaction((err) => {
+    db.getConnection((err, connection) => {
       if (err) {
-        console.error('Error starting transaction:', err);
+        console.error('Error getting database connection:', err);
         return callback(err);
       }
 
-      // Insert into items table
-      const itemQuery = `
-        INSERT INTO items (name, description, available, installment, quantity, item_image) 
-        VALUES (?, ?, ?, ?, ?, ?)
-      `;
-      
-      db.query(itemQuery, [
-        itemData.name,
-        itemData.description,
-        itemData.available,
-        itemData.installment,
-        itemData.quantity,
-        itemData.item_image
-      ], (err, itemResult) => {
+      connection.beginTransaction((err) => {
         if (err) {
-          console.error('Error inserting item:', err);
-          return db.rollback(() => {
-            callback(err);
-          });
+          console.error('Error starting transaction:', err);
+          connection.release();
+          return callback(err);
         }
 
-        const itemId = itemResult.insertId;
-        
-        // Insert into item_prices table
-        const priceQuery = `
-          INSERT INTO item_prices 
-          (item_id, user_id, price_cash, buy_price, price_installment_total, 
-           installment_first_payment, installment_months, installment_per_month, 
-           installment_last_payment, on_sale_price) 
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        // Insert into items table
+        const itemQuery = `
+          INSERT INTO items (name, description, available, installment, quantity, item_image) 
+          VALUES (?, ?, ?, ?, ?, ?)
         `;
         
-        console.log('Inserting price with buy_price:', priceData.buy_price);
-        
-        db.query(priceQuery, [
-          itemId,
-          priceData.user_id,
-          priceData.price_cash,
-          priceData.buy_price || null,
-          priceData.price_installment_total,
-          priceData.installment_first_payment,
-          priceData.installment_months,
-          priceData.installment_per_month,
-          priceData.installment_last_payment,
-          priceData.on_sale_price
-        ], (err) => {
+        connection.query(itemQuery, [
+          itemData.name,
+          itemData.description,
+          itemData.available,
+          itemData.installment,
+          itemData.quantity,
+          itemData.item_image
+        ], (err, itemResult) => {
           if (err) {
-            console.error('Error inserting price:', err);
-            return db.rollback(() => {
+            console.error('Error inserting item:', err);
+            return connection.rollback(() => {
+              connection.release();
               callback(err);
             });
           }
 
-          db.commit((err) => {
+          const itemId = itemResult.insertId;
+          
+          // Insert into item_prices table
+          const priceQuery = `
+            INSERT INTO item_prices 
+            (item_id, user_id, price_cash, buy_price, price_installment_total, 
+             installment_first_payment, installment_months, installment_per_month, 
+             installment_last_payment, on_sale_price) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `;
+          
+          console.log('Inserting price with buy_price:', priceData.buy_price);
+          
+          connection.query(priceQuery, [
+            itemId,
+            priceData.user_id,
+            priceData.price_cash,
+            priceData.buy_price || null,
+            priceData.price_installment_total,
+            priceData.installment_first_payment,
+            priceData.installment_months,
+            priceData.installment_per_month,
+            priceData.installment_last_payment,
+            priceData.on_sale_price
+          ], (err) => {
             if (err) {
-              console.error('Error committing transaction:', err);
-              return db.rollback(() => {
+              console.error('Error inserting price:', err);
+              return connection.rollback(() => {
+                connection.release();
                 callback(err);
               });
             }
-            
-            callback(null, { itemId, success: true });
+
+            connection.commit((err) => {
+              if (err) {
+                console.error('Error committing transaction:', err);
+                return connection.rollback(() => {
+                  connection.release();
+                  callback(err);
+                });
+              }
+              
+              connection.release();
+              callback(null, { itemId, success: true });
+            });
           });
         });
       });
     });
   }
 
-  // Update item and price (edit mode) - callback version
+  // Update item and price (edit mode) - FIXED
   static updateWithPrice(itemId, itemData, priceData, callback) {
-    db.beginTransaction((err) => {
+    db.getConnection((err, connection) => {
       if (err) {
-        console.error('Error starting transaction:', err);
+        console.error('Error getting database connection:', err);
         return callback(err);
       }
 
-      // Update items table
-      const itemQuery = `
-        UPDATE items 
-        SET name = ?, description = ?, available = ?, 
-            installment = ?, quantity = ?, item_image = ?
-        WHERE id = ?
-      `;
-      
-      db.query(itemQuery, [
-        itemData.name,
-        itemData.description,
-        itemData.available,
-        itemData.installment,
-        itemData.quantity,
-        itemData.item_image,
-        itemId
-      ], (err) => {
+      connection.beginTransaction((err) => {
         if (err) {
-          console.error('Error updating item:', err);
-          return db.rollback(() => {
-            callback(err);
-          });
+          console.error('Error starting transaction:', err);
+          connection.release();
+          return callback(err);
         }
 
-        // Get latest price to update it
-        Item.getLatestPrice(itemId, (err, latestPrice) => {
+        // Update items table
+        const itemQuery = `
+          UPDATE items 
+          SET name = ?, description = ?, available = ?, 
+              installment = ?, quantity = ?, item_image = ?
+          WHERE id = ?
+        `;
+        
+        connection.query(itemQuery, [
+          itemData.name,
+          itemData.description,
+          itemData.available,
+          itemData.installment,
+          itemData.quantity,
+          itemData.item_image,
+          itemId
+        ], (err) => {
           if (err) {
-            console.error('Error getting latest price:', err);
-            return db.rollback(() => {
+            console.error('Error updating item:', err);
+            return connection.rollback(() => {
+              connection.release();
               callback(err);
             });
           }
 
-          if (latestPrice && latestPrice.id) {
-            const priceQuery = `
-              UPDATE item_prices 
-              SET price_cash = ?, buy_price = ?, price_installment_total = ?, 
-                  installment_first_payment = ?, installment_months = ?, 
-                  installment_per_month = ?, installment_last_payment = ?, 
-                  on_sale_price = ?, user_id = ?
-              WHERE id = ?
-            `;
-            
-            console.log('Updating price with buy_price:', priceData.buy_price);
-            
-            db.query(priceQuery, [
-              priceData.price_cash,
-              priceData.buy_price || null,
-              priceData.price_installment_total,
-              priceData.installment_first_payment,
-              priceData.installment_months,
-              priceData.installment_per_month,
-              priceData.installment_last_payment,
-              priceData.on_sale_price,
-              priceData.user_id,
-              latestPrice.id
-            ], (err) => {
-              if (err) {
-                console.error('Error updating price:', err);
-                return db.rollback(() => {
-                  callback(err);
-                });
-              }
+          // Get latest price to update it
+          this.getLatestPrice(itemId, (err, latestPrice) => {
+            if (err) {
+              console.error('Error getting latest price:', err);
+              return connection.rollback(() => {
+                connection.release();
+                callback(err);
+              });
+            }
 
-              db.commit((err) => {
+            if (latestPrice && latestPrice.id) {
+              const priceQuery = `
+                UPDATE item_prices 
+                SET price_cash = ?, buy_price = ?, price_installment_total = ?, 
+                    installment_first_payment = ?, installment_months = ?, 
+                    installment_per_month = ?, installment_last_payment = ?, 
+                    on_sale_price = ?, user_id = ?
+                WHERE id = ?
+              `;
+              
+              console.log('Updating price with buy_price:', priceData.buy_price);
+              
+              connection.query(priceQuery, [
+                priceData.price_cash,
+                priceData.buy_price || null,
+                priceData.price_installment_total,
+                priceData.installment_first_payment,
+                priceData.installment_months,
+                priceData.installment_per_month,
+                priceData.installment_last_payment,
+                priceData.on_sale_price,
+                priceData.user_id,
+                latestPrice.id
+              ], (err) => {
+                if (err) {
+                  console.error('Error updating price:', err);
+                  return connection.rollback(() => {
+                    connection.release();
+                    callback(err);
+                  });
+                }
+
+                connection.commit((err) => {
+                  if (err) {
+                    console.error('Error committing transaction:', err);
+                    return connection.rollback(() => {
+                      connection.release();
+                      callback(err);
+                    });
+                  }
+                  
+                  connection.release();
+                  callback(null, { success: true });
+                });
+              });
+            } else {
+              connection.commit((err) => {
                 if (err) {
                   console.error('Error committing transaction:', err);
-                  return db.rollback(() => {
+                  return connection.rollback(() => {
+                    connection.release();
                     callback(err);
                   });
                 }
                 
+                connection.release();
                 callback(null, { success: true });
               });
-            });
-          } else {
-            db.commit((err) => {
-              if (err) {
-                console.error('Error committing transaction:', err);
-                return db.rollback(() => {
-                  callback(err);
-                });
-              }
-              
-              callback(null, { success: true });
-            });
-          }
+            }
+          });
         });
       });
     });
@@ -367,36 +394,80 @@ class Item {
 
   // Delete item - callback version
   static delete(itemId, callback) {
-    const query = 'DELETE FROM items WHERE id = ?';
-    db.query(query, [itemId], (err, result) => {
+    db.getConnection((err, connection) => {
       if (err) {
-        console.error('Error in delete:', err);
-        return callback(err, null);
+        console.error('Error getting database connection:', err);
+        return callback(err);
       }
-      callback(null, result);
+
+      connection.beginTransaction((err) => {
+        if (err) {
+          console.error('Error starting transaction:', err);
+          connection.release();
+          return callback(err);
+        }
+
+        // First delete related item_prices
+        const deletePricesQuery = 'DELETE FROM item_prices WHERE item_id = ?';
+        connection.query(deletePricesQuery, [itemId], (err) => {
+          if (err) {
+            console.error('Error deleting price history:', err);
+            return connection.rollback(() => {
+              connection.release();
+              callback(err);
+            });
+          }
+
+          // Then delete the item
+          const deleteItemQuery = 'DELETE FROM items WHERE id = ?';
+          connection.query(deleteItemQuery, [itemId], (err, result) => {
+            if (err) {
+              console.error('Error deleting item:', err);
+              return connection.rollback(() => {
+                connection.release();
+                callback(err);
+              });
+            }
+
+            connection.commit((err) => {
+              if (err) {
+                console.error('Error committing transaction:', err);
+                return connection.rollback(() => {
+                  connection.release();
+                  callback(err);
+                });
+              }
+              
+              connection.release();
+              callback(null, result);
+            });
+          });
+        });
+      });
     });
   }
-  // Add this method to your existing Item.js model
-static getLatestPriceForContract(itemId) {
-  return new Promise((resolve, reject) => {
-    const query = `
-      SELECT 
-        ip.*
-      FROM item_prices ip
-      WHERE ip.item_id = ? 
-      ORDER BY ip.date DESC 
-      LIMIT 1
-    `;
-    
-    db.query(query, [itemId], (err, results) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(results[0] || null);
+
+  // Get latest price for contract - promise version
+  static getLatestPriceForContract(itemId) {
+    return new Promise((resolve, reject) => {
+      const query = `
+        SELECT 
+          ip.*
+        FROM item_prices ip
+        WHERE ip.item_id = ? 
+        ORDER BY ip.date DESC 
+        LIMIT 1
+      `;
+      
+      db.query(query, [itemId], (err, results) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        resolve(results[0] || null);
+      });
     });
-  });
-}
+  }
 
   // Get user by ID - callback version
   static getUserById(userId, callback) {

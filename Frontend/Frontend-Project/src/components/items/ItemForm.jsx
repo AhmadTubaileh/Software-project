@@ -78,13 +78,14 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
     setSelectedFile(null);
   }, [item]);
 
-  // Calculate installment payments
+  // Calculate installment payments with NEW method
   const calculateInstallmentPayments = () => {
     const total = parseFloat(formData.price_installment_total);
     const downPayment = parseFloat(formData.installment_first_payment);
     const months = parseInt(formData.installment_months);
 
-    if (!total || !downPayment || !months || months <= 2) {
+    if (!total || !downPayment || !months || months <= 1) {
+      // If only 1 month or invalid, everything is down payment
       setCalculatedPayments({
         installment_per_month: '0',
         installment_last_payment: total ? (total - downPayment).toFixed(2) : '0'
@@ -93,7 +94,7 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
     }
 
     const remaining = total - downPayment;
-    const equalMonths = months - 2;
+    const equalMonths = months - 1; // CHANGED: Months - 1
     
     // Calculate monthly payment (rounded down to nearest 10)
     const rawMonthly = remaining / equalMonths;
@@ -435,10 +436,13 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
                         </div>
                       </div>
                       <p className="text-xs text-gray-500 mt-2">
-                        <strong>Note:</strong> 
-                        <br/>1. Monthly payment is rounded down to nearest $10
-                        <br/>2. If last payment would be $0, $10 is taken from each monthly payment
-                        <br/>3. Final payment is never $0
+                        <strong>New Calculation Method:</strong> 
+                        <br/>• Down payment = Month 0 (not counted in months)
+                        <br/>• Months 1 to (n-1) = Equal monthly payments
+                        <br/>• Month n = Final payment
+                        <br/>• Monthly payment is rounded down to nearest $10
+                        <br/>• If final payment would be $0, $10 is taken from each monthly payment
+                        <br/>• Final payment is never $0
                       </p>
                     </div>
                   )}
