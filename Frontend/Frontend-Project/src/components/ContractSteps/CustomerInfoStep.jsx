@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 import ImageModal from './ImageModal';
 import toast from 'react-hot-toast';
 
-const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
+const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep, isReapplication = false }) => {
   const [viewingImage, setViewingImage] = useState(false);
 
   const handleCustomerChange = (field, value) => {
@@ -99,6 +99,21 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-bold mb-6 text-blue-400">Step 2: Customer Information</h2>
       
+      {/* Reapplication Notice */}
+      {isReapplication && (
+        <div className="bg-blue-900/20 border border-blue-500 p-4 rounded-lg mb-6">
+          <div className="flex items-center gap-3">
+            <div className="text-blue-400 text-xl">✏️</div>
+            <div>
+              <h3 className="font-semibold text-blue-400">Edit Customer Information</h3>
+              <p className="text-sm text-blue-300 mt-1">
+                You can update customer details as needed. All changes will be saved to the new contract.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="space-y-6">
         {/* Source Information */}
         {formData.existingCustomer && (
@@ -156,8 +171,13 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
               onChange={(e) => handleCustomerChange('id_card_number', e.target.value)}
               className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
               placeholder="ID card number"
-              readOnly
+              readOnly={isReapplication && formData.existingCustomer}
             />
+            {isReapplication && formData.existingCustomer && (
+              <p className="text-xs text-yellow-400 mt-1">
+                ID card number cannot be changed for existing customer
+              </p>
+            )}
           </div>
         </div>
 
@@ -215,6 +235,11 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep }) => {
             {formData.existingCustomer && formData.customer.id_card_image && typeof formData.customer.id_card_image === 'string' 
               ? 'Upload a new image only if you need to update the existing one. Leave empty to keep the current image.'
               : 'Upload a clear photo of the customer\'s ID card (max 5MB)'}
+            {isReapplication && (
+              <span className="text-blue-400 block mt-1">
+                • For reapplication: You can update the ID card image if needed.
+              </span>
+            )}
           </p>
         </div>
 

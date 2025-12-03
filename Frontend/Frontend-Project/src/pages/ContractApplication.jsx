@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useCallback, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import toast, { Toaster } from 'react-hot-toast';
 import IdVerificationStep from '../components/ContractSteps/IdVerificationStep';
 import CustomerInfoStep from '../components/ContractSteps/CustomerInfoStep';
@@ -10,10 +10,13 @@ import { useLocalSession } from '../hooks/useLocalSession';
 
 const ContractApplication = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { currentUser } = useLocalSession();
   
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [isReapplication, setIsReapplication] = useState(false);
+  const [originalContractId, setOriginalContractId] = useState(null);
   
   // Main form state - UPDATED FOR MULTIPLE ITEMS WITH QUANTITY
   const [formData, setFormData] = useState({
@@ -37,6 +40,82 @@ const ContractApplication = () => {
     // Step 4: Contract Items - ARRAY FOR MULTIPLE ITEMS WITH QUANTITY
     contractItems: []
   });
+
+  // Load reapplication data from location state or sessionStorage
+  useEffect(() => {
+    if (location.state?.prefillData) {
+      // From navigation state
+      const prefillData = location.state.prefillData;
+      setIsReapplication(location.state.isReapplication || false);
+      setOriginalContractId(prefillData.original_contract_id || null);
+      
+      setFormData(prev => ({
+        ...prev,
+        customer: prefillData.customer,
+        sponsors: prefillData.sponsors,
+        contractItems: prefillData.contractItems
+      }));
+      
+      // Set ID card number from customer data
+      if (prefillData.customer.id_card_number) {
+        setFormData(prev => ({
+          ...prev,
+          idCardNumber: prefillData.customer.id_card_number,
+          existingCustomer: {
+            full_name: prefillData.customer.full_name,
+            phone: prefillData.customer.phone,
+            address: prefillData.customer.address,
+            email: prefillData.customer.email,
+            id_card_image: prefillData.customer.id_card_image,
+            source_table: 'contract_customers',
+            type: 'contract_customer'
+          }
+        }));
+      }
+      
+      toast.success('Contract data loaded for editing. Make your changes and resubmit.');
+    } else {
+      // Check sessionStorage for reapplication data
+      const savedData = sessionStorage.getItem('reapplyContractData');
+      if (savedData) {
+        try {
+          const prefillData = JSON.parse(savedData);
+          setIsReapplication(true);
+          setOriginalContractId(prefillData.original_contract_id || null);
+          
+          setFormData(prev => ({
+            ...prev,
+            customer: prefillData.customer,
+            sponsors: prefillData.sponsors,
+            contractItems: prefillData.contractItems
+          }));
+          
+          // Set ID card number from customer data
+          if (prefillData.customer.id_card_number) {
+            setFormData(prev => ({
+              ...prev,
+              idCardNumber: prefillData.customer.id_card_number,
+              existingCustomer: {
+                full_name: prefillData.customer.full_name,
+                phone: prefillData.customer.phone,
+                address: prefillData.customer.address,
+                email: prefillData.customer.email,
+                id_card_image: prefillData.customer.id_card_image,
+                source_table: 'contract_customers',
+                type: 'contract_customer'
+              }
+            }));
+          }
+          
+          toast.success('Contract data loaded for editing. Make your changes and resubmit.');
+          // Clear sessionStorage after loading
+          sessionStorage.removeItem('reapplyContractData');
+        } catch (error) {
+          console.error('Error loading reapplication data:', error);
+        }
+      }
+    }
+  }, [location.state]);
 
   const updateFormData = useCallback((updates) => {
     setFormData(prev => ({ ...prev, ...updates }));
@@ -98,7 +177,8 @@ const ContractApplication = () => {
             worker_id: currentUser.id,
             quantity: 1, // Each entry is for 1 item
             contract_number: i + 1, // Which copy this is (1st, 2nd, etc.)
-            original_quantity: item.quantity // Keep original for reference
+            original_quantity: item.quantity, // Keep original for reference
+            original_contract_id: isReapplication ? originalContractId : null // Track if reapplication
           });
         }
       });
@@ -118,7 +198,7 @@ const ContractApplication = () => {
       });
 
       // Show loading message with details
-      toast.loading(`Submitting ${totalContracts} contract(s)...`, {
+      toast.loading(`${isReapplication ? 'Resubmitting' : 'Submitting'} ${totalContracts} contract(s)...`, {
         id: 'contract-submission'
       });
 
@@ -138,7 +218,7 @@ const ContractApplication = () => {
 
       if (data.failed > 0) {
         if (data.successful > 0) {
-          toast.success(`${data.successful} contract(s) submitted successfully!`);
+          toast.success(`${data.successful} contract(s) ${isReapplication ? 'resubmitted' : 'submitted'} successfully!`);
           
           // Show details of failed contracts
           if (data.errors && data.errors.length > 0) {
@@ -152,7 +232,7 @@ const ContractApplication = () => {
           throw new Error('All contracts failed: ' + (data.errors?.map(e => e.error).join(', ') || 'Unknown error'));
         }
       } else {
-        toast.success(`${data.successful} contract(s) submitted successfully!`);
+        toast.success(`${data.successful} contract(s) ${isReapplication ? 'resubmitted' : 'submitted'} successfully!`);
       }
 
       // Show summary
@@ -188,6 +268,7 @@ const ContractApplication = () => {
             formData={formData}
             updateFormData={updateFormData}
             nextStep={nextStep}
+            isReapplication={isReapplication}
           />
         );
       case 2:
@@ -197,6 +278,7 @@ const ContractApplication = () => {
             updateFormData={updateFormData}
             nextStep={nextStep}
             prevStep={prevStep}
+            isReapplication={isReapplication}
           />
         );
       case 3:
@@ -206,6 +288,7 @@ const ContractApplication = () => {
             updateFormData={updateFormData}
             nextStep={nextStep}
             prevStep={prevStep}
+            isReapplication={isReapplication}
           />
         );
       case 4:
@@ -216,6 +299,7 @@ const ContractApplication = () => {
             prevStep={prevStep}
             onSubmit={handleSubmit}
             loading={loading}
+            isReapplication={isReapplication}
           />
         );
       default:
@@ -251,11 +335,20 @@ const ContractApplication = () => {
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              New Installment Contract
+              {isReapplication ? 'Edit & Resubmit Contract' : 'New Installment Contract'}
             </h1>
             <p className="text-gray-400 mt-2">
-              Apply for new installment purchase contract(s)
+              {isReapplication 
+                ? 'Edit contract details and resubmit for approval'
+                : 'Apply for new installment purchase contract(s)'}
             </p>
+            {isReapplication && originalContractId && (
+              <div className="mt-4 bg-yellow-900/20 border border-yellow-500 p-3 rounded-lg inline-block">
+                <p className="text-yellow-300">
+                  Editing contract #{originalContractId}. This will create a new contract submission.
+                </p>
+              </div>
+            )}
             {currentStep === 4 && totalContracts > 0 && (
               <div className="mt-4 bg-blue-900/20 border border-blue-500 p-3 rounded-lg inline-block">
                 <p className="text-blue-300">

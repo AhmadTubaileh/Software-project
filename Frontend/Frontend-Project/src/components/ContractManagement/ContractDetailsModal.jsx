@@ -22,6 +22,18 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
             <p className="text-gray-400">
               Contract #{contractDetails.id} • {contractDetails.item_name}
             </p>
+            {contractDetails.status === 'rejected' && contractDetails.rejection_reason && (
+              <div className="mt-2 bg-red-900/30 border border-red-500 p-2 rounded">
+                <p className="text-red-400 text-sm">
+                  <span className="font-bold">Rejection Reason:</span> {contractDetails.rejection_reason}
+                </p>
+                {contractDetails.decision_date && (
+                  <p className="text-red-300 text-xs mt-1">
+                    Rejected on: {formatDate(contractDetails.decision_date)}
+                  </p>
+                )}
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -67,6 +79,16 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
                     <label className="text-sm text-gray-400">Start Date</label>
                     <p className="font-semibold">{formatDate(contractDetails.start_date)}</p>
                   </div>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400">Status</label>
+                  <p className={`font-semibold ${
+                    contractDetails.status === 'completed' ? 'text-green-400' :
+                    contractDetails.status === 'active' ? 'text-blue-400' :
+                    contractDetails.status === 'pending' ? 'text-yellow-400' : 'text-red-400'
+                  }`}>
+                    {contractDetails.status.toUpperCase()}
+                  </p>
                 </div>
                 <div>
                   <label className="text-sm text-gray-400">Price Reference</label>

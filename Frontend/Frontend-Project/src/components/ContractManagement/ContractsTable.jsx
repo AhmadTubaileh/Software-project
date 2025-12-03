@@ -1,6 +1,6 @@
 import React from 'react';
 
-const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject, showActions = true }) => {
+const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject, onEditReapply, showActions = true, isAdmin = false }) => {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -136,6 +136,11 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
                   </td>
                   <td className="px-6 py-4">
                     {getStatusBadge(contract.status)}
+                    {contract.status === 'rejected' && contract.rejection_reason && (
+                      <div className="text-xs text-red-400 mt-1">
+                        ❌ Rejected
+                      </div>
+                    )}
                     {contract.paid_payments > 0 && contract.total_payments > 0 && (
                       <div className="text-xs text-gray-400 mt-1">
                         {contract.paid_payments}/{contract.total_payments} paid
@@ -143,8 +148,17 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
                     )}
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex space-x-2">
-                      {showActions && contract.status === 'pending' && (
+                    <div className="flex space-x-2 flex-wrap gap-1">
+                      {/* View Details Button - ALWAYS VISIBLE */}
+                      <button
+                        onClick={() => onViewDetails(contract)}
+                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors duration-200"
+                      >
+                        View Details
+                      </button>
+
+                      {/* Approve/Reject Buttons - ADMIN ONLY on PENDING contracts */}
+                      {showActions && contract.status === 'pending' && isAdmin && (
                         <>
                           <button
                             onClick={() => onApprove(contract)}
@@ -160,12 +174,16 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
                           </button>
                         </>
                       )}
-                      <button
-                        onClick={() => onViewDetails(contract)}
-                        className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm font-medium transition-colors duration-200"
-                      >
-                        View Details
-                      </button>
+
+                      {/* Edit & Reapply Button - ALL WORKERS on REJECTED contracts */}
+                      {contract.status === 'rejected' && (
+                        <button
+                          onClick={() => onEditReapply(contract)}
+                          className="px-3 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-sm font-medium transition-colors duration-200"
+                        >
+                          Edit & Reapply
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

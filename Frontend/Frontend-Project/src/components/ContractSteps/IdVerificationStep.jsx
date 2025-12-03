@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 
-const IdVerificationStep = ({ formData, updateFormData, nextStep }) => {
+const IdVerificationStep = ({ formData, updateFormData, nextStep, isReapplication = false }) => {
   const [verifying, setVerifying] = useState(false);
   const [searched, setSearched] = useState(false);
 
@@ -98,6 +98,25 @@ const IdVerificationStep = ({ formData, updateFormData, nextStep }) => {
     <div className="max-w-2xl mx-auto">
       <h2 className="text-2xl font-bold mb-6 text-blue-400">Step 1: ID Card Verification</h2>
       
+      {/* Reapplication Notice */}
+      {isReapplication && (
+        <div className="bg-yellow-900/20 border border-yellow-500 p-4 rounded-lg mb-6">
+          <div className="flex items-center gap-3">
+            <div className="text-yellow-400 text-xl">🔄</div>
+            <div>
+              <h3 className="font-semibold text-yellow-400">Editing Existing Contract</h3>
+              <p className="text-sm text-yellow-300 mt-1">
+                You are editing an existing contract. Customer information is pre-filled.
+                You can verify the ID card or make changes as needed.
+              </p>
+              <p className="text-xs text-yellow-400 mt-2">
+                Note: You can change the customer by entering a different ID card number.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -182,6 +201,9 @@ const IdVerificationStep = ({ formData, updateFormData, nextStep }) => {
             <li>• We'll search in both user accounts and existing contract customers</li>
             <li>• If found, we'll pre-fill their information including ID card image</li>
             <li>• If not found, you'll need to enter their details manually</li>
+            {isReapplication && (
+              <li className="text-yellow-400">• You're editing an existing contract. You can keep the current customer or change to a different one.</li>
+            )}
           </ul>
         </div>
 

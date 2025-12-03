@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 
-const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loading }) => {
+const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loading, isReapplication = false }) => {
   const [items, setItems] = useState([]);
   const [itemsLoading, setItemsLoading] = useState(true);
   const [itemsError, setItemsError] = useState(null);
@@ -312,6 +312,26 @@ const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loadi
     <div className="max-w-6xl mx-auto">
       <h2 className="text-2xl font-bold mb-6 text-blue-400">Step 4: Select Contract Items</h2>
       
+      {/* Reapplication Notice */}
+      {isReapplication && (
+        <div className="bg-purple-900/20 border border-purple-500 p-4 rounded-lg mb-6">
+          <div className="flex items-center gap-3">
+            <div className="text-purple-400 text-xl">💰</div>
+            <div>
+              <h3 className="font-semibold text-purple-400">Edit Contract Items & Terms</h3>
+              <p className="text-sm text-purple-300 mt-1">
+                You can change the item, quantity, prices, or payment terms for the new contract.
+              </p>
+              {formData.contractItems.length > 0 && (
+                <p className="text-xs text-purple-400 mt-2">
+                  Current item: {formData.contractItems[0].item_name} • Quantity: {formData.contractItems.reduce((sum, item) => sum + item.quantity, 0)}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="space-y-6">
         {/* Add Item Section */}
         <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
@@ -508,6 +528,9 @@ const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loadi
             <p>• Or use "Add 1 Item" button for quick addition</p>
             <p>• You can add the same item multiple times</p>
             <p>• Each quantity unit will become a separate contract</p>
+            {isReapplication && (
+              <p className="text-purple-400">• You can change the item completely or keep the original</p>
+            )}
           </div>
         </div>
 
@@ -557,6 +580,11 @@ const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loadi
                       </h4>
                       {item.item_description && (
                         <p className="text-gray-400 text-sm mt-1">{item.item_description}</p>
+                      )}
+                      {isReapplication && (
+                        <p className="text-purple-400 text-xs mt-1">
+                          🔄 Editing from original contract
+                        </p>
                       )}
                     </div>
                     <button
@@ -748,6 +776,13 @@ const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loadi
                   <p className="text-2xl font-bold text-white">{getTotals().items}</p>
                 </div>
               </div>
+              {isReapplication && (
+                <div className="mt-4 p-3 bg-purple-900/20 rounded-lg border border-purple-500/30">
+                  <p className="text-purple-300 text-sm">
+                    📝 <strong>Note:</strong> You're editing an existing contract. After submitting, a new contract will be created for review.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -770,11 +805,11 @@ const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loadi
               {loading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  Submitting {getTotals().items} Contract(s)...
+                  {isReapplication ? 'Resubmitting' : 'Submitting'} {getTotals().items} Contract(s)...
                 </>
               ) : (
                 <>
-                  Submit {getTotals().items} Contract(s)
+                  {isReapplication ? 'Resubmit' : 'Submit'} {getTotals().items} Contract(s)
                   <span className="text-lg">→</span>
                 </>
               )}

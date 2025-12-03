@@ -2,7 +2,7 @@ import React, { useCallback, useState, useEffect } from 'react';
 import ImageModal from './ImageModal';
 import toast from 'react-hot-toast';
 
-const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
+const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep, isReapplication = false }) => {
   const [viewingImage, setViewingImage] = useState(null);
   const [verifyingSponsors, setVerifyingSponsors] = useState({});
 
@@ -327,6 +327,26 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
     <div className="max-w-4xl mx-auto">
       <h2 className="text-2xl font-bold mb-6 text-blue-400">Step 3: Sponsors Information</h2>
       
+      {/* Reapplication Notice */}
+      {isReapplication && (
+        <div className="bg-green-900/20 border border-green-500 p-4 rounded-lg mb-6">
+          <div className="flex items-center gap-3">
+            <div className="text-green-400 text-xl">👥</div>
+            <div>
+              <h3 className="font-semibold text-green-400">Edit Sponsors</h3>
+              <p className="text-sm text-green-300 mt-1">
+                You can add, remove, or edit sponsors for the new contract.
+              </p>
+              {formData.sponsors.length > 0 && (
+                <p className="text-xs text-green-400 mt-2">
+                  Current sponsors: {formData.sponsors.length} sponsor(s)
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="space-y-6">
         {/* Sponsors List */}
         {formData.sponsors.map((sponsor, index) => (
@@ -548,6 +568,11 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                 {sponsor.existingCustomer && sponsor.id_card_image && typeof sponsor.id_card_image === 'string' 
                   ? 'Upload a new image only if you need to update the existing one.'
                   : 'Upload a clear photo of the sponsor\'s ID card (max 5MB)'}
+                {isReapplication && (
+                  <span className="text-green-400 block mt-1">
+                    • For reapplication: You can update sponsor details as needed.
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -608,6 +633,11 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
             {formData.sponsors.some(s => s.isDuplicate) && (
               <p className="text-red-400 text-xs mt-2">
                 ⚠️ Please fix duplicate ID cards before proceeding
+              </p>
+            )}
+            {isReapplication && (
+              <p className="text-green-400 text-xs mt-2">
+                ✅ You can add, remove, or edit sponsors for the new contract
               </p>
             )}
           </div>
