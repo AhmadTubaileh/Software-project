@@ -960,193 +960,318 @@ class Contract {
     });
   }
 
-  // Approve contract - create payment schedule with new logic
-  static approve(contractId, approverId) {
-    return new Promise((resolve, reject) => {
-      db.query('START TRANSACTION', (startErr) => {
-        if (startErr) {
-          reject(startErr);
+ // Approve contract - create payment schedule with new logic
+static approve(contractId, approverId) {
+  return new Promise((resolve, reject) => {
+    console.log(`🚀 Starting contract approval for ID: ${contractId}`);
+    
+    db.query('START TRANSACTION', async (startErr) => {
+      if (startErr) {
+        console.error('❌ Error starting transaction:', startErr);
+        reject(startErr);
+        return;
+      }
+
+      try {
+        // 1. Get contract details
+        const contract = await Contract.getByIdForApproval(contractId);
+        if (!contract) {
+          throw new Error('Contract not found or already processed');
+        }
+
+        console.log(`📋 Contract found: ${contract.item_name}, Months: ${contract.months}`);
+
+        // 2. Update contract status to 'active'
+        await Contract.updateStatus(contractId, 'active');
+        console.log('✅ Contract status updated to active');
+
+        // 3. Create or update approval record
+        await Contract.updateApproval(contractId, approverId);
+        console.log('✅ Approval record updated');
+
+        // 4. Create payment schedule
+        const result = await Contract.createPaymentSchedule(contractId, contract);
+        console.log('✅ Payment schedule created');
+
+        // 5. Commit transaction
+        await Contract.commitTransaction();
+        console.log('💾 Transaction committed successfully');
+
+        resolve({
+          success: true,
+          message: `Contract approved successfully. ${result.totalPayments} payments created`,
+          contractId: contractId,
+          paymentsCreated: result.totalPayments,
+          breakdown: result.breakdown
+        });
+
+      } catch (error) {
+        console.error('❌ Error during approval:', error.message);
+        await Contract.rollbackTransaction();
+        reject(error);
+      }
+    });
+  });
+}
+
+// Helper method: Get contract for approval
+static getByIdForApproval(contractId) {
+  return new Promise((resolve, reject) => {
+    const query = `
+      SELECT 
+        ic.*, 
+        cc.full_name as customer_name, 
+        i.name as item_name
+      FROM installment_contracts ic
+      LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+      LEFT JOIN items i ON ic.item_id = i.id
+      WHERE ic.id = ? AND ic.status = "pending"
+      FOR UPDATE
+    `;
+    
+    db.query(query, [contractId], (err, results) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(results[0] || null);
+    });
+  });
+}
+
+// Helper method: Update contract status
+static updateStatus(contractId, status) {
+  return new Promise((resolve, reject) => {
+    const query = 'UPDATE installment_contracts SET status = ? WHERE id = ?';
+    db.query(query, [status, contractId], (err, result) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      
+      if (result.affectedRows === 0) {
+        reject(new Error('Contract not found or already updated'));
+        return;
+      }
+      
+      resolve(result);
+    });
+  });
+}
+
+// Helper method: Update approval record
+static updateApproval(contractId, approverId) {
+  return new Promise((resolve, reject) => {
+    // First check if approval record exists
+    const checkQuery = 'SELECT id FROM contract_approvals WHERE contract_id = ?';
+    
+    db.query(checkQuery, [contractId], (checkErr, checkResults) => {
+      if (checkErr) {
+        reject(checkErr);
+        return;
+      }
+
+      let query, params;
+      
+      if (checkResults.length > 0) {
+        // Update existing
+        query = `
+          UPDATE contract_approvals 
+          SET status = 'approved', approver_id = ?, updated_at = NOW() 
+          WHERE contract_id = ?
+        `;
+        params = [approverId, contractId];
+      } else {
+        // Insert new
+        query = `
+          INSERT INTO contract_approvals 
+          (contract_id, approver_id, status) 
+          VALUES (?, ?, 'approved')
+        `;
+        params = [contractId, approverId];
+      }
+
+      db.query(query, params, (err, result) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        if (result.affectedRows === 0) {
+          reject(new Error('Failed to update approval record'));
+          return;
+        }
+        
+        resolve(result);
+      });
+    });
+  });
+}
+
+// ⭐ FIXED: Create payment schedule - with correct date calculation and timezone handling
+static createPaymentSchedule(contractId, contract) {
+  return new Promise((resolve, reject) => {
+    const downPayment = parseFloat(contract.down_payment);
+    const monthlyPayment = parseFloat(contract.monthly_payment);
+    const lastPayment = parseFloat(contract.installment_last_payment);
+    const installmentMonths = parseInt(contract.months);
+    const approvalDate = new Date();
+    
+    const totalPayments = installmentMonths + 1;
+    console.log(`📅 Creating payment schedule: ${totalPayments} total payments`);
+    console.log(`📊 Installment months: ${installmentMonths}`);
+    console.log(`📅 Approval date: ${approvalDate.toISOString().split('T')[0]}`);
+
+    // Helper function to get date string in YYYY-MM-DD format without timezone issues
+    const getDateString = (year, month, day) => {
+      // Create date in local timezone and format as YYYY-MM-DD
+      const date = new Date(year, month, day);
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const dd = String(date.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    // Get approval date in correct format
+    const approvalYear = approvalDate.getFullYear();
+    const approvalMonth = approvalDate.getMonth();
+    const approvalDay = approvalDate.getDate();
+    const formattedApprovalDate = getDateString(approvalYear, approvalMonth, approvalDay);
+
+    // First create down payment
+    const downPaymentQuery = `
+      INSERT INTO installment_payments 
+      (contract_id, month_number, bill_date, due_date, amount_due, amount_paid, status, is_overdue) 
+      VALUES (?, 0, ?, NULL, ?, 0.00, 'pending', 0)
+    `;
+    
+    db.query(downPaymentQuery, [
+      contractId,
+      formattedApprovalDate,
+      downPayment
+    ], (downPaymentErr) => {
+      if (downPaymentErr) {
+        reject(downPaymentErr);
+        return;
+      }
+      
+      console.log(`✅ Created down payment (Month 0): ${downPayment} [${formattedApprovalDate}]`);
+
+      // Create installment payments sequentially
+      const createInstallments = (monthNum = 1) => {
+        if (monthNum > installmentMonths) {
+          // All payments created
+          console.log(`✅ All ${installmentMonths} installment payments created`);
+          resolve({
+            totalPayments: totalPayments,
+            breakdown: {
+              down_payment: downPayment,
+              monthly_payments: installmentMonths - (installmentMonths > 0 ? 1 : 0),
+              last_payment: installmentMonths > 0 ? lastPayment : 0,
+              total_installment_months: installmentMonths
+            }
+          });
           return;
         }
 
-        // 1. Get contract details
-        const getContractQuery = `
-          SELECT 
-            ic.*, 
-            cc.full_name as customer_name, 
-            i.name as item_name
-          FROM installment_contracts ic
-          LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
-          LEFT JOIN items i ON ic.item_id = i.id
-          WHERE ic.id = ? AND ic.status = "pending"
+        // Calculate target month correctly
+        const currentDate = new Date(approvalDate);
+        const currentYear = currentDate.getFullYear();
+        const currentMonth = currentDate.getMonth();
+        
+        // Calculate target year and month
+        let targetYear = currentYear;
+        let targetMonth = currentMonth + monthNum;
+        
+        // Handle month overflow (if targetMonth > 11)
+        while (targetMonth > 11) {
+          targetMonth -= 12;
+          targetYear += 1;
+        }
+        
+        // Create bill date (1st of the target month)
+        const billDateStr = getDateString(targetYear, targetMonth, 1);
+        
+        // Create due date (15th of the target month)
+        const dueDateStr = getDateString(targetYear, targetMonth, 15);
+        
+        // Determine amount for this month
+        let amountDue;
+        if (monthNum < installmentMonths) {
+          amountDue = monthlyPayment;
+        } else {
+          amountDue = lastPayment;
+        }
+
+        const installmentQuery = `
+          INSERT INTO installment_payments 
+          (contract_id, month_number, bill_date, due_date, amount_due, amount_paid, status, is_overdue) 
+          VALUES (?, ?, ?, ?, ?, 0.00, 'pending', 0)
         `;
         
-        db.query(getContractQuery, [contractId], (err, contractResults) => {
-          if (err) {
-            return rollbackAndReject(err, reject);
+        db.query(installmentQuery, [
+          contractId,
+          monthNum,
+          billDateStr,
+          dueDateStr,
+          amountDue
+        ], (installmentErr) => {
+          if (installmentErr) {
+            reject(installmentErr);
+            return;
           }
-
-          if (contractResults.length === 0) {
-            return rollbackAndReject(new Error('Contract not found or already processed'), reject);
-          }
-
-          const contract = contractResults[0];
-
-          // 2. Update contract status to 'active'
-          const updateContractQuery = 'UPDATE installment_contracts SET status = "active" WHERE id = ?';
-          db.query(updateContractQuery, [contractId], (updateErr) => {
-            if (updateErr) {
-              return rollbackAndReject(updateErr, reject);
-            }
-
-            // 3. Update approval status to 'approved'
-            const updateApprovalQuery = `
-              UPDATE contract_approvals 
-              SET status = 'approved', approver_id = ?, updated_at = NOW() 
-              WHERE contract_id = ?
-            `;
-            
-            db.query(updateApprovalQuery, [approverId, contractId], (approvalErr) => {
-              if (approvalErr) {
-                return rollbackAndReject(approvalErr, reject);
-              }
-
-              // 4. Create payment schedule with new logic
-              createPaymentSchedule(contract);
-            });
-          });
+          
+          console.log(`✅ Created installment payment (Month ${monthNum}): ${amountDue} [Bill: ${billDateStr}, Due: ${dueDateStr}]`);
+          
+          // Recursively create next payment
+          createInstallments(monthNum + 1);
         });
-
-        function createPaymentSchedule(contract) {
-          const downPayment = parseFloat(contract.down_payment);
-          const monthlyPayment = parseFloat(contract.monthly_payment);
-          const lastPayment = parseFloat(contract.installment_last_payment);
-          const installmentMonths = parseInt(contract.months); // Installment months only
-          const approvalDate = new Date(); // Current date when approved
-          
-          let paymentsCreated = 0;
-          const totalPayments = installmentMonths + 1; // +1 for down payment
-
-          console.log(`Creating payment schedule: ${totalPayments} total payments`);
-          console.log(`Installment months: ${installmentMonths}`);
-
-          // 4a. Create DOWN PAYMENT (Month 0) - NO due date, is_overdue = 0
-          const downPaymentQuery = `
-            INSERT INTO installment_payments 
-            (contract_id, month_number, bill_date, due_date, amount_due, amount_paid, status, is_overdue) 
-            VALUES (?, 0, ?, NULL, ?, 0.00, 'pending', 0)
-          `;
-          
-          db.query(downPaymentQuery, [
-            contractId,
-            approvalDate.toISOString().split('T')[0], // Current date as bill_date
-            downPayment
-          ], (downPaymentErr) => {
-            if (downPaymentErr) {
-              console.error('Error creating down payment:', downPaymentErr);
-              return rollbackAndReject(downPaymentErr, reject);
-            }
-            
-            paymentsCreated++;
-            console.log(`Created down payment (Month 0)`);
-
-            // 4b. Create INSTALLMENT PAYMENTS (Months 1 to n)
-            createInstallmentPayments();
-          });
-
-          function createInstallmentPayments() {
-            if (installmentMonths === 0) {
-              // No installment payments, only down payment
-              return completeApproval();
-            }
-
-            // For each installment month (1 to n)
-            for (let monthNum = 1; monthNum <= installmentMonths; monthNum++) {
-              // Calculate dates for this installment
-              // Bill date: 1st of month (starting from next month after approval)
-              // Due date: 15th of same month
-              
-              const billDate = new Date(approvalDate);
-              billDate.setMonth(billDate.getMonth() + monthNum);
-              billDate.setDate(1); // Always 1st of month
-              
-              const dueDate = new Date(billDate);
-              dueDate.setDate(15); // Always 15th of month
-              
-              // Determine amount for this month
-              let amountDue;
-              if (monthNum < installmentMonths) {
-                // Regular monthly payment for months 1 to (n-1)
-                amountDue = monthlyPayment;
-              } else {
-                // Last payment (month n)
-                amountDue = lastPayment;
-              }
-
-              const installmentQuery = `
-                INSERT INTO installment_payments 
-                (contract_id, month_number, bill_date, due_date, amount_due, amount_paid, status, is_overdue) 
-                VALUES (?, ?, ?, ?, ?, 0.00, 'pending', 0)
-              `;
-              
-              // Use immediate execution with closure
-              (function(mNum, bDate, dDate, amount) {
-                db.query(installmentQuery, [
-                  contractId,
-                  mNum,
-                  bDate.toISOString().split('T')[0],
-                  dDate.toISOString().split('T')[0],
-                  amount
-                ], (installmentErr) => {
-                  if (installmentErr) {
-                    console.error(`Error creating installment payment ${mNum}:`, installmentErr);
-                    return rollbackAndReject(installmentErr, reject);
-                  }
-                  
-                  paymentsCreated++;
-                  console.log(`Created installment payment (Month ${mNum}): ${amount}`);
-                  
-                  // Check if all payments created
-                  if (paymentsCreated === totalPayments) {
-                    completeApproval();
-                  }
-                });
-              })(monthNum, billDate, dueDate, amountDue);
-            }
+      };
+      
+      // Start creating payments from month 1
+      if (installmentMonths > 0) {
+        createInstallments(1);
+      } else {
+        // No installment months, just resolve
+        resolve({
+          totalPayments: totalPayments,
+          breakdown: {
+            down_payment: downPayment,
+            monthly_payments: 0,
+            last_payment: 0,
+            total_installment_months: 0
           }
-
-          function completeApproval() {
-            // All payments created, commit transaction
-            db.query('COMMIT', (commitErr) => {
-              if (commitErr) {
-                return rollbackAndReject(commitErr, reject);
-              }
-              
-              resolve({
-                success: true,
-                message: `Contract approved successfully. ${totalPayments} payments created`,
-                contractId: contractId,
-                paymentsCreated: totalPayments,
-                breakdown: {
-                  down_payment: downPayment,
-                  monthly_payments: installmentMonths - (installmentMonths > 0 ? 1 : 0),
-                  last_payment: installmentMonths > 0 ? lastPayment : 0,
-                  total_installment_months: installmentMonths
-                }
-              });
-            });
-          }
-        }
-
-        // Helper function to rollback and reject
-        function rollbackAndReject(error, rejectCallback) {
-          db.query('ROLLBACK', () => {
-            rejectCallback(error);
-          });
-        }
-      });
+        });
+      }
     });
-  }
+  });
+}
+
+// Helper method: Commit transaction
+static commitTransaction() {
+  return new Promise((resolve, reject) => {
+    db.query('COMMIT', (commitErr) => {
+      if (commitErr) {
+        reject(commitErr);
+        return;
+      }
+      resolve();
+    });
+  });
+}
+
+// Helper method: Rollback transaction
+static rollbackTransaction() {
+  return new Promise((resolve, reject) => {
+    db.query('ROLLBACK', (rollbackErr) => {
+      if (rollbackErr) {
+        reject(rollbackErr);
+        return;
+      }
+      resolve();
+    });
+  });
+}
 
   // Reject contract
   static reject(contractId, approverId, reason) {
