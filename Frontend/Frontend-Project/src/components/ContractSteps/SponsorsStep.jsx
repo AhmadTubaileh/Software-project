@@ -2,9 +2,120 @@ import React, { useCallback, useState, useEffect } from 'react';
 import ImageModal from './ImageModal';
 import toast from 'react-hot-toast';
 
+// Image compression function
+const compressImage = (file) => {
+  return new Promise((resolve, reject) => {
+    // If file is already small (< 500KB), skip compression
+    if (file.size <= 500 * 1024) {
+      console.log(`Image already small (${Math.round(file.size / 1024)}KB), skipping compression`);
+      resolve(file);
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Calculate new dimensions (max 800px on the longest side)
+        let width = img.width;
+        let height = img.height;
+        const MAX_SIZE = 800;
+        const MAX_FILE_SIZE = 500 * 1024; // 500KB
+        
+        // Calculate new dimensions while maintaining aspect ratio
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height = Math.round((height * MAX_SIZE) / width);
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width = Math.round((width * MAX_SIZE) / height);
+            height = MAX_SIZE;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw image with white background for transparent PNGs
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Determine compression quality based on original size
+        let quality = 0.8; // Start with 80% quality
+        if (file.size > 2 * 1024 * 1024) { // > 2MB
+          quality = 0.6;
+        } else if (file.size > 1 * 1024 * 1024) { // > 1MB
+          quality = 0.7;
+        }
+        
+        // Convert to JPEG (smaller than PNG)
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            reject(new Error('Failed to compress image'));
+            return;
+          }
+          
+          const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + '.jpg', {
+            type: 'image/jpeg',
+            lastModified: Date.now(),
+          });
+          
+          console.log(`✅ Image compressed: ${Math.round(file.size / 1024)}KB → ${Math.round(blob.size / 1024)}KB (${Math.round((blob.size / file.size) * 100)}%)`);
+          
+          // If still too large, reduce quality further
+          if (blob.size > MAX_FILE_SIZE) {
+            console.log('Image still large, reducing quality further...');
+            canvas.toBlob(
+              (finalBlob) => {
+                if (!finalBlob) {
+                  resolve(compressedFile); // Return previous version
+                  return;
+                }
+                
+                const finalFile = new File([finalBlob], compressedFile.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
+                
+                console.log(`✅ Further compressed: ${Math.round(finalBlob.size / 1024)}KB`);
+                resolve(finalFile);
+              },
+              'image/jpeg',
+              0.5 // 50% quality
+            );
+          } else {
+            resolve(compressedFile);
+          }
+        }, 'image/jpeg', quality);
+      };
+      
+      img.onerror = () => {
+        console.error('Failed to load image for compression');
+        reject(new Error('Failed to load image'));
+      };
+    };
+    
+    reader.onerror = (error) => {
+      console.error('Failed to read file:', error);
+      reject(error);
+    };
+  });
+};
+
 const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep, isReapplication = false }) => {
   const [viewingImage, setViewingImage] = useState(null);
   const [verifyingSponsors, setVerifyingSponsors] = useState({});
+  const [compressingImages, setCompressingImages] = useState({});
 
   // Check if ID card number already exists (customer or other sponsors)
   const isIdCardDuplicate = useCallback((idCardNumber, currentSponsorIndex) => {
@@ -220,20 +331,67 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep, isReapplic
     }
   };
 
-  const handleSponsorFileChange = (index, e) => {
+  const handleSponsorFileChange = async (index, e) => {
     const file = e.target.files[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
-        return;
+    if (!file) return;
+    
+    // Basic validation
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (JPG, PNG, etc.)');
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+    
+    // Check if sponsor has duplicate ID
+    const sponsor = formData.sponsors[index];
+    if (sponsor.isDuplicate) {
+      toast.error('Cannot upload image for duplicate ID card');
+      return;
+    }
+    
+    // Set compressing state
+    setCompressingImages(prev => ({ ...prev, [index]: true }));
+    
+    try {
+      // Show loading toast
+      const loadingToastId = toast.loading('Compressing image...', {
+        id: `compressing-${index}`,
+        duration: 5000
+      });
+      
+      // Compress the image
+      const compressedFile = await compressImage(file);
+      
+      // Update sponsor with compressed file
+      updateSponsor(index, 'id_card_image', compressedFile);
+      
+      // Show success message
+      toast.dismiss(loadingToastId);
+      
+      const sizeReduction = Math.round((1 - (compressedFile.size / file.size)) * 100);
+      if (sizeReduction > 10) {
+        toast.success(`Image compressed by ${sizeReduction}%`);
+      } else {
+        toast.success('Image ready for upload');
       }
       
-      if (file.size > 5 * 1024 * 1024) {
-        alert('File size must be less than 5MB');
-        return;
+    } catch (error) {
+      console.error('Image compression error:', error);
+      toast.dismiss(`compressing-${index}`);
+      
+      if (error.message === 'Failed to load image') {
+        toast.error('Invalid image file. Please try another image.');
+      } else {
+        toast.error('Failed to compress image. Using original file.');
+        // Fallback to original file
+        updateSponsor(index, 'id_card_image', file);
       }
-
-      updateSponsor(index, 'id_card_image', file);
+    } finally {
+      setCompressingImages(prev => ({ ...prev, [index]: false }));
     }
   };
 
@@ -251,6 +409,11 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep, isReapplic
     if (!sponsor.id_card_image) return null;
     
     if (typeof sponsor.id_card_image === 'string') {
+      // Check if it's a data URL
+      if (sponsor.id_card_image.startsWith('data:')) {
+        return sponsor.id_card_image;
+      }
+      // Assume it's base64 from database
       return `data:image/jpeg;base64,${sponsor.id_card_image}`;
     } else if (sponsor.id_card_image instanceof File) {
       return URL.createObjectURL(sponsor.id_card_image);
@@ -279,6 +442,12 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep, isReapplic
               >
                 🔍 View
               </button>
+              <p className="text-xs text-gray-400">
+                {sponsor.id_card_image instanceof File 
+                  ? `Size: ${Math.round(sponsor.id_card_image.size / 1024)}KB`
+                  : 'From database'
+                }
+              </p>
             </div>
           </div>
         </div>
@@ -321,6 +490,13 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep, isReapplic
     if (formData.sponsors.length === 0) return false;
     
     return validateSponsors();
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' bytes';
+    if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+    return Math.round(bytes / (1024 * 1024) * 10) / 10 + ' MB';
   };
 
   return (
@@ -416,11 +592,11 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep, isReapplic
                     sponsor.isDuplicate ? 'border-red-500' : 'border-gray-500'
                   } rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500`}
                   placeholder="Enter sponsor's ID card number"
-                  disabled={verifyingSponsors[index]}
+                  disabled={verifyingSponsors[index] || sponsor.isDuplicate}
                 />
                 <button
                   onClick={() => verifySponsorIdCard(index)}
-                  disabled={verifyingSponsors[index] || !sponsor.id_card_number.trim()}
+                  disabled={verifyingSponsors[index] || !sponsor.id_card_number.trim() || sponsor.isDuplicate}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded font-medium transition-colors duration-200 flex items-center gap-2"
                 >
                   {verifyingSponsors[index] ? (
@@ -543,6 +719,15 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep, isReapplic
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 ID Card Image
+                {sponsor.id_card_image && (
+                  <span className="text-green-400 text-sm ml-2">
+                    ✅ Selected ({formatFileSize(
+                      sponsor.id_card_image instanceof File 
+                        ? sponsor.id_card_image.size 
+                        : sponsor.id_card_image.length * 0.75 // Estimate for base64
+                    )})
+                  </span>
+                )}
               </label>
               
               {/* Show existing image if available */}
@@ -556,18 +741,20 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep, isReapplic
                   className={`flex-1 px-3 py-2 bg-gray-600 border ${
                     sponsor.isDuplicate ? 'border-red-500' : 'border-gray-500'
                   } rounded text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700`}
-                  disabled={sponsor.isDuplicate}
+                  disabled={sponsor.isDuplicate || compressingImages[index]}
                 />
-                {sponsor.id_card_image && sponsor.id_card_image instanceof File && !renderSponsorImage(sponsor, index) && (
-                  <span className="text-green-400 text-sm">
-                    ✅ Image selected
-                  </span>
+                {compressingImages[index] && (
+                  <div className="flex items-center gap-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                    <span className="text-blue-400 text-sm">Compressing...</span>
+                  </div>
                 )}
               </div>
               <p className="text-sm text-gray-400 mt-2">
                 {sponsor.existingCustomer && sponsor.id_card_image && typeof sponsor.id_card_image === 'string' 
                   ? 'Upload a new image only if you need to update the existing one.'
-                  : 'Upload a clear photo of the sponsor\'s ID card (max 5MB)'}
+                  : 'Upload a clear photo of the sponsor\'s ID card (max 5MB). Images are automatically compressed.'
+                }
                 {isReapplication && (
                   <span className="text-green-400 block mt-1">
                     • For reapplication: You can update sponsor details as needed.

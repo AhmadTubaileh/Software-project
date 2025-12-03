@@ -2,6 +2,79 @@ import React, { useCallback, useState } from 'react';
 import ImageModal from './ImageModal';
 import toast from 'react-hot-toast';
 
+// Add this function to compress images before upload
+const compressImage = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Calculate new dimensions (max 800px)
+        let width = img.width;
+        let height = img.height;
+        const MAX_SIZE = 800;
+        
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw and compress
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convert to JPEG with 70% quality
+        canvas.toBlob((blob) => {
+          const compressedFile = new File([blob], file.name, {
+            type: 'image/jpeg',
+            lastModified: Date.now(),
+          });
+          
+          console.log(`Image compressed: ${file.size} bytes → ${blob.size} bytes (${Math.round(blob.size / file.size * 100)}%)`);
+          
+          // If still too large, convert to data URL and limit size
+          if (blob.size > 500 * 1024) { // Still > 500KB
+            console.warn('Image still too large, further reducing quality...');
+            canvas.toBlob(
+              (finalBlob) => {
+                const finalFile = new File([finalBlob], file.name, {
+                  type: 'image/jpeg',
+                  lastModified: Date.now(),
+                });
+                resolve(finalFile);
+              },
+              'image/jpeg',
+              0.5 // Further reduce quality to 50%
+            );
+          } else {
+            resolve(compressedFile);
+          }
+        }, 'image/jpeg', 0.7); // 70% quality
+      };
+      
+      img.onerror = reject;
+    };
+    
+    reader.onerror = reject;
+  });
+};
+
 const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep, isReapplication = false }) => {
   const [viewingImage, setViewingImage] = useState(false);
 
@@ -14,19 +87,44 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep, isReap
     });
   };
 
-  const handleFileChange = (e) => {
+  // Update file change handler with compression
+  const handleFileChange = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
-        return;
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (JPG, PNG, etc.)');
+      return;
+    }
+    
+    if (file.size > 5 * 1024 * 1024) { // 5MB
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+    
+    try {
+      // Show loading
+      toast.loading('Compressing image...', { id: 'compressing' });
+      
+      // Compress the image
+      const compressedFile = await compressImage(file);
+      
+      toast.dismiss('compressing');
+      
+      if (compressedFile.size > 500 * 1024) {
+        toast.warning('Image is still large, quality reduced for upload');
       }
       
-      if (file.size > 5 * 1024 * 1024) {
-        alert('File size must be less than 5MB');
-        return;
-      }
-
+      // Update form data
+      handleCustomerChange('id_card_image', compressedFile);
+      
+      toast.success('Image ready for upload');
+    } catch (error) {
+      console.error('Image compression error:', error);
+      toast.dismiss('compressing');
+      toast.error('Failed to process image');
+      
+      // Fallback: use original file
       handleCustomerChange('id_card_image', file);
     }
   };
@@ -85,7 +183,9 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep, isReap
               <p className="text-xs text-gray-400">
                 {typeof formData.customer.id_card_image === 'string' 
                   ? 'Existing image from database'
-                  : 'New image selected'}
+                  : formData.customer.id_card_image instanceof File 
+                    ? `Compressed image: ${Math.round(formData.customer.id_card_image.size / 1024)}KB`
+                    : 'New image selected'}
               </p>
             </div>
           </div>
@@ -234,7 +334,7 @@ const CustomerInfoStep = ({ formData, updateFormData, nextStep, prevStep, isReap
           <p className="text-sm text-gray-400 mt-2">
             {formData.existingCustomer && formData.customer.id_card_image && typeof formData.customer.id_card_image === 'string' 
               ? 'Upload a new image only if you need to update the existing one. Leave empty to keep the current image.'
-              : 'Upload a clear photo of the customer\'s ID card (max 5MB)'}
+              : 'Upload a clear photo of the customer\'s ID card (max 5MB). Images are automatically compressed for faster upload.'}
             {isReapplication && (
               <span className="text-blue-400 block mt-1">
                 • For reapplication: You can update the ID card image if needed.
