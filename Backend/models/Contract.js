@@ -58,10 +58,11 @@ class Contract {
     });
   }
 
-  // Apply for new contract with price_id (single contract)
+  // Apply for new contract with reapplication support
   static apply(applicationData) {
     return new Promise((resolve, reject) => {
       const { customer_data, sponsors_data, contract_data } = applicationData;
+      const originalContractId = contract_data.original_contract_id;
 
       db.query('START TRANSACTION', (startErr) => {
         if (startErr) {
@@ -191,13 +192,13 @@ class Contract {
 
                     saleInsertId = saleResult.insertId;
 
-                    // 6. Create installment contract with price_id
+                    // 6. Create installment contract with price_id and original_contract_id
                     const contractQuery = `
                       INSERT INTO installment_contracts 
                       (sale_id, user_id, customer_id, item_id, price_id,
                        total_price, down_payment, months, monthly_payment, 
-                       installment_last_payment, start_date, status) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+                       installment_last_payment, start_date, status, original_contract_id) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
                     `;
                     
                     db.query(contractQuery, [
@@ -211,7 +212,8 @@ class Contract {
                       contract_data.months,
                       contract_data.monthly_payment,
                       contract_data.installment_last_payment,
-                      contract_data.start_date
+                      contract_data.start_date,
+                      originalContractId || null
                     ], (contractErr, contractResult) => {
                       if (contractErr) {
                         return rollbackAndReject(contractErr, reject);
@@ -219,28 +221,53 @@ class Contract {
 
                       contractId = contractResult.insertId;
 
-                      // 7. Create contract approval record
-                      const approvalQuery = `
-                        INSERT INTO contract_approvals 
-                        (contract_id, approver_id, status) 
-                        VALUES (?, ?, 'pending_review')
-                      `;
-                      
-                      db.query(approvalQuery, [
-                        contractId,
-                        contract_data.worker_id
-                      ], (approvalErr) => {
-                        if (approvalErr) {
-                          return rollbackAndReject(approvalErr, reject);
-                        }
-
-                        // 8. Create sponsor records for this contract
-                        createSponsors();
-                      });
+                      // 7. Update original contract status to 'deleted' and set replaced_by_contract_id
+                      // ONLY if original contract exists and is in 'rejected' status
+                      if (originalContractId) {
+                        const updateOriginalQuery = `
+                          UPDATE installment_contracts 
+                          SET status = 'deleted', replaced_by_contract_id = ?, updated_at = NOW()
+                          WHERE id = ? AND status = 'rejected'
+                        `;
+                        
+                        db.query(updateOriginalQuery, [contractId, originalContractId], (updateOriginalErr, updateResult) => {
+                          if (updateOriginalErr) {
+                            console.error('Error updating original contract:', updateOriginalErr);
+                            // Log error but continue - don't fail the new contract creation
+                          } else if (updateResult.affectedRows === 0) {
+                            console.warn(`Original contract ${originalContractId} not found or not in rejected status`);
+                          }
+                          
+                          proceedWithApprovalAndSponsors();
+                        });
+                      } else {
+                        proceedWithApprovalAndSponsors();
+                      }
                     });
                   });
                 });
               });
+            });
+          }
+
+          function proceedWithApprovalAndSponsors() {
+            // 8. Create contract approval record
+            const approvalQuery = `
+              INSERT INTO contract_approvals 
+              (contract_id, approver_id, status) 
+              VALUES (?, ?, 'pending_review')
+            `;
+            
+            db.query(approvalQuery, [
+              contractId,
+              contract_data.worker_id
+            ], (approvalErr) => {
+              if (approvalErr) {
+                return rollbackAndReject(approvalErr, reject);
+              }
+
+              // 9. Create sponsor records for this contract
+              createSponsors();
             });
           }
 
@@ -293,7 +320,9 @@ class Contract {
                 total_price: contract_data.total_price,
                 quantity: contract_data.quantity || 1,
                 contract_number: contract_data.contract_number || 1,
-                success: true
+                original_contract_id: originalContractId,
+                success: true,
+                isReapplication: !!originalContractId
               });
             });
           }
@@ -328,98 +357,8 @@ class Contract {
         });
       }
 
-      // Group contracts by item_id to check availability in bulk
-      const itemsToCheck = {};
-      contractsData.forEach((contractData, index) => {
-        const itemId = contractData.contract_data.item_id;
-        if (!itemsToCheck[itemId]) {
-          itemsToCheck[itemId] = {
-            count: 0,
-            contracts: [],
-            item_name: contractData.contract_data.item_name
-          };
-        }
-        itemsToCheck[itemId].count++;
-        itemsToCheck[itemId].contracts.push(index);
-      });
-
-      // Check all items availability first
-      const checkAvailability = () => {
-        const itemIds = Object.keys(itemsToCheck);
-        if (itemIds.length === 0) {
-          processContracts();
-          return;
-        }
-        
-        let checked = 0;
-        
-        itemIds.forEach(itemId => {
-          const query = 'SELECT quantity, name FROM items WHERE id = ?';
-          db.query(query, [itemId], (err, results) => {
-            checked++;
-            
-            if (err) {
-              console.error('Error checking item availability:', err);
-              // Mark all contracts for this item as failed
-              itemsToCheck[itemId].contracts.forEach(index => {
-                errors.push({
-                  index,
-                  item_name: itemsToCheck[itemId].item_name,
-                  error: 'Database error checking availability'
-                });
-              });
-            } else if (results.length === 0) {
-              // Item not found
-              itemsToCheck[itemId].contracts.forEach(index => {
-                errors.push({
-                  index,
-                  item_name: itemsToCheck[itemId].item_name,
-                  error: 'Item not found in database'
-                });
-              });
-            } else {
-              const available = results[0].quantity;
-              const itemName = results[0].name;
-              
-              if (available < itemsToCheck[itemId].count) {
-                // Not enough quantity
-                itemsToCheck[itemId].contracts.forEach(index => {
-                  errors.push({
-                    index,
-                    item_name: itemName,
-                    error: `Only ${available} available, requested ${itemsToCheck[itemId].count}`
-                  });
-                });
-              }
-            }
-            
-            if (checked === itemIds.length) {
-              // All items checked, proceed with processing
-              processContracts();
-            }
-          });
-        });
-      };
-
       const processContracts = () => {
         const processNext = () => {
-          if (processed >= total) {
-            resolve({
-              success: results.length > 0,
-              results,
-              errors,
-              total,
-              successful: results.length,
-              failed: errors.length
-            });
-            return;
-          }
-
-          // Skip contracts that already have errors
-          while (processed < total && errors.some(e => e.index === processed)) {
-            processed++;
-          }
-          
           if (processed >= total) {
             resolve({
               success: results.length > 0,
@@ -440,6 +379,7 @@ class Contract {
                 index: processed,
                 item_name: contractData.contract_data.item_name,
                 contract_number: contractData.contract_data.contract_number,
+                original_contract_id: contractData.contract_data.original_contract_id,
                 ...result
               });
               processed++;
@@ -449,7 +389,8 @@ class Contract {
               errors.push({
                 index: processed,
                 item_name: contractData.contract_data.item_name,
-                error: error.message
+                error: error.message,
+                original_contract_id: contractData.contract_data.original_contract_id
               });
               processed++;
               processNext();
@@ -459,8 +400,8 @@ class Contract {
         processNext();
       };
 
-      // Start by checking availability
-      checkAvailability();
+      // Start processing contracts
+      processContracts();
     });
   }
 
@@ -527,13 +468,31 @@ class Contract {
           ca.approver_id,
           ca.updated_at as decision_date,
           (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.sale_id = ic.sale_id) as total_payments,
-          (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.sale_id = ic.sale_id AND ipay.status = 'paid') as paid_payments
+          (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.sale_id = ic.sale_id AND ipay.status = 'paid') as paid_payments,
+          -- Get information about original contract if this is a reapplication
+          oic.id as original_contract_id_ref,
+          oic.customer_id as original_customer_id,
+          oic.item_id as original_item_id,
+          oic.total_price as original_total_price,
+          oic.status as original_status,
+          occ.full_name as original_customer_name,
+          oi.name as original_item_name,
+          -- Get information about replacement contract if this was replaced
+          ric.id as replacement_contract_id,
+          ric.status as replacement_status,
+          ric.created_at as replacement_created_at
         FROM installment_contracts ic
         LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
         LEFT JOIN items i ON ic.item_id = i.id
         LEFT JOIN item_prices ip ON ic.price_id = ip.id
         LEFT JOIN users u ON ic.user_id = u.id
         LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+        -- Left join for original contract (if this is a reapplication)
+        LEFT JOIN installment_contracts oic ON ic.original_contract_id = oic.id
+        LEFT JOIN contract_customers occ ON oic.customer_id = occ.id
+        LEFT JOIN items oi ON oic.item_id = oi.id
+        -- Left join for replacement contract (if this was replaced)
+        LEFT JOIN installment_contracts ric ON ic.replaced_by_contract_id = ric.id
       `;
       
       const params = [];
@@ -549,12 +508,51 @@ class Contract {
           reject(err);
           return;
         }
-        resolve(results);
+        
+        // Process the results to add relationship information
+        const processedResults = results.map(contract => {
+          // Add relationship information
+          if (contract.original_contract_id_ref) {
+            contract.original_contract_info = {
+              id: contract.original_contract_id_ref,
+              customer_id: contract.original_customer_id,
+              item_id: contract.original_item_id,
+              total_price: contract.original_total_price,
+              status: contract.original_status,
+              customer_name: contract.original_customer_name,
+              item_name: contract.original_item_name
+            };
+          }
+          
+          if (contract.replacement_contract_id) {
+            contract.replacement_contract_info = {
+              id: contract.replacement_contract_id,
+              status: contract.replacement_status,
+              created_at: contract.replacement_created_at
+            };
+          }
+          
+          // Clean up temporary fields
+          delete contract.original_contract_id_ref;
+          delete contract.original_customer_id;
+          delete contract.original_item_id;
+          delete contract.original_total_price;
+          delete contract.original_status;
+          delete contract.original_customer_name;
+          delete contract.original_item_name;
+          delete contract.replacement_contract_id;
+          delete contract.replacement_status;
+          delete contract.replacement_created_at;
+          
+          return contract;
+        });
+        
+        resolve(processedResults);
       });
     });
   }
 
-  // Get contract details by ID with price info
+  // Get contract details by ID with price info and relationships
   static getById(contractId) {
     return new Promise((resolve, reject) => {
       const query = `
@@ -580,13 +578,33 @@ class Contract {
           ca.status as approval_status,
           ca.reason as rejection_reason,
           ca.approver_id,
-          ca.updated_at as decision_date
+          ca.updated_at as decision_date,
+          -- Original contract info (if this is a reapplication)
+          oic.id as original_contract_id_ref,
+          oic.status as original_status,
+          oic.created_at as original_created_at,
+          occ.full_name as original_customer_name,
+          oi.name as original_item_name,
+          -- Replacement contract info (if this was replaced)
+          ric.id as replacement_contract_id,
+          ric.status as replacement_status,
+          ric.created_at as replacement_created_at,
+          rcc.full_name as replacement_customer_name,
+          ri.name as replacement_item_name
         FROM installment_contracts ic
         LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
         LEFT JOIN items i ON ic.item_id = i.id
         LEFT JOIN item_prices ip ON ic.price_id = ip.id
         LEFT JOIN users u ON ic.user_id = u.id
         LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+        -- Left join for original contract (if this is a reapplication)
+        LEFT JOIN installment_contracts oic ON ic.original_contract_id = oic.id
+        LEFT JOIN contract_customers occ ON oic.customer_id = occ.id
+        LEFT JOIN items oi ON oic.item_id = oi.id
+        -- Left join for replacement contract (if this was replaced)
+        LEFT JOIN installment_contracts ric ON ic.replaced_by_contract_id = ric.id
+        LEFT JOIN contract_customers rcc ON ric.customer_id = rcc.id
+        LEFT JOIN items ri ON ric.item_id = ri.id
         WHERE ic.id = ?
       `;
       
@@ -598,19 +616,54 @@ class Contract {
         
         const contract = results[0] || null;
         
-        // Convert customer image if exists
-        if (contract && contract.customer_id_card_image) {
-          try {
-            if (Buffer.isBuffer(contract.customer_id_card_image)) {
-              contract.customer_id_card_image = contract.customer_id_card_image.toString('base64');
-            } else if (typeof contract.customer_id_card_image === 'string' && 
-                      !contract.customer_id_card_image.startsWith('data:')) {
-              // Keep as raw base64 - frontend will add data URL prefix
+        if (contract) {
+          // Convert customer image if exists
+          if (contract.customer_id_card_image) {
+            try {
+              if (Buffer.isBuffer(contract.customer_id_card_image)) {
+                contract.customer_id_card_image = contract.customer_id_card_image.toString('base64');
+              } else if (typeof contract.customer_id_card_image === 'string' && 
+                        !contract.customer_id_card_image.startsWith('data:')) {
+                // Keep as raw base64 - frontend will add data URL prefix
+              }
+            } catch (error) {
+              console.error('Error converting customer image:', error);
+              contract.customer_id_card_image = null;
             }
-          } catch (error) {
-            console.error('Error converting customer image:', error);
-            contract.customer_id_card_image = null;
           }
+          
+          // Add relationship information
+          if (contract.original_contract_id_ref) {
+            contract.original_contract_info = {
+              id: contract.original_contract_id_ref,
+              status: contract.original_status,
+              created_at: contract.original_created_at,
+              customer_name: contract.original_customer_name,
+              item_name: contract.original_item_name
+            };
+          }
+          
+          if (contract.replacement_contract_id) {
+            contract.replacement_contract_info = {
+              id: contract.replacement_contract_id,
+              status: contract.replacement_status,
+              created_at: contract.replacement_created_at,
+              customer_name: contract.replacement_customer_name,
+              item_name: contract.replacement_item_name
+            };
+          }
+          
+          // Clean up temporary fields
+          delete contract.original_contract_id_ref;
+          delete contract.original_status;
+          delete contract.original_created_at;
+          delete contract.original_customer_name;
+          delete contract.original_item_name;
+          delete contract.replacement_contract_id;
+          delete contract.replacement_status;
+          delete contract.replacement_created_at;
+          delete contract.replacement_customer_name;
+          delete contract.replacement_item_name;
         }
         
         resolve(contract);

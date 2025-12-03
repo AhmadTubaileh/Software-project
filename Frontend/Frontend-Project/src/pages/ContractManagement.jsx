@@ -8,6 +8,7 @@ import ContractDetailsModal from '../components/ContractManagement/ContractDetai
 import ApproveModal from '../components/ContractManagement/ApproveModal';
 import RejectModal from '../components/ContractManagement/RejectModal';
 import StatsCards from '../components/ContractManagement/StatsCards';
+import { useNavigate } from 'react-router-dom';
 
 function ContractManagement() {
   const [contracts, setContracts] = useState([]);
@@ -24,18 +25,21 @@ function ContractManagement() {
   const [viewingImage, setViewingImage] = useState(null);
   const [statusFilter, setStatusFilter] = useState('pending');
   const { currentUser } = useLocalSession();
+  const navigate = useNavigate();
 
-  // Access control
-  if (!currentUser || currentUser.role !== 'admin') {
+  // Access control - ALLOW ALL WORKERS (0-9) to view the page
+  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role < 0 && currentUser.role > 9)) {
     return (
       <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p>You need admin privileges to access this page.</p>
+          <p>You need to be logged in as a worker to access this page.</p>
         </div>
       </div>
     );
   }
+
+  const isAdmin = currentUser.role === 'admin';
 
   // Fetch contracts based on filter
   const fetchContracts = useCallback(async () => {
@@ -116,9 +120,13 @@ function ContractManagement() {
     fetchContracts();
   }, [fetchContracts]);
 
-  // Handle approve contract
+  // Handle approve contract (ADMIN ONLY)
   const handleApprove = async () => {
     if (!selectedContract) return;
+    if (!isAdmin) {
+      toast.error('Only admin can approve contracts');
+      return;
+    }
 
     setProcessing(true);
     try {
@@ -150,10 +158,14 @@ function ContractManagement() {
     }
   };
 
-  // Handle reject contract
+  // Handle reject contract (ADMIN ONLY)
   const handleReject = async () => {
     if (!selectedContract || !rejectionReason.trim()) {
       toast.error('Please provide a rejection reason');
+      return;
+    }
+    if (!isAdmin) {
+      toast.error('Only admin can reject contracts');
       return;
     }
 
@@ -189,7 +201,7 @@ function ContractManagement() {
     }
   };
 
-  // Handle view details
+  // Handle view details (ALL WORKERS)
   const handleViewDetails = (contract) => {
     setSelectedContract(contract);
     fetchContractDetails(contract.id);
@@ -203,7 +215,7 @@ function ContractManagement() {
     setSelectedContract(null);
   };
 
-  // Handle view image
+  // Handle view image (ALL WORKERS)
   const handleViewImage = (person, type = 'customer') => {
     if (person.id_card_image) {
       const imageSrc = getImageSrc(person.id_card_image);
@@ -235,6 +247,87 @@ function ContractManagement() {
     setStatusFilter(newFilter);
   };
 
+  // Handle edit & reapply (ALL WORKERS)
+  const handleEditAndReapply = async (contract) => {
+    try {
+      toast.loading('Loading contract data for editing...', { id: 'loading-contract' });
+      
+      // Fetch complete contract data including sponsors
+      const [contractRes, sponsorsRes] = await Promise.all([
+        fetch(`http://localhost:5000/api/contracts/${contract.id}`),
+        fetch(`http://localhost:5000/api/contracts/${contract.id}/sponsors`)
+      ]);
+      
+      if (!contractRes.ok) {
+        throw new Error('Failed to fetch contract data');
+      }
+      
+      const contractData = await contractRes.json();
+      const sponsorsData = sponsorsRes.ok ? await sponsorsRes.json() : { sponsors: [] };
+      
+      toast.dismiss('loading-contract');
+      
+      // Prepare data for contract application
+      const applicationData = {
+        // Customer data
+        customer: {
+          full_name: contractData.contract.customer_name || '',
+          phone: contractData.contract.customer_phone || '',
+          id_card_number: contractData.contract.customer_id_card_number || '',
+          address: contractData.contract.customer_address || '',
+          email: contractData.contract.customer_email || '',
+          id_card_image: contractData.contract.customer_id_card_image || null
+        },
+        
+        // Sponsors data
+        sponsors: sponsorsData.sponsors.map(sponsor => ({
+          full_name: sponsor.full_name || '',
+          phone: sponsor.phone || '',
+          id_card_number: sponsor.id_card_number || '',
+          relationship: sponsor.relationship || '',
+          address: sponsor.address || '',
+          id_card_image: sponsor.id_card_image || null
+        })),
+        
+        // Contract items data
+        contractItems: [{
+          item_id: contractData.contract.item_id,
+          item_name: contractData.contract.item_name,
+          item_description: contractData.contract.item_description,
+          price_id: contractData.contract.price_id,
+          total_price: contractData.contract.total_price,
+          down_payment: contractData.contract.down_payment,
+          months: contractData.contract.months,
+          monthly_payment: contractData.contract.monthly_payment,
+          installment_last_payment: contractData.contract.installment_last_payment,
+          start_date: contractData.contract.start_date,
+          quantity: 1,
+          // Include original contract ID for reapplication
+          original_contract_id: contract.id
+        }],
+        
+        // Original contract ID for reference
+        original_contract_id: contract.id
+      };
+      
+      // Store data in sessionStorage for contract application page
+      sessionStorage.setItem('reapplyContractData', JSON.stringify(applicationData));
+      
+      // Navigate to contract application page
+      navigate('/contract-application', { 
+        state: { 
+          prefillData: applicationData,
+          isReapplication: true 
+        } 
+      });
+      
+    } catch (error) {
+      console.error('Error loading contract for reapplication:', error);
+      toast.dismiss('loading-contract');
+      toast.error('Failed to load contract data for editing');
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
@@ -251,11 +344,18 @@ function ContractManagement() {
               Contract Management
             </h1>
             <p className="text-gray-400 mt-2">
-              Review and manage installment contract applications
+              {isAdmin ? 'Review and manage installment contract applications' : 'View installment contract applications'}
             </p>
+            {!isAdmin && (
+              <div className="mt-4 bg-blue-900/20 border border-blue-500 p-3 rounded-lg inline-block">
+                <p className="text-blue-300 text-sm">
+                  <span className="font-bold">Note:</span> You can view all contracts. Only admins can approve/reject contracts.
+                </p>
+              </div>
+            )}
           </div>
 
-          {/* Status Filter */}
+          {/* Status Filter - ADDED 'DELETED' */}
           <div className="mb-6">
             <div className="flex flex-wrap gap-2">
               {[
@@ -263,6 +363,7 @@ function ContractManagement() {
                 { value: 'active', label: 'Active', color: 'bg-green-600 hover:bg-green-700' },
                 { value: 'rejected', label: 'Rejected', color: 'bg-red-600 hover:bg-red-700' },
                 { value: 'completed', label: 'Completed', color: 'bg-blue-600 hover:bg-blue-700' },
+                { value: 'deleted', label: 'Deleted', color: 'bg-gray-600 hover:bg-gray-700' },
                 { value: 'all', label: 'All Contracts', color: 'bg-purple-600 hover:bg-purple-700' }
               ].map((filter) => (
                 <button
@@ -289,14 +390,24 @@ function ContractManagement() {
             loading={loading}
             onViewDetails={handleViewDetails}
             onApprove={(contract) => {
+              if (!isAdmin) {
+                toast.error('Only admin can approve contracts');
+                return;
+              }
               setSelectedContract(contract);
               setShowApproveModal(true);
             }}
             onReject={(contract) => {
+              if (!isAdmin) {
+                toast.error('Only admin can reject contracts');
+                return;
+              }
               setSelectedContract(contract);
               setShowRejectModal(true);
             }}
+            onEditReapply={handleEditAndReapply}
             showActions={statusFilter === 'pending'}
+            isAdmin={isAdmin}
           />
         </div>
       </main>
@@ -323,8 +434,8 @@ function ContractManagement() {
         />
       )}
 
-      {/* Approve Confirmation Modal */}
-      {showApproveModal && selectedContract && (
+      {/* Approve Confirmation Modal (ADMIN ONLY) */}
+      {showApproveModal && selectedContract && isAdmin && (
         <ApproveModal
           contract={selectedContract}
           processing={processing}
@@ -333,8 +444,8 @@ function ContractManagement() {
         />
       )}
 
-      {/* Reject Confirmation Modal */}
-      {showRejectModal && selectedContract && (
+      {/* Reject Confirmation Modal (ADMIN ONLY) */}
+      {showRejectModal && selectedContract && isAdmin && (
         <RejectModal
           contract={selectedContract}
           processing={processing}

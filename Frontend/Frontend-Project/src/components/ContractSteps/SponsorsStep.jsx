@@ -1,12 +1,34 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import ImageModal from './ImageModal';
 import toast from 'react-hot-toast';
 
-const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
+const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep, isReapplication = false }) => {
   const [viewingImage, setViewingImage] = useState(null);
   const [verifyingSponsors, setVerifyingSponsors] = useState({});
 
+  // Check if ID card number already exists (customer or other sponsors)
+  const isIdCardDuplicate = useCallback((idCardNumber, currentSponsorIndex) => {
+    if (!idCardNumber.trim()) return false;
+    
+    // Check against customer ID card
+    if (formData.customer.id_card_number === idCardNumber) {
+      return true;
+    }
+    
+    // Check against other sponsors (excluding current sponsor)
+    return formData.sponsors.some((sponsor, index) => 
+      index !== currentSponsorIndex && 
+      sponsor.id_card_number === idCardNumber
+    );
+  }, [formData.customer.id_card_number, formData.sponsors]);
+
   const addSponsor = () => {
+    // Check maximum sponsors limit
+    if (formData.sponsors.length >= 5) {
+      toast.error('Maximum 5 sponsors allowed');
+      return;
+    }
+    
     const newSponsor = {
       full_name: '',
       phone: '',
@@ -15,7 +37,8 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
       address: '',
       id_card_image: null,
       existingCustomer: null,
-      searched: false
+      searched: false,
+      isDuplicate: false
     };
     
     updateFormData({
@@ -26,6 +49,7 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
   const removeSponsor = (index) => {
     const updatedSponsors = formData.sponsors.filter((_, i) => i !== index);
     updateFormData({ sponsors: updatedSponsors });
+    toast.success('Sponsor removed');
   };
 
   const updateSponsor = (index, field, value) => {
@@ -38,14 +62,29 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
 
   const handleSponsorIdCardChange = (index, e) => {
     const idCardNumber = e.target.value;
-    updateSponsor(index, 'id_card_number', idCardNumber);
     
-    // Reset search status when ID card number changes
-    if (formData.sponsors[index].searched) {
-      updateSponsor(index, 'searched', false);
-    }
-    if (formData.sponsors[index].existingCustomer) {
-      updateSponsor(index, 'existingCustomer', null);
+    // Clear all fields when ID card changes
+    const clearedSponsor = {
+      full_name: '',
+      phone: '',
+      id_card_number: idCardNumber,
+      relationship: formData.sponsors[index].relationship || '', // Keep relationship
+      address: '',
+      id_card_image: null,
+      existingCustomer: null,
+      searched: false,
+      isDuplicate: false
+    };
+    
+    const updatedSponsors = [...formData.sponsors];
+    updatedSponsors[index] = clearedSponsor;
+    
+    updateFormData({ sponsors: updatedSponsors });
+    
+    // Check for duplicates
+    if (idCardNumber.trim() && isIdCardDuplicate(idCardNumber, index)) {
+      updatedSponsors[index].isDuplicate = true;
+      updateFormData({ sponsors: updatedSponsors });
     }
   };
 
@@ -68,11 +107,24 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
       return;
     }
 
+    // Check for duplicates before verifying
+    if (isIdCardDuplicate(sponsor.id_card_number, index)) {
+      if (formData.customer.id_card_number === sponsor.id_card_number) {
+        toast.error('This ID card belongs to the customer. Customer cannot be a sponsor.');
+      } else {
+        toast.error('This ID card already exists in another sponsor. Duplicate sponsors are not allowed.');
+      }
+      
+      // Mark as duplicate
+      const updatedSponsors = [...formData.sponsors];
+      updatedSponsors[index].isDuplicate = true;
+      updateFormData({ sponsors: updatedSponsors });
+      return;
+    }
+
     setVerifyingSponsors(prev => ({ ...prev, [index]: true }));
     
     try {
-      console.log('Verifying sponsor ID:', sponsor.id_card_number);
-      
       const response = await fetch('http://localhost:5000/api/customers/check', {
         method: 'POST',
         headers: {
@@ -85,18 +137,15 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
       });
 
       const data = await response.json();
-      console.log('Sponsor verification response:', data);
 
       if (!response.ok) {
         throw new Error(data.error || 'Verification failed');
       }
 
       if (data.exists && data.customerData) {
-        // Pre-fill sponsor data if exists (BUT DON'T SAVE TO DATABASE)
+        // Person found - auto-fill all fields
         const customerData = data.customerData;
-        console.log('Found existing customer:', customerData);
         
-        // Create updated sponsor object with all changes
         const updatedSponsor = {
           ...sponsor,
           full_name: customerData.full_name || '',
@@ -104,10 +153,10 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
           address: customerData.address || '',
           id_card_image: customerData.id_card_image || null,
           existingCustomer: customerData,
-          searched: true
+          searched: true,
+          isDuplicate: false
         };
 
-        // Update the entire sponsor at once
         const updatedSponsors = [...formData.sponsors];
         updatedSponsors[index] = updatedSponsor;
         
@@ -126,28 +175,46 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
         
         toast.success(`Sponsor found!${sourceInfo}`);
       } else {
-        console.log('No existing customer found');
-        // Update only the searched status
-        const updatedSponsors = [...formData.sponsors];
-        updatedSponsors[index] = {
+        // Person not found - keep ID card but clear other fields
+        const updatedSponsor = {
           ...sponsor,
+          full_name: '',
+          phone: '',
+          address: '',
+          id_card_image: null,
           existingCustomer: null,
-          searched: true
+          searched: true,
+          isDuplicate: false
         };
+        
+        const updatedSponsors = [...formData.sponsors];
+        updatedSponsors[index] = updatedSponsor;
         
         updateFormData({ 
           sponsors: updatedSponsors 
         });
         
-        toast.success('ID card not found. Please fill in sponsor information.');
+        toast.success('ID card not found. Please fill in sponsor information manually.');
       }
     } catch (error) {
       console.error('Sponsor verification error:', error);
-      if (error.message.includes('Network') || error.message.includes('fetch')) {
-        toast.error('Network error: Cannot connect to server');
-      } else {
-        toast.error(error.message || 'Failed to verify sponsor ID card');
-      }
+      toast.error(error.message || 'Failed to verify sponsor ID card');
+      
+      // Clear fields on error
+      const updatedSponsor = {
+        ...sponsor,
+        full_name: '',
+        phone: '',
+        address: '',
+        id_card_image: null,
+        existingCustomer: null,
+        searched: true,
+        isDuplicate: false
+      };
+      
+      const updatedSponsors = [...formData.sponsors];
+      updatedSponsors[index] = updatedSponsor;
+      updateFormData({ sponsors: updatedSponsors });
     } finally {
       setVerifyingSponsors(prev => ({ ...prev, [index]: false }));
     }
@@ -220,25 +287,72 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
     return null;
   };
 
-  const canProceed = () => {
+  // Check if all required fields are filled for each sponsor
+  const validateSponsors = () => {
     if (formData.sponsors.length === 0) return false;
     
     return formData.sponsors.every(sponsor => 
       sponsor.full_name.trim() && 
       sponsor.phone.trim() && 
       sponsor.id_card_number.trim() && 
-      sponsor.address.trim()
+      sponsor.address.trim() &&
+      !sponsor.isDuplicate
     );
+  };
+
+  // Check for duplicates on component mount and when sponsors change
+  useEffect(() => {
+    const updatedSponsors = formData.sponsors.map((sponsor, index) => ({
+      ...sponsor,
+      isDuplicate: isIdCardDuplicate(sponsor.id_card_number, index)
+    }));
+    
+    // Only update if there are changes
+    const hasChanges = updatedSponsors.some((sponsor, index) => 
+      sponsor.isDuplicate !== formData.sponsors[index]?.isDuplicate
+    );
+    
+    if (hasChanges) {
+      updateFormData({ sponsors: updatedSponsors });
+    }
+  }, [formData.sponsors, formData.customer.id_card_number, isIdCardDuplicate, updateFormData]);
+
+  const canProceed = () => {
+    if (formData.sponsors.length === 0) return false;
+    
+    return validateSponsors();
   };
 
   return (
     <div className="max-w-4xl mx-auto">
       <h2 className="text-2xl font-bold mb-6 text-blue-400">Step 3: Sponsors Information</h2>
       
+      {/* Reapplication Notice */}
+      {isReapplication && (
+        <div className="bg-green-900/20 border border-green-500 p-4 rounded-lg mb-6">
+          <div className="flex items-center gap-3">
+            <div className="text-green-400 text-xl">👥</div>
+            <div>
+              <h3 className="font-semibold text-green-400">Edit Sponsors</h3>
+              <p className="text-sm text-green-300 mt-1">
+                You can add, remove, or edit sponsors for the new contract.
+              </p>
+              {formData.sponsors.length > 0 && (
+                <p className="text-xs text-green-400 mt-2">
+                  Current sponsors: {formData.sponsors.length} sponsor(s)
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="space-y-6">
         {/* Sponsors List */}
         {formData.sponsors.map((sponsor, index) => (
-          <div key={index} className="bg-gray-700/50 p-6 rounded-lg border border-gray-600">
+          <div key={index} className={`bg-gray-700/50 p-6 rounded-lg border ${
+            sponsor.isDuplicate ? 'border-red-500' : 'border-gray-600'
+          }`}>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-white">Sponsor {index + 1}</h3>
               {formData.sponsors.length > 1 && (
@@ -251,8 +365,26 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
               )}
             </div>
 
+            {/* Duplicate Warning */}
+            {sponsor.isDuplicate && (
+              <div className="bg-red-900/20 border border-red-500 p-3 rounded-lg mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="text-red-400 text-lg">⚠️</div>
+                  <div>
+                    <h3 className="font-semibold text-red-400 text-sm">Duplicate ID Card</h3>
+                    <p className="text-xs text-red-300 mt-1">
+                      {formData.customer.id_card_number === sponsor.id_card_number
+                        ? 'This ID card belongs to the customer. Customer cannot be a sponsor.'
+                        : 'This ID card already exists in another sponsor. Please use a different ID card.'
+                      }
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Source Information */}
-            {sponsor.existingCustomer && (
+            {sponsor.existingCustomer && !sponsor.isDuplicate && (
               <div className="bg-blue-900/20 border border-blue-500 p-3 rounded-lg mb-4">
                 <div className="flex items-center gap-3">
                   <div className="text-blue-400 text-lg">ℹ️</div>
@@ -280,7 +412,9 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                   value={sponsor.id_card_number}
                   onChange={(e) => handleSponsorIdCardChange(index, e)}
                   onKeyPress={(e) => handleSponsorKeyPress(index, e)}
-                  className="flex-1 px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                  className={`flex-1 px-3 py-2 bg-gray-600 border ${
+                    sponsor.isDuplicate ? 'border-red-500' : 'border-gray-500'
+                  } rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500`}
                   placeholder="Enter sponsor's ID card number"
                   disabled={verifyingSponsors[index]}
                 />
@@ -299,10 +433,13 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                   )}
                 </button>
               </div>
+              <p className="text-xs text-gray-400 mt-2">
+                Note: Changing ID card will clear all fields
+              </p>
             </div>
 
             {/* Verification Result */}
-            {sponsor.searched && (
+            {sponsor.searched && !sponsor.isDuplicate && (
               <div className={`p-3 rounded-lg border mb-4 ${
                 sponsor.existingCustomer 
                   ? 'bg-green-900/20 border-green-500' 
@@ -322,21 +459,9 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                     </h3>
                     <p className="text-xs text-gray-300 mt-1">
                       {sponsor.existingCustomer 
-                        ? `Existing ${sponsor.existingCustomer.type} found. You can review and update their information.`
+                        ? `Existing ${sponsor.existingCustomer.type} found.`
                         : 'This is a new sponsor. Please fill in their information.'}
                     </p>
-                    {sponsor.existingCustomer && (
-                      <div className="mt-1 text-xs text-gray-400">
-                        <p><strong>Name:</strong> {sponsor.full_name}</p>
-                        <p><strong>Phone:</strong> {sponsor.phone}</p>
-                        {sponsor.address && (
-                          <p><strong>Address:</strong> {sponsor.address}</p>
-                        )}
-                        {sponsor.id_card_image && (
-                          <p><strong>ID Card Image:</strong> ✅ Already on file</p>
-                        )}
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -352,8 +477,11 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                   type="text"
                   value={sponsor.full_name}
                   onChange={(e) => updateSponsor(index, 'full_name', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                  className={`w-full px-3 py-2 bg-gray-600 border ${
+                    sponsor.isDuplicate ? 'border-red-500' : 'border-gray-500'
+                  } rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500`}
                   placeholder="Sponsor's full name"
+                  disabled={sponsor.isDuplicate}
                 />
               </div>
 
@@ -366,8 +494,11 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                   type="tel"
                   value={sponsor.phone}
                   onChange={(e) => updateSponsor(index, 'phone', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                  className={`w-full px-3 py-2 bg-gray-600 border ${
+                    sponsor.isDuplicate ? 'border-red-500' : 'border-gray-500'
+                  } rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500`}
                   placeholder="Phone number"
+                  disabled={sponsor.isDuplicate}
                 />
               </div>
             </div>
@@ -382,8 +513,11 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                   type="text"
                   value={sponsor.relationship}
                   onChange={(e) => updateSponsor(index, 'relationship', e.target.value)}
-                  className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                  className={`w-full px-3 py-2 bg-gray-600 border ${
+                    sponsor.isDuplicate ? 'border-red-500' : 'border-gray-500'
+                  } rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500`}
                   placeholder="e.g., Father, Mother, Friend"
+                  disabled={sponsor.isDuplicate}
                 />
               </div>
             </div>
@@ -397,8 +531,11 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                 value={sponsor.address}
                 onChange={(e) => updateSponsor(index, 'address', e.target.value)}
                 rows={2}
-                className="w-full px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                className={`w-full px-3 py-2 bg-gray-600 border ${
+                  sponsor.isDuplicate ? 'border-red-500' : 'border-gray-500'
+                } rounded text-white placeholder-gray-400 focus:outline-none focus:border-blue-500`}
                 placeholder="Full residential address"
+                disabled={sponsor.isDuplicate}
               />
             </div>
 
@@ -416,7 +553,10 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                   type="file"
                   accept="image/*"
                   onChange={(e) => handleSponsorFileChange(index, e)}
-                  className="flex-1 px-3 py-2 bg-gray-600 border border-gray-500 rounded text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+                  className={`flex-1 px-3 py-2 bg-gray-600 border ${
+                    sponsor.isDuplicate ? 'border-red-500' : 'border-gray-500'
+                  } rounded text-white text-sm file:mr-3 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700`}
+                  disabled={sponsor.isDuplicate}
                 />
                 {sponsor.id_card_image && sponsor.id_card_image instanceof File && !renderSponsorImage(sponsor, index) && (
                   <span className="text-green-400 text-sm">
@@ -426,8 +566,13 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
               </div>
               <p className="text-sm text-gray-400 mt-2">
                 {sponsor.existingCustomer && sponsor.id_card_image && typeof sponsor.id_card_image === 'string' 
-                  ? 'Upload a new image only if you need to update the existing one. Leave empty to keep the current image.'
+                  ? 'Upload a new image only if you need to update the existing one.'
                   : 'Upload a clear photo of the sponsor\'s ID card (max 5MB)'}
+                {isReapplication && (
+                  <span className="text-green-400 block mt-1">
+                    • For reapplication: You can update sponsor details as needed.
+                  </span>
+                )}
               </p>
             </div>
           </div>
@@ -437,10 +582,11 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
         <div className="flex justify-center">
           <button
             onClick={addSponsor}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
+            disabled={formData.sponsors.length >= 5}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
           >
             <span>+</span>
-            Add Another Sponsor
+            Add Sponsor ({formData.sponsors.length}/5)
           </button>
         </div>
 
@@ -457,6 +603,43 @@ const SponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Sponsor Summary */}
+        {formData.sponsors.length > 0 && (
+          <div className="bg-gray-800/50 p-4 rounded-lg border border-gray-700">
+            <h3 className="font-semibold text-white mb-2">Sponsor Summary</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="text-gray-400">Total Sponsors: </span>
+                <span className="text-white font-semibold">{formData.sponsors.length}</span>
+              </div>
+              <div>
+                <span className="text-gray-400">Verified: </span>
+                <span className="text-green-400 font-semibold">
+                  {formData.sponsors.filter(s => s.searched && s.existingCustomer).length}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-400">Issues: </span>
+                <span className={`font-semibold ${
+                  formData.sponsors.filter(s => s.isDuplicate).length > 0 ? 'text-red-400' : 'text-green-400'
+                }`}>
+                  {formData.sponsors.filter(s => s.isDuplicate).length} duplicate(s)
+                </span>
+              </div>
+            </div>
+            {formData.sponsors.some(s => s.isDuplicate) && (
+              <p className="text-red-400 text-xs mt-2">
+                ⚠️ Please fix duplicate ID cards before proceeding
+              </p>
+            )}
+            {isReapplication && (
+              <p className="text-green-400 text-xs mt-2">
+                ✅ You can add, remove, or edit sponsors for the new contract
+              </p>
+            )}
           </div>
         )}
 

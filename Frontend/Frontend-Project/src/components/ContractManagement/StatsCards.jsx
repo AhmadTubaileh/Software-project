@@ -12,16 +12,29 @@ const StatsCards = ({ contracts }) => {
   const activeCount = contracts.filter(c => c.status === 'active').length;
   const rejectedCount = contracts.filter(c => c.status === 'rejected').length;
   const completedCount = contracts.filter(c => c.status === 'completed').length;
-  const totalValue = contracts.reduce((sum, contract) => sum + parseFloat(contract.total_price), 0);
+  const deletedCount = contracts.filter(c => c.status === 'deleted').length;
+  
+  // Calculate total value excluding deleted contracts
+  const totalValue = contracts
+    .filter(c => c.status !== 'deleted')
+    .reduce((sum, contract) => sum + parseFloat(contract.total_price), 0);
+  
+  // Calculate active contracts value
+  const activeValue = contracts
+    .filter(c => c.status === 'active')
+    .reduce((sum, contract) => sum + parseFloat(contract.total_price), 0);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
+    <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-8">
       <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-gray-400 text-sm">Total</p>
+            <p className="text-gray-400 text-sm">Total Active</p>
             <p className="text-xl font-bold text-white mt-1">
-              {contracts.length}
+              {contracts.length - deletedCount}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              ({contracts.length} total)
             </p>
           </div>
           <div className="text-2xl text-purple-400">📋</div>
@@ -63,9 +76,23 @@ const StatsCards = ({ contracts }) => {
       <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-gray-400 text-sm">Total Value</p>
+            <p className="text-gray-400 text-sm">Deleted</p>
+            <p className="text-xl font-bold text-gray-400 mt-1">
+              {deletedCount}
+            </p>
+          </div>
+          <div className="text-2xl text-gray-400">🗑️</div>
+        </div>
+      </div>
+      <div className="bg-gray-800/50 p-4 rounded-xl border border-gray-700/50">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-gray-400 text-sm">Active Value</p>
             <p className="text-xl font-bold text-white mt-1">
-              {formatCurrency(totalValue)}
+              {formatCurrency(activeValue)}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              Total: {formatCurrency(totalValue)}
             </p>
           </div>
           <div className="text-2xl text-blue-400">💰</div>

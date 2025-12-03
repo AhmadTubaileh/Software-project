@@ -22,6 +22,45 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
             <p className="text-gray-400">
               Contract #{contractDetails.id} • {contractDetails.item_name}
             </p>
+            
+            {/* Relationship Information */}
+            {contractDetails.original_contract_info && (
+              <div className="mt-2 bg-blue-900/30 border border-blue-500 p-2 rounded">
+                <p className="text-blue-400 text-sm">
+                  <span className="font-bold">Reapplication:</span> This contract was created from rejected contract #{contractDetails.original_contract_info.id}
+                </p>
+              </div>
+            )}
+            
+            {contractDetails.replacement_contract_info && (
+              <div className="mt-2 bg-gray-900/30 border border-gray-500 p-2 rounded">
+                <p className="text-gray-400 text-sm">
+                  <span className="font-bold">Replaced by:</span> This contract was replaced by contract #{contractDetails.replacement_contract_info.id}
+                </p>
+              </div>
+            )}
+            
+            {/* Status Information */}
+            {contractDetails.status === 'rejected' && contractDetails.rejection_reason && (
+              <div className="mt-2 bg-red-900/30 border border-red-500 p-2 rounded">
+                <p className="text-red-400 text-sm">
+                  <span className="font-bold">Rejection Reason:</span> {contractDetails.rejection_reason}
+                </p>
+                {contractDetails.decision_date && (
+                  <p className="text-red-300 text-xs mt-1">
+                    Rejected on: {formatDate(contractDetails.decision_date)}
+                  </p>
+                )}
+              </div>
+            )}
+            
+            {contractDetails.status === 'deleted' && (
+              <div className="mt-2 bg-gray-900/30 border border-gray-500 p-2 rounded">
+                <p className="text-gray-400 text-sm">
+                  <span className="font-bold">Deleted:</span> This contract was deleted because it was replaced by a new version.
+                </p>
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -69,6 +108,18 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
                   </div>
                 </div>
                 <div>
+                  <label className="text-sm text-gray-400">Status</label>
+                  <p className={`font-semibold ${
+                    contractDetails.status === 'completed' ? 'text-green-400' :
+                    contractDetails.status === 'active' ? 'text-blue-400' :
+                    contractDetails.status === 'pending' ? 'text-yellow-400' :
+                    contractDetails.status === 'rejected' ? 'text-red-400' :
+                    'text-gray-400' // deleted
+                  }`}>
+                    {contractDetails.status.toUpperCase()}
+                  </p>
+                </div>
+                <div>
                   <label className="text-sm text-gray-400">Price Reference</label>
                   <p className="font-semibold text-sm">
                     {contractDetails.price_id 
@@ -76,6 +127,23 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
                       : 'No price reference (old contract)'}
                   </p>
                 </div>
+                {/* Relationship Information */}
+                {contractDetails.original_contract_info && (
+                  <div className="pt-3 border-t border-gray-600">
+                    <label className="text-sm text-gray-400">Original Contract</label>
+                    <p className="font-semibold text-sm text-blue-400">
+                      #{contractDetails.original_contract_info.id} • {contractDetails.original_contract_info.status}
+                    </p>
+                  </div>
+                )}
+                {contractDetails.replacement_contract_info && (
+                  <div className="pt-3 border-t border-gray-600">
+                    <label className="text-sm text-gray-400">Replacement Contract</label>
+                    <p className="font-semibold text-sm text-green-400">
+                      #{contractDetails.replacement_contract_info.id} • {contractDetails.replacement_contract_info.status}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
