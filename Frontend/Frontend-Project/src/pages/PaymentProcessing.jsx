@@ -21,18 +21,38 @@ function PaymentProcessing() {
   // Ref for scrolling to payment form
   const paymentFormRef = useRef(null);
 
-  // Access control
-  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'worker')) {
+  // Access control - Check user_type field (0-9) instead of role
+  if (!currentUser || currentUser.user_type === undefined || currentUser.user_type === null) {
     return (
       <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p>You need admin or worker privileges to access this page.</p>
+          <p>You need to be logged in to access this page.</p>
         </div>
       </div>
     );
   }
 
+  // Convert user_type to number and check if it's between 0-9
+  const userType = parseInt(currentUser.user_type);
+  const isAllowedUserType = userType >= 0 && userType <= 9;
+  
+  if (!isAllowedUserType) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
+          <p>Your user type "{currentUser.user_type}" does not have permission to access the payment processing page.</p>
+          <p className="text-gray-400 mt-2">Only user types 0-9 are allowed to access payment processing.</p>
+          <p className="text-sm text-gray-500 mt-2">
+            Current user info: {currentUser.username} (User Type: {currentUser.user_type})
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Rest of your component code...
   // Search for contracts by customer name OR ID card number
   const handleSearch = useCallback(async () => {
     if (!searchTerm.trim()) {
@@ -152,7 +172,7 @@ function PaymentProcessing() {
         body: JSON.stringify({
           payment_id: selectedPayment.id,
           amount_paid: paymentAmountNum, // Use the parsed amount with fixed decimals
-          worker_id: currentUser.id
+          worker_id: currentUser.id  // Use current user's ID as worker_id
         }),
       });
 
@@ -230,6 +250,23 @@ function PaymentProcessing() {
     }
   };
 
+  // Get user type description for display
+  const getUserTypeDescription = (userType) => {
+    const userTypeNames = {
+      0: 'Admin',
+      1: 'Manager',
+      2: 'Senior Worker',
+      3: 'Worker',
+      4: 'Junior Worker',
+      5: 'Trainee',
+      6: 'Cashier',
+      7: 'Accountant',
+      8: 'Supervisor',
+      9: 'Operator'
+    };
+    return userTypeNames[userType] || `User Type ${userType}`;
+  };
+
   return (
     <div className="flex min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
@@ -242,12 +279,23 @@ function PaymentProcessing() {
         <div className="p-6">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
-              Payment Processing
-            </h1>
-            <p className="text-gray-400 mt-2">
-              Process installment payments for approved contracts
-            </p>
+            <div className="flex justify-between items-start">
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                  Payment Processing
+                </h1>
+                <p className="text-gray-400 mt-2">
+                  Process installment payments for approved contracts
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-400">Logged in as:</p>
+                <p className="font-semibold">{currentUser.username}</p>
+                <p className="text-xs text-gray-400">
+                  {getUserTypeDescription(userType)}
+                </p>
+              </div>
+            </div>
           </div>
 
           {/* Search Section */}
