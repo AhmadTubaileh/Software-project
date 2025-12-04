@@ -3,7 +3,7 @@ const router = express.Router();
 const Item = require('../models/Item');
 const upload = require('../middleware/upload');
 
-// Helper: calculate installment payments with new logic
+// Update the calculateInstallmentPayments function in the items.js router:
 function calculateInstallmentPayments(price_installment_total, installment_first_payment, installment_months) {
   if (!price_installment_total || !installment_first_payment || !installment_months) {
     return { installment_per_month: null, installment_last_payment: null };
@@ -13,7 +13,7 @@ function calculateInstallmentPayments(price_installment_total, installment_first
   const downPayment = parseFloat(installment_first_payment);
   const months = parseInt(installment_months);
 
-  if (months <= 2) {
+  if (months <= 1) {
     return {
       installment_per_month: 0,
       installment_last_payment: total - downPayment
@@ -21,7 +21,7 @@ function calculateInstallmentPayments(price_installment_total, installment_first
   }
 
   const remaining = total - downPayment;
-  const equalMonths = months - 2;
+  const equalMonths = months - 1; // CHANGED: Months - 1
   
   // Calculate monthly payment (rounded down to nearest 10)
   const rawMonthly = remaining / equalMonths;
@@ -37,9 +37,10 @@ function calculateInstallmentPayments(price_installment_total, installment_first
     // Add (10 * equalMonths) to last payment
     lastPayment = 10 * equalMonths;
     
-    console.log('Adjusted installment calculation:');
+    console.log('New installment calculation (Months-1 method):');
+    console.log('Total:', total, 'Down:', downPayment, 'Months:', months);
+    console.log('Remaining:', remaining, 'Equal Months:', equalMonths);
     console.log('Original monthly:', monthlyPayment);
-    console.log('Original last:', 0);
     console.log('Adjusted monthly:', adjustedMonthly);
     console.log('Adjusted last:', lastPayment);
     

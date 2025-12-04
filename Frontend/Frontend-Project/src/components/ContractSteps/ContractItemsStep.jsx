@@ -30,7 +30,7 @@ const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loadi
     }
 
     const remaining = total - down;
-    const equal_months = months - 2;
+    const equal_months = months - 1;
     
     if (equal_months <= 0) {
       return {
@@ -728,7 +728,7 @@ const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loadi
                       <div className="text-center p-2 bg-gray-600/30 rounded">
                         <p className="text-gray-400">Monthly × {Math.max(0, item.months - 2)}</p>
                         <p className="font-semibold text-green-400">{formatCurrency(item.monthly_payment)}</p>
-                        <p className="text-xs text-gray-500">Months 2-{item.months - 1}</p>
+                        <p className="text-xs text-gray-500">Months 1-{item.months - 1}</p>
                       </div>
                       <div className="text-center p-2 bg-gray-600/30 rounded">
                         <p className="text-gray-400">Last Payment</p>

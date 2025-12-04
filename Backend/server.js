@@ -33,10 +33,15 @@ if (!fs.existsSync(tasksUploadsDir)) {
   console.log('📁 Created uploads/tasks directory');
 }
 
+// ⭐ UPDATED: Increased body size limits for FormData with multiple sponsors
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' })); // ⭐ Increase JSON body limit
+app.use(express.urlencoded({ 
+  extended: true, 
+  limit: '50mb', // ⭐ Increase URL-encoded body limit
+  parameterLimit: 100000 // ⭐ Increase parameter limit
+}));
 
 // Serve uploaded files (for task attachments) - FIXED PATH
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -85,7 +90,81 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+// ============================================
+// DAILY OVERDUE PAYMENTS CHECK (Option 2)
+// ============================================
+const db = require('./config/database');
+
+// ⭐ ADDED: Database connection error handler
+db.on('error', (err) => {
+  console.error('Database connection error:', err);
+  if (err.code === 'PROTOCOL_CONNECTION_LOST') {
+    console.error('Database connection was closed. Attempting to reconnect...');
+  } else {
+    throw err;
+  }
+});
+
+function checkOverduePayments() {
+  const now = new Date();
+  console.log(`[${now.toLocaleString()}] 🔄 Checking overdue payments...`);
+  
+  const updateQuery = `
+    UPDATE installment_payments 
+    SET is_overdue = 1 
+    WHERE 
+      month_number >= 1
+      AND due_date IS NOT NULL 
+      AND due_date < CURDATE()
+      AND amount_due > amount_paid
+      AND is_overdue = 0
+  `;
+  
+  db.query(updateQuery, (err, result) => {
+    if (err) {
+      console.error('❌ Error updating overdue payments:', err.message);
+    } else {
+      console.log(`[${new Date().toLocaleString()}] ✅ Check completed. ${result.affectedRows} payments marked overdue`);
+    }
+  });
+}
+
+// Calculate time until next 2:00 AM
+function getTimeUntil2AM() {
+  const now = new Date();
+  const twoAM = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    2, 0, 0, 0 // 2:00:00.000 AM
+  );
+  
+  // If it's already past 2 AM today, schedule for 2 AM tomorrow
+  if (now > twoAM) {
+    twoAM.setDate(twoAM.getDate() + 1);
+  }
+  
+  return twoAM.getTime() - now.getTime();
+}
+
+// Run at 2:00 AM daily
+function scheduleDailyCheck() {
+  const timeUntil2AM = getTimeUntil2AM();
+  const nextCheck = new Date(Date.now() + timeUntil2AM);
+  
+  console.log(`⏰ Next overdue check at: ${nextCheck.toLocaleString()} (in ${Math.round(timeUntil2AM / 1000 / 60)} minutes)`);
+  
+  // Schedule first run at 2:00 AM
+  setTimeout(() => {
+    checkOverduePayments();
+    // Then run every 24 hours
+    setInterval(checkOverduePayments, 24 * 60 * 60 * 1000);
+  }, timeUntil2AM);
+}
+
+// ============================================
 // Start server
+// ============================================
 app.listen(PORT, () => {
   console.log(`✅ Server running on port ${PORT}`);
   console.log(`💰 Payment System: http://localhost:${PORT}/api/payments`);
@@ -94,4 +173,12 @@ app.listen(PORT, () => {
   console.log(`💬 Chat System: http://localhost:${PORT}/api/chats`);
   console.log(`📁 File Uploads: http://localhost:${PORT}/uploads`);
   console.log(`✅ All Routes: http://localhost:${PORT}/api/health`);
+  
+  // Start the daily overdue check scheduler
+  console.log('\n🔔 Starting automated overdue payments check system...');
+  scheduleDailyCheck();
+  
+  // Also run a check immediately on server start (optional)
+  console.log('🔄 Running initial overdue check on server start...');
+  checkOverduePayments();
 });

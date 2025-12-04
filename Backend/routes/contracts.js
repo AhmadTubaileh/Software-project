@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const Contract = require('../models/Contract');
 const upload = require('../middleware/upload');
-const db = require('../config/database');
 
 // GET /api/contracts/items - Get items available for installment with latest prices
 router.get('/items', async (req, res) => {
@@ -84,53 +83,11 @@ router.get('/:id', async (req, res) => {
 router.get('/:id/sponsors', async (req, res) => {
   try {
     const { id } = req.params;
+    const sponsors = await Contract.getSponsors(id);
     
-    const query = `
-      SELECT 
-        id,
-        full_name,
-        phone,
-        id_card_number,
-        id_card_image,
-        relationship,
-        address
-      FROM contract_sponsors 
-      WHERE contract_id = ?
-      ORDER BY id
-    `;
-    
-    db.query(query, [id], (err, results) => {
-      if (err) {
-        console.error('Get sponsors error:', err);
-        return res.status(500).json({
-          success: false,
-          error: 'Failed to fetch sponsors'
-        });
-      }
-
-      // Convert BLOB images to base64
-      const sponsors = results.map(sponsor => {
-        if (sponsor.id_card_image) {
-          try {
-            if (Buffer.isBuffer(sponsor.id_card_image)) {
-              sponsor.id_card_image = sponsor.id_card_image.toString('base64');
-            } else if (typeof sponsor.id_card_image === 'string') {
-              if (!sponsor.id_card_image.startsWith('data:')) {
-                sponsor.id_card_image = `data:image/jpeg;base64,${sponsor.id_card_image}`;
-              }
-            }
-          } catch (error) {
-            console.error('Error converting sponsor image:', error);
-            sponsor.id_card_image = null;
-          }
-        }
-        return sponsor;
-      });
-
-      res.json({
-        success: true,
-        sponsors
-      });
+    res.json({
+      success: true,
+      sponsors
     });
   } catch (error) {
     console.error('Get sponsors error:', error);
@@ -146,7 +103,7 @@ router.get('/:id/payments', async (req, res) => {
   try {
     const { id } = req.params;
     
-    // First get the contract to find sale_id
+    // Check if contract exists
     const contract = await Contract.getById(id);
     if (!contract) {
       return res.status(404).json({
@@ -155,7 +112,7 @@ router.get('/:id/payments', async (req, res) => {
       });
     }
 
-    const payments = await Contract.getPaymentSchedule(contract.sale_id);
+    const payments = await Contract.getPaymentSchedule(id);
     
     res.json({
       success: true,
@@ -170,6 +127,35 @@ router.get('/:id/payments', async (req, res) => {
   }
 });
 
+// GET /api/contracts/:id/payment-summary - Get payment summary for contract
+router.get('/:id/payment-summary', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if contract exists
+    const contract = await Contract.getById(id);
+    if (!contract) {
+      return res.status(404).json({
+        success: false,
+        error: 'Contract not found'
+      });
+    }
+
+    const summary = await Contract.getPaymentSummary(id);
+    
+    res.json({
+      success: true,
+      summary
+    });
+  } catch (error) {
+    console.error('Get payment summary error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch payment summary'
+    });
+  }
+});
+
 // POST /api/contracts/apply - Apply for new contract (single)
 router.post('/apply', upload.fields([
   { name: 'customer_id_card_image', maxCount: 1 },
@@ -180,21 +166,32 @@ router.post('/apply', upload.fields([
   { name: 'sponsor_4_id_card_image', maxCount: 1 }
 ]), async (req, res) => {
   try {
+    console.log('Contract application request received');
+    
     // Parse the form data
     const customer_data = JSON.parse(req.body.customer_data);
     const sponsors_data = JSON.parse(req.body.sponsors_data);
     const contract_data = JSON.parse(req.body.contract_data);
 
+    console.log('Data parsed:', {
+      customer_name: customer_data.full_name,
+      sponsors_count: sponsors_data.length,
+      item_id: contract_data.item_id
+    });
+
     // Handle file uploads
     if (req.files && req.files['customer_id_card_image']) {
+      console.log('Customer image uploaded');
       customer_data.id_card_image = req.files['customer_id_card_image'][0].buffer;
     }
 
     // Handle sponsor file uploads
     if (req.files) {
+      console.log('Processing sponsor images');
       sponsors_data.forEach((sponsor, index) => {
         const fileField = `sponsor_${index}_id_card_image`;
         if (req.files[fileField]) {
+          console.log(`Sponsor ${index} image uploaded`);
           sponsor.id_card_image = req.files[fileField][0].buffer;
         }
       });
@@ -207,13 +204,14 @@ router.post('/apply', upload.fields([
       contract_data
     });
 
+    console.log('Contract application successful:', result.contractId);
+
     res.json({
       success: true,
       contractId: result.contractId,
-      saleId: result.saleId,
       item_name: result.item_name,
       total_price: result.total_price,
-      message: `Contract for ${result.item_name} submitted successfully and item reserved`
+      message: `Contract for ${result.item_name} submitted successfully`
     });
 
   } catch (error) {
@@ -235,10 +233,18 @@ router.post('/apply-multiple', upload.fields([
   { name: 'sponsor_4_id_card_image', maxCount: 1 }
 ]), async (req, res) => {
   try {
+    console.log('Multiple contract application request received');
+    
     // Parse the form data
     const customer_data = JSON.parse(req.body.customer_data);
     const sponsors_data = JSON.parse(req.body.sponsors_data);
     const contracts_data = JSON.parse(req.body.contracts_data); // Array of contracts
+
+    console.log('Data parsed:', {
+      customer_name: customer_data.full_name,
+      sponsors_count: sponsors_data.length,
+      contracts_count: contracts_data.length
+    });
 
     if (!Array.isArray(contracts_data) || contracts_data.length === 0) {
       return res.status(400).json({
@@ -249,14 +255,17 @@ router.post('/apply-multiple', upload.fields([
 
     // Handle file uploads
     if (req.files && req.files['customer_id_card_image']) {
+      console.log('Customer image uploaded');
       customer_data.id_card_image = req.files['customer_id_card_image'][0].buffer;
     }
 
     // Handle sponsor file uploads
     if (req.files) {
+      console.log('Processing sponsor images');
       sponsors_data.forEach((sponsor, index) => {
         const fileField = `sponsor_${index}_id_card_image`;
         if (req.files[fileField]) {
+          console.log(`Sponsor ${index} image uploaded`);
           sponsor.id_card_image = req.files[fileField][0].buffer;
         }
       });
@@ -271,6 +280,12 @@ router.post('/apply-multiple', upload.fields([
 
     // Process contracts
     const result = await Contract.applyMultiple(contractsToProcess);
+
+    console.log('Multiple contract processing completed:', {
+      total: result.total,
+      successful: result.successful,
+      failed: result.failed
+    });
 
     if (result.successful === 0) {
       return res.status(500).json({
@@ -317,7 +332,8 @@ router.put('/:id/approve', async (req, res) => {
     res.json({
       success: true,
       message: result.message,
-      paymentsCreated: result.paymentsCreated
+      paymentsCreated: result.paymentsCreated,
+      breakdown: result.breakdown || null
     });
 
   } catch (error) {
@@ -354,6 +370,33 @@ router.put('/:id/reject', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to reject contract'
+    });
+  }
+});
+
+// GET /api/contracts/search/customer - Search contracts by customer name
+router.get('/search/customer', async (req, res) => {
+  try {
+    const { name } = req.query;
+    
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        error: 'Customer name is required'
+      });
+    }
+
+    const contracts = await Contract.searchByCustomer(name);
+    
+    res.json({
+      success: true,
+      contracts
+    });
+  } catch (error) {
+    console.error('Search contracts error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to search contracts'
     });
   }
 });

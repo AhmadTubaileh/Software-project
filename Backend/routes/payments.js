@@ -2,23 +2,34 @@ const express = require('express');
 const router = express.Router();
 const Payment = require('../models/Payment');
 
-// GET /api/payments/search - Search contracts by customer name
+// GET /api/payments/search - Search contracts by customer name or ID card number
 router.get('/search', async (req, res) => {
   try {
-    const { customer } = req.query;
+    const { name, id_card } = req.query;
     
-    if (!customer) {
+    // Determine search type
+    let searchValue, searchType;
+    
+    if (id_card) {
+      searchValue = id_card;
+      searchType = 'id_card';
+    } else if (name) {
+      searchValue = name;
+      searchType = 'name';
+    } else {
       return res.status(400).json({
         success: false,
-        error: 'Customer name is required'
+        error: 'Either customer name or ID card number is required'
       });
     }
 
-    const contracts = await Payment.searchContracts(customer);
+    const contracts = await Payment.searchContracts(searchValue, searchType);
     
     res.json({
       success: true,
-      contracts
+      contracts,
+      search_type: searchType,
+      search_value: searchValue
     });
   } catch (error) {
     console.error('Search contracts error:', error);
@@ -48,7 +59,7 @@ router.get('/contract/:id', async (req, res) => {
   }
 });
 
-// POST /api/payments/process - Process a payment
+// POST /api/payments/process - Process a payment WITH FIXED AMOUNT_DUE LOGIC
 router.post('/process', async (req, res) => {
   const { payment_id, amount_paid, worker_id } = req.body;
   
@@ -56,6 +67,14 @@ router.post('/process', async (req, res) => {
     return res.status(400).json({
       success: false,
       error: 'Payment ID, amount paid, and worker ID are required'
+    });
+  }
+
+  const paymentAmount = parseFloat(parseFloat(amount_paid).toFixed(2)); // FIX: Parse with 2 decimals
+  if (paymentAmount <= 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Amount must be greater than 0'
     });
   }
 
@@ -70,31 +89,159 @@ router.post('/process', async (req, res) => {
     }
 
     try {
-      // 1. Get payment details
+      // 1. Get payment details with contract info
       const payment = await Payment.getPaymentById(payment_id);
       if (!payment) {
         throw new Error('Payment not found');
       }
 
-      const currentAmountDue = payment.amount_due;
-      const itemId = payment.item_id;
       const contractId = payment.contract_id;
-      const saleId = payment.sale_id;
+      const currentAmountPaid = parseFloat(payment.amount_paid);
+      const amountDue = parseFloat(payment.amount_due);
+      const monthNumber = payment.month_number; // FIX: Get month_number from payment
+      const customerId = payment.customer_id;
+      const itemId = payment.item_id;
 
-      console.log(`Processing payment: ${amount_paid}, Current Amount Due: ${currentAmountDue}`);
+      console.log(`🚀 Processing payment ${payment_id}:`);
+      console.log(`   Month: ${monthNumber} | Amount Due: ${amountDue} | Already Paid: ${currentAmountPaid}`);
+      console.log(`   Payment Amount: ${paymentAmount}`);
 
-      let resultMessage = '';
+      // 2. SPECIAL RULE: For down payment (month 0), must pay exact amount
+      if (monthNumber === 0) { // FIX: Now monthNumber is defined
+        const dueAmount = parseFloat(amountDue);
+        const paidAmount = parseFloat(paymentAmount);
+        
+        console.log(`🔍 Down Payment Validation:`);
+        console.log(`   Due Amount: ${dueAmount} (type: ${typeof dueAmount})`);
+        console.log(`   Paid Amount: ${paidAmount} (type: ${typeof paidAmount})`);
+        
+        // Check if down payment is already paid
+        if (currentAmountPaid >= dueAmount) {
+          throw new Error(`Down payment already fully paid. Amount paid: ${currentAmountPaid.toFixed(2)}`);
+        }
+        
+        // Allow small rounding differences (0.01 tolerance)
+        const tolerance = 0.01;
+        const difference = Math.abs(paidAmount - dueAmount);
+        
+        console.log(`   Difference: ${difference}`);
+        console.log(`   Within tolerance? ${difference <= tolerance}`);
+        
+        if (difference > tolerance) {
+          throw new Error(`Down payment must be exact amount: $${dueAmount.toFixed(2)}. You paid: $${paidAmount.toFixed(2)}`);
+        }
+        
+        console.log(`✅ Down payment amount validated successfully`);
+      }
 
-      // 2. Process payment based on amount
-      if (amount_paid === currentAmountDue) {
-        // Exact amount - set amount_due to 0 and mark as paid
-        resultMessage = await processExactPayment(payment, amount_paid, worker_id, itemId, contractId, saleId);
-      } else if (amount_paid < currentAmountDue) {
-        // Partial payment - decrease amount_due
-        resultMessage = await processPartialPayment(payment, amount_paid, worker_id, itemId, contractId, saleId);
-      } else {
-        // Overpayment - set current amount_due to 0 and apply excess to next payment
-        resultMessage = await processOverpayment(payment, amount_paid, worker_id, itemId, contractId, saleId);
+      // 3. Create sales record for this payment session
+      const salesRecordId = await Payment.createSalesRecord({
+        user_id: worker_id,
+        customer_id: customerId,
+        item_id: itemId,
+        price: paymentAmount, // Total amount paid in this session
+        contract_id: contractId
+      });
+
+      console.log(`   Created sales record ID: ${salesRecordId}`);
+
+      // 4. Process payment with FIXED AMOUNT_DUE logic
+      let remainingPayment = paymentAmount;
+      let currentPaymentId = payment_id;
+      let processedPayments = [];
+      let inventoryUpdated = false;
+
+      while (remainingPayment > 0) {
+        const currentPayment = await Payment.getPaymentById(currentPaymentId);
+        if (!currentPayment) {
+          console.log(`   No more payments to process`);
+          break;
+        }
+
+        const currentPaid = parseFloat(currentPayment.amount_paid);
+        const paymentDue = parseFloat(currentPayment.amount_due);
+        const paymentRemaining = paymentDue - currentPaid;
+        
+        console.log(`   Processing payment ${currentPaymentId}:`);
+        console.log(`     Due: ${paymentDue} | Paid: ${currentPaid} | Remaining: ${paymentRemaining}`);
+        console.log(`     Available from payment: ${remainingPayment}`);
+        
+        if (paymentRemaining <= 0) {
+          // This payment is already fully paid, move to next
+          console.log(`     Already fully paid, moving to next payment`);
+          const nextPayments = await Payment.getNextUnpaidPayments(contractId, currentPayment.month_number);
+          if (nextPayments.length === 0) {
+            console.log(`     No more payments, excess will be recorded as credit`);
+            break;
+          }
+          currentPaymentId = nextPayments[0].id;
+          continue;
+        }
+
+        // Calculate how much to apply to this payment
+        const amountToApply = Math.min(remainingPayment, paymentRemaining);
+        console.log(`     Applying ${amountToApply} to this payment`);
+        
+        // Update payment amount paid (DO NOT CHANGE amount_due)
+        const newAmountPaid = currentPaid + amountToApply;
+        await Payment.updatePaymentAmountPaid(currentPaymentId, newAmountPaid);
+        
+        // Create transaction
+        await Payment.createTransaction(currentPaymentId, salesRecordId, amountToApply, worker_id);
+        
+        processedPayments.push({
+          payment_id: currentPaymentId,
+          month_number: currentPayment.month_number,
+          amount_applied: amountToApply,
+          amount_due: paymentDue,
+          new_amount_paid: newAmountPaid,
+          new_status: newAmountPaid >= paymentDue ? 'paid' : 'partial'
+        });
+
+        remainingPayment -= amountToApply;
+        console.log(`     Remaining to distribute: ${remainingPayment}`);
+        
+        // 5. SPECIAL: If this is down payment (month 0) and fully paid
+        if (currentPayment.month_number === 0 && newAmountPaid >= paymentDue) {
+          // Decrease inventory
+          await Payment.decreaseItemQuantity(itemId);
+          
+          // Create inventory log
+          await Payment.createInventoryLog(itemId, worker_id, 'sale', -1);
+          
+          inventoryUpdated = true;
+          console.log(`     Inventory decreased for item ${itemId}`);
+        }
+
+        // If we still have remaining payment amount, move to next payment
+        if (remainingPayment > 0) {
+          const nextPayments = await Payment.getNextUnpaidPayments(contractId, currentPayment.month_number);
+          if (nextPayments.length === 0) {
+            // No more payments, keep remaining as credit
+            console.log(`     No more payments, recording excess ${remainingPayment} as credit`);
+            
+            // Create credit transaction for excess
+            await Payment.createCreditTransaction(salesRecordId, remainingPayment, worker_id, contractId);
+            
+            processedPayments.push({
+              type: 'credit',
+              amount: remainingPayment,
+              message: 'Excess amount recorded as credit'
+            });
+            
+            remainingPayment = 0;
+            break;
+          }
+          currentPaymentId = nextPayments[0].id;
+          console.log(`     Moving to next payment: ${currentPaymentId}`);
+        }
+      }
+
+      // 6. Check if contract is completed
+      const isCompleted = await Payment.isContractCompleted(contractId);
+      if (isCompleted) {
+        await Payment.markContractCompleted(contractId);
+        console.log(`   Contract ${contractId} marked as completed`);
       }
 
       // Commit transaction
@@ -102,16 +249,28 @@ router.post('/process', async (req, res) => {
         if (commitErr) {
           throw commitErr;
         }
+        
+        console.log(`✅ Payment processing completed successfully`);
+        
         res.json({
           success: true,
-          message: resultMessage
+          message: `Payment processed successfully`,
+          details: {
+            sales_record_id: salesRecordId,
+            contract_id: contractId,
+            total_amount_paid: paymentAmount,
+            payments_processed: processedPayments.length,
+            processed_payments: processedPayments,
+            inventory_updated: inventoryUpdated,
+            contract_completed: isCompleted
+          }
         });
       });
 
     } catch (error) {
       // Rollback on error
       db.query('ROLLBACK', () => {
-        console.error('Payment processing error:', error);
+        console.error('❌ Payment processing error:', error);
         res.status(500).json({
           success: false,
           error: error.message || 'Failed to process payment'
@@ -178,121 +337,61 @@ router.get('/overdue', async (req, res) => {
   }
 });
 
-// Payment processing helper functions
-async function processExactPayment(payment, amountPaid, workerId, itemId, contractId, saleId) {
-  await Payment.updatePayment(payment.id, {
-    amount_due: 0,
-    amount_paid: payment.amount_paid + amountPaid,
-    status: 'paid',
-    paid_date: new Date()
-  });
-
-  await Payment.createTransaction(payment.id, amountPaid, workerId);
-  await Payment.createInventoryLog(itemId, workerId, 'sale', 0);
-
-  const isCompleted = await Payment.isContractCompleted(saleId);
-  if (isCompleted) {
-    await Payment.markContractCompleted(contractId);
-    return `Payment of ${amountPaid} processed. Payment marked as PAID. All payments completed! Contract marked as COMPLETED.`;
-  }
-
-  return `Payment of ${amountPaid} processed. Payment marked as PAID. Amount due set to 0.`;
-}
-
-async function processPartialPayment(payment, amountPaid, workerId, itemId, contractId, saleId) {
-  const newAmountDue = payment.amount_due - amountPaid;
-  
-  await Payment.updatePayment(payment.id, {
-    amount_due: newAmountDue,
-    amount_paid: payment.amount_paid + amountPaid,
-    status: 'partial',
-    paid_date: payment.paid_date
-  });
-
-  await Payment.createTransaction(payment.id, amountPaid, workerId);
-  await Payment.createInventoryLog(itemId, workerId, 'sale', 0);
-
-  return `Partial payment of ${amountPaid} processed. Amount due decreased to ${newAmountDue}.`;
-}
-
-async function processOverpayment(payment, amountPaid, workerId, itemId, contractId, saleId) {
-  const excessAmount = amountPaid - payment.amount_due;
-  
-  // Set current payment amount_due to 0 and mark as paid
-  await Payment.updatePayment(payment.id, {
-    amount_due: 0,
-    amount_paid: payment.amount_paid + amountPaid,
-    status: 'paid',
-    paid_date: new Date()
-  });
-
-  await Payment.createTransaction(payment.id, amountPaid, workerId);
-
-  // Apply excess to next payment if any
-  if (excessAmount > 0) {
-    await applyExcessToNextPayment(saleId, payment.month_number, excessAmount, workerId, itemId, contractId, saleId);
-    return `Payment processed. Excess ${excessAmount} applied to next payment.`;
-  }
-
-  await Payment.createInventoryLog(itemId, workerId, 'sale', 0);
-  
-  const isCompleted = await Payment.isContractCompleted(saleId);
-  if (isCompleted) {
-    await Payment.markContractCompleted(contractId);
-    return `Payment processed. Current payment marked as PAID. All payments completed! Contract marked as COMPLETED.`;
-  }
-
-  return `Payment processed. Current payment marked as PAID with amount due set to 0.`;
-}
-
-async function applyExcessToNextPayment(saleId, currentMonth, excessAmount, workerId, itemId, contractId, saleId) {
-  const nextPayment = await Payment.getNextUnpaidPayment(saleId, currentMonth);
-  
-  if (!nextPayment) {
-    await Payment.createInventoryLog(itemId, workerId, 'sale', 0);
-    return;
-  }
-
-  let newAmountDue = nextPayment.amount_due - excessAmount;
-  
-  if (newAmountDue <= 0) {
-    const remainingExcess = -newAmountDue;
-    newAmountDue = 0;
+// GET /api/payments/sales/:contract_id - Get all sales records for a contract
+router.get('/sales/:contract_id', async (req, res) => {
+  try {
+    const { contract_id } = req.params;
+    const sales = await Payment.getContractSales(contract_id);
     
-    // Update next payment to 0 and mark as paid
-    await Payment.updatePayment(nextPayment.id, {
-      amount_due: 0,
-      amount_paid: nextPayment.amount_paid + nextPayment.amount_due,
-      status: 'paid',
-      paid_date: new Date()
+    res.json({
+      success: true,
+      sales
     });
-
-    await Payment.createTransaction(nextPayment.id, nextPayment.amount_due, workerId);
-
-    // If there's still excess, apply to the next payment recursively
-    if (remainingExcess > 0) {
-      await applyExcessToNextPayment(saleId, nextPayment.month_number, remainingExcess, workerId, itemId, contractId, saleId);
-    } else {
-      await Payment.createInventoryLog(itemId, workerId, 'sale', 0);
-    }
-  } else {
-    // Partial application to next payment
-    await Payment.updatePayment(nextPayment.id, {
-      amount_due: newAmountDue,
-      amount_paid: nextPayment.amount_paid + excessAmount,
-      status: 'partial',
-      paid_date: nextPayment.paid_date
+  } catch (error) {
+    console.error('Get contract sales error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch sales records'
     });
-
-    await Payment.createTransaction(nextPayment.id, excessAmount, workerId);
-    await Payment.createInventoryLog(itemId, workerId, 'sale', 0);
   }
+});
 
-  // Check if contract is completed after applying excess
-  const isCompleted = await Payment.isContractCompleted(saleId);
-  if (isCompleted) {
-    await Payment.markContractCompleted(contractId);
+// GET /api/payments/contract-transactions/:contract_id - Get all transactions for a contract
+router.get('/contract-transactions/:contract_id', async (req, res) => {
+  try {
+    const { contract_id } = req.params;
+    const transactions = await Payment.getContractTransactions(contract_id);
+    
+    res.json({
+      success: true,
+      transactions
+    });
+  } catch (error) {
+    console.error('Get contract transactions error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch transactions'
+    });
   }
-}
+});
+
+// GET /api/payments/credit/:contract_id - Get credit balance for a contract
+router.get('/credit/:contract_id', async (req, res) => {
+  try {
+    const { contract_id } = req.params;
+    const creditBalance = await Payment.getCreditBalance(contract_id);
+    
+    res.json({
+      success: true,
+      credit_balance: creditBalance
+    });
+  } catch (error) {
+    console.error('Get credit balance error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch credit balance'
+    });
+  }
+});
 
 module.exports = router;
