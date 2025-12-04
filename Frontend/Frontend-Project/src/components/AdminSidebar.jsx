@@ -78,6 +78,7 @@ function AdminSidebar() {
         { name: 'Employees', path: '/employees', icon: '👨‍💼' },
         { name: 'Items', path: '/items', icon: '📦' },
         { name: 'Manage Contracts', path: '/contract-management', icon: '⚡' },
+        { name: 'Overdue Payments', path: '/overdue-payments', icon: '⏰' },
         { name: 'Project Management', path: '/project-management', icon: '🏗️' },
         { name: 'Task Archive', path: '/task-archive', icon: '📚' },
         { name: 'Manage Duty Hours', path: '/admin-duty-hours', icon: '👨‍💼' }

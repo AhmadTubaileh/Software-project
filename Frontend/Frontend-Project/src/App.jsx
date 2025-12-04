@@ -16,6 +16,7 @@ import AdminDutyHours from './pages/AdminDutyHours.jsx';
 import ProjectManagement from './pages/ProjectManagement.jsx'; // NEW
 import ProjectDetails from './pages/ProjectDetails.jsx'; // NEW
 import TaskArchive from './pages/TaskArchive.jsx'; // NEW
+import OverduePayments from './pages/OverduePayments.jsx'; // NEW
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
         <Route path="/project-management" element={<ProjectManagement />} /> {/* NEW */}
         <Route path="/project/:id" element={<ProjectDetails />} /> {/* NEW */}
         <Route path="/task-archive" element={<TaskArchive />} /> {/* NEW */}
+        <Route path="/overdue-payments" element={<OverduePayments />} /> {/* NEW */}
       </Routes>
     </Router>
   );
