@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 const ContractDetails = ({ contract, payments, selectedPayment, onSelectPayment }) => {
   const formatCurrency = (amount) => {
@@ -9,6 +9,9 @@ const ContractDetails = ({ contract, payments, selectedPayment, onSelectPayment 
   };
 
   const formatDate = (dateString) => {
+    if (!dateString || dateString === '0000-00-00' || dateString === 'null' || dateString === 'NULL') {
+      return 'N/A';
+    }
     return new Date(dateString).toLocaleDateString();
   };
 
@@ -25,6 +28,33 @@ const ContractDetails = ({ contract, payments, selectedPayment, onSelectPayment 
         {config.text}
       </span>
     );
+  };
+
+  // Automatically select the first unpaid payment when payments load
+  useEffect(() => {
+    if (payments.length > 0 && !selectedPayment) {
+      const firstUnpaidPayment = payments.find(p => p.status !== 'paid');
+      if (firstUnpaidPayment) {
+        onSelectPayment(firstUnpaidPayment);
+      }
+    }
+  }, [payments, selectedPayment, onSelectPayment]);
+
+  // Function to get next payment in sequence
+  const getNextPaymentInSequence = (currentPayment) => {
+    const currentIndex = payments.findIndex(p => p.id === currentPayment?.id);
+    if (currentIndex === -1) {
+      return payments.find(p => p.status !== 'paid');
+    }
+    
+    // Find next unpaid payment after current one
+    for (let i = currentIndex + 1; i < payments.length; i++) {
+      if (payments[i].status !== 'paid') {
+        return payments[i];
+      }
+    }
+    
+    return null;
   };
 
   return (
@@ -65,6 +95,41 @@ const ContractDetails = ({ contract, payments, selectedPayment, onSelectPayment 
         </div>
       </div>
 
+      {/* Current Payment Indicator */}
+      {selectedPayment && (
+        <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-2xl">⏳</div>
+              <div>
+                <p className="font-semibold text-blue-400">Currently Processing:</p>
+                <p className="text-sm">
+                  Month {selectedPayment.month_number} 
+                  {selectedPayment.month_number === 0 
+                    ? ' (Down Payment)' 
+                    : ` • Due: ${formatDate(selectedPayment.due_date)}`
+                  }
+                </p>
+                <p className="text-xs text-gray-400">
+                  Remaining: {formatCurrency(selectedPayment.amount_due)}
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-400">Next in line:</p>
+              <p className="font-semibold">
+                {(() => {
+                  const nextPayment = getNextPaymentInSequence(selectedPayment);
+                  return nextPayment 
+                    ? `Month ${nextPayment.month_number}` 
+                    : 'None (Last payment)';
+                })()}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Payment Schedule */}
       <h4 className="text-lg font-semibold mb-4">Payment Schedule</h4>
       {payments.length === 0 ? (
@@ -79,24 +144,27 @@ const ContractDetails = ({ contract, payments, selectedPayment, onSelectPayment 
               key={payment.id}
               className={`bg-gray-700/50 rounded-lg p-4 border transition-colors duration-200 ${
                 selectedPayment?.id === payment.id 
-                  ? 'border-blue-500 bg-blue-500/10' 
-                  : 'border-gray-600/50 hover:border-gray-500 cursor-pointer'
-              } ${payment.status === 'paid' ? 'opacity-75' : ''}`}
-              onClick={() => {
-                if (payment.status !== 'paid') {
-                  onSelectPayment(payment);
-                }
-              }}
+                  ? 'border-blue-500 bg-blue-500/20' 
+                  : payment.status === 'paid'
+                  ? 'opacity-60 border-gray-600/30'
+                  : 'border-gray-600/50'
+              } ${payment.status === 'paid' ? 'cursor-default' : ''}`}
             >
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-4">
                   <div className="text-2xl">
                     {payment.status === 'paid' ? '✅' : 
-                     payment.status === 'partial' ? '🟡' : '⏳'}
+                     payment.status === 'partial' ? '🟡' : 
+                     selectedPayment?.id === payment.id ? '⏳' : '🔒'}
                   </div>
                   <div>
                     <p className="font-semibold">
-                      Month {payment.month_number} • Due: {formatDate(payment.due_date)}
+                      Month {payment.month_number} 
+                      {payment.month_number === 0 
+                        ? ' (Down Payment)' 
+                        : ` • Due: ${formatDate(payment.due_date)}`
+                      }
+                      {payment.month_number === 0 && <span className="ml-2 text-yellow-400">(Due immediately)</span>}
                     </p>
                     <div className="text-sm text-gray-400 grid grid-cols-2 gap-4 mt-1">
                       <div>
@@ -108,22 +176,58 @@ const ContractDetails = ({ contract, payments, selectedPayment, onSelectPayment 
                       <div>
                         <span className="text-gray-500">Remaining Due:</span> 
                         <span className={`font-semibold ml-1 ${
-                          payment.amount_due > 0 ? 'text-yellow-400' : 'text-green-400'
+                          payment.amount_due > 0.01 ? 'text-yellow-400' : 'text-green-400'
                         }`}>
                           {formatCurrency(payment.amount_due)}
                         </span>
                       </div>
                     </div>
+                    {selectedPayment?.id === payment.id && payment.status !== 'paid' && (
+                      <div className="mt-2 text-xs text-blue-400">
+                        ⚡ Currently selected for processing
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div>
                   {getPaymentStatusBadge(payment)}
+                  {payment.status === 'paid' && (
+                    <div className="text-xs text-gray-500 text-center mt-1">
+                      Locked
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           ))}
         </div>
       )}
+      
+      {/* Payment Sequence Rules */}
+      <div className="mt-6 p-4 bg-gray-700/30 rounded-lg border border-gray-600/50">
+        <h5 className="font-semibold mb-2 flex items-center gap-2">
+          <span className="text-lg">📋</span>
+          Payment Processing Rules
+        </h5>
+        <ul className="text-sm text-gray-400 space-y-1">
+          <li className="flex items-start gap-2">
+            <span className="text-green-400">•</span>
+            <span>Payments must be processed in sequence (Month 0, then 1, then 2, etc.)</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-yellow-400">•</span>
+            <span><strong>Down Payment (Month 0)</strong> must be paid in full before installments</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-blue-400">•</span>
+            <span>Once a payment is marked as PAID, it cannot be selected again</span>
+          </li>
+          <li className="flex items-start gap-2">
+            <span className="text-purple-400">•</span>
+            <span>System automatically advances to next payment after processing</span>
+          </li>
+        </ul>
+      </div>
     </div>
   );
 };

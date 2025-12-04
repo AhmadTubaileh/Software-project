@@ -1,14 +1,39 @@
 const db = require('../config/database');
 
 class Payment {
-  // Search contracts by customer name
-  static searchContracts(customerName) {
-    return new Promise((resolve, reject) => {
-      const query = `
+  // Search contracts by customer name or ID card number
+// In Payment model (Payment.js)
+static searchContracts(searchValue, searchType = 'name') {
+  return new Promise((resolve, reject) => {
+    let query, params;
+    
+    if (searchType === 'id_card') {
+      // Search by exact ID card number
+      query = `
         SELECT 
           ic.*,
           cc.full_name as customer_name,
           cc.phone as customer_phone,
+          cc.id_card_number as customer_id_card,
+          i.name as item_name,
+          u.username as worker_name
+        FROM installment_contracts ic
+        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+        LEFT JOIN items i ON ic.item_id = i.id
+        LEFT JOIN users u ON ic.user_id = u.id
+        WHERE cc.id_card_number = ? 
+          AND ic.status = 'active'
+        ORDER BY ic.created_at DESC
+      `;
+      params = [searchValue];
+    } else {
+      // Default: search by name (partial match)
+      query = `
+        SELECT 
+          ic.*,
+          cc.full_name as customer_name,
+          cc.phone as customer_phone,
+          cc.id_card_number as customer_id_card,
           i.name as item_name,
           u.username as worker_name
         FROM installment_contracts ic
@@ -19,16 +44,23 @@ class Payment {
           AND ic.status = 'active'
         ORDER BY ic.created_at DESC
       `;
-      
-      db.query(query, [`%${customerName}%`], (err, results) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(results);
-      });
+      params = [`%${searchValue}%`];
+    }
+    
+    console.log(`🔍 Executing ${searchType} search for: ${searchValue}`);
+    console.log(`📊 Query: ${query.substring(0, 100)}...`);
+    
+    db.query(query, params, (err, results) => {
+      if (err) {
+        console.error('❌ Database query error:', err);
+        reject(err);
+        return;
+      }
+      console.log(`✅ Found ${results.length} contracts`);
+      resolve(results);
     });
-  }
+  });
+}
 
   // Get payments for a contract
   static getPaymentsByContract(contractId) {
@@ -50,35 +82,46 @@ class Payment {
   }
 
   // Get payment by ID with contract details
-  static getPaymentById(paymentId) {
-    return new Promise((resolve, reject) => {
-      const query = `
-        SELECT 
-          ip.*,
-          ic.id as contract_id,
-          ic.customer_id,
-          ic.item_id,
-          ic.down_payment,
-          ic.monthly_payment,
-          ic.installment_last_payment,
-          ic.months,
-          ic.status as contract_status,
-          cc.full_name as customer_name
-        FROM installment_payments ip
-        LEFT JOIN installment_contracts ic ON ip.contract_id = ic.id
-        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
-        WHERE ip.id = ?
-      `;
+static getPaymentById(paymentId) {
+  return new Promise((resolve, reject) => {
+    const query = `
+      SELECT 
+        ip.*,
+        ic.id as contract_id,
+        ic.customer_id,
+        ic.item_id,
+        ic.down_payment,
+        ic.monthly_payment,
+        ic.installment_last_payment,
+        ic.months,
+        ic.status as contract_status,
+        cc.full_name as customer_name
+      FROM installment_payments ip
+      LEFT JOIN installment_contracts ic ON ip.contract_id = ic.id
+      LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+      WHERE ip.id = ?
+    `;
+    
+    console.log(`🔍 Fetching payment ${paymentId}`);
+    
+    db.query(query, [paymentId], (err, results) => {
+      if (err) {
+        console.error('❌ Error fetching payment:', err);
+        reject(err);
+        return;
+      }
       
-      db.query(query, [paymentId], (err, results) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(results[0] || null);
-      });
+      if (results.length === 0) {
+        console.log(`❌ Payment ${paymentId} not found`);
+        resolve(null);
+        return;
+      }
+      
+      console.log(`✅ Payment ${paymentId} found, month_number: ${results[0].month_number}`);
+      resolve(results[0]);
     });
-  }
+  });
+}
 
   // Get next unpaid payments for a contract
   static getNextUnpaidPayments(contractId, startFromMonth) {

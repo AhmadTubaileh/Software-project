@@ -2,23 +2,34 @@ const express = require('express');
 const router = express.Router();
 const Payment = require('../models/Payment');
 
-// GET /api/payments/search - Search contracts by customer name
+// GET /api/payments/search - Search contracts by customer name or ID card number
 router.get('/search', async (req, res) => {
   try {
-    const { customer } = req.query;
+    const { name, id_card } = req.query;
     
-    if (!customer) {
+    // Determine search type
+    let searchValue, searchType;
+    
+    if (id_card) {
+      searchValue = id_card;
+      searchType = 'id_card';
+    } else if (name) {
+      searchValue = name;
+      searchType = 'name';
+    } else {
       return res.status(400).json({
         success: false,
-        error: 'Customer name is required'
+        error: 'Either customer name or ID card number is required'
       });
     }
 
-    const contracts = await Payment.searchContracts(customer);
+    const contracts = await Payment.searchContracts(searchValue, searchType);
     
     res.json({
       success: true,
-      contracts
+      contracts,
+      search_type: searchType,
+      search_value: searchValue
     });
   } catch (error) {
     console.error('Search contracts error:', error);
@@ -59,7 +70,7 @@ router.post('/process', async (req, res) => {
     });
   }
 
-  const paymentAmount = parseFloat(amount_paid);
+  const paymentAmount = parseFloat(parseFloat(amount_paid).toFixed(2)); // FIX: Parse with 2 decimals
   if (paymentAmount <= 0) {
     return res.status(400).json({
       success: false,
@@ -87,7 +98,7 @@ router.post('/process', async (req, res) => {
       const contractId = payment.contract_id;
       const currentAmountPaid = parseFloat(payment.amount_paid);
       const amountDue = parseFloat(payment.amount_due);
-      const monthNumber = payment.month_number;
+      const monthNumber = payment.month_number; // FIX: Get month_number from payment
       const customerId = payment.customer_id;
       const itemId = payment.item_id;
 
@@ -96,19 +107,31 @@ router.post('/process', async (req, res) => {
       console.log(`   Payment Amount: ${paymentAmount}`);
 
       // 2. SPECIAL RULE: For down payment (month 0), must pay exact amount
-      if (monthNumber === 0) {
+      if (monthNumber === 0) { // FIX: Now monthNumber is defined
         const dueAmount = parseFloat(amountDue);
         const paidAmount = parseFloat(paymentAmount);
         
-        // Allow small rounding differences (0.01 tolerance)
-        if (Math.abs(paidAmount - dueAmount) > 0.01) {
-          throw new Error(`Down payment must be exact amount: ${dueAmount.toFixed(2)}. You paid: ${paidAmount.toFixed(2)}`);
+        console.log(`🔍 Down Payment Validation:`);
+        console.log(`   Due Amount: ${dueAmount} (type: ${typeof dueAmount})`);
+        console.log(`   Paid Amount: ${paidAmount} (type: ${typeof paidAmount})`);
+        
+        // Check if down payment is already paid
+        if (currentAmountPaid >= dueAmount) {
+          throw new Error(`Down payment already fully paid. Amount paid: ${currentAmountPaid.toFixed(2)}`);
         }
         
-        // Also check if down payment is already paid
-        if (currentAmountPaid > 0) {
-          throw new Error(`Down payment already paid. Amount paid: ${currentAmountPaid}`);
+        // Allow small rounding differences (0.01 tolerance)
+        const tolerance = 0.01;
+        const difference = Math.abs(paidAmount - dueAmount);
+        
+        console.log(`   Difference: ${difference}`);
+        console.log(`   Within tolerance? ${difference <= tolerance}`);
+        
+        if (difference > tolerance) {
+          throw new Error(`Down payment must be exact amount: $${dueAmount.toFixed(2)}. You paid: $${paidAmount.toFixed(2)}`);
         }
+        
+        console.log(`✅ Down payment amount validated successfully`);
       }
 
       // 3. Create sales record for this payment session
