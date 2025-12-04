@@ -41,6 +41,58 @@ router.get('/items', (req, res) => {
   });
 });
 
+// PUT /api/pos/update-price - Update item price
+router.put('/update-price', (req, res) => {
+  const { itemId, newPrice, userId } = req.body;
+  
+  console.log('💰 POS Update Price:', { itemId, newPrice, userId });
+  
+  // Validate input
+  if (!itemId || !newPrice || !userId) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Item ID, new price, and user ID are required' 
+    });
+  }
+
+  if (isNaN(newPrice) || newPrice <= 0) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Price must be a valid positive number' 
+    });
+  }
+
+  // Update item price
+  POS.updateItemPrice(itemId, newPrice, (err, result) => {
+    if (err) {
+      console.error('❌ Error updating price:', err);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to update price',
+        error: err.message 
+      });
+    }
+
+    // Create price change log
+    POS.createPriceLog(itemId, userId, newPrice, (logErr) => {
+      if (logErr) {
+        console.error('❌ Error creating price log:', logErr);
+        // Don't fail the price update if log fails
+      }
+
+      console.log(`✅ Price updated for item ${itemId} to $${newPrice}`);
+      
+      res.json({
+        success: true,
+        message: 'Price updated successfully',
+        itemId,
+        newPrice,
+        timestamp: new Date().toISOString()
+      });
+    });
+  });
+});
+
 // POST /api/pos/checkout - Process sale
 router.post('/checkout', (req, res) => {
   const { cart, userId } = req.body;

@@ -6,20 +6,23 @@ function ItemHeader({ searchQuery, onSearchChange, onAddItem, availableFilter, o
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-3xl font-bold text-white">Item Management</h1>
-          <p className="text-gray-400 mt-2">Manage inventory items and their details</p>
+          <p className="text-gray-400 mt-2">Manage inventory items with price history tracking</p>
+          <p className="text-gray-500 text-sm">
+            <strong>Edit:</strong> Modify current price • <strong>Update:</strong> Create new price entry
+          </p>
         </div>
         <button
           onClick={onAddItem}
           className="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-md transition-colors duration-200 flex items-center gap-2"
         >
-          <span>+</span> Add Item
+          <span>+</span> Add New Item
         </button>
       </div>
       <div className="flex flex-col lg:flex-row gap-4 mb-6">
         <div className="flex-1">
           <input
             type="text"
-            placeholder="Search items by name..."
+            placeholder="Search items by name or description..."
             value={searchQuery}
             onChange={onSearchChange}
             className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"

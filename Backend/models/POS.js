@@ -36,6 +36,22 @@ class POS {
     });
   }
 
+  // Update item price
+  static updateItemPrice(itemId, newPrice, callback) {
+    const query = 'UPDATE items SET price_cash = ? WHERE id = ?';
+    db.query(query, [newPrice, itemId], callback);
+  }
+
+  // Create price change log
+  static createPriceLog(itemId, userId, newPrice, callback) {
+    const query = `
+      INSERT INTO price_change_logs 
+        (item_id, user_id, new_price, changed_at) 
+      VALUES (?, ?, ?, NOW())
+    `;
+    db.query(query, [itemId, userId, newPrice], callback);
+  }
+
   // Get item by ID
   static getItemById(id, callback) {
     const query = 'SELECT * FROM items WHERE id = ?';

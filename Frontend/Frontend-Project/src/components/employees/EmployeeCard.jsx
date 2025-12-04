@@ -5,7 +5,6 @@ function EmployeeCard({ employee, onEdit, onDelete, onViewImage }) {
   // Helper function to get image source
   const getImageSrc = () => {
     if (employee.card_image) {
-      // If it's already a base64 string from backend
       return `data:image/jpeg;base64,${employee.card_image}`;
     }
     return null;
@@ -32,7 +31,6 @@ function EmployeeCard({ employee, onEdit, onDelete, onViewImage }) {
               alt={employee.username}
               className="w-16 h-16 rounded-full object-cover border-2 border-gray-600 group-hover:border-blue-500 transition-colors duration-200"
             />
-            {/* Hover overlay */}
             <div className="absolute inset-0 bg-blue-500 bg-opacity-0 group-hover:bg-opacity-20 rounded-full transition-all duration-200 flex items-center justify-center">
               <span className="text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                 👁️ View ID
@@ -47,6 +45,10 @@ function EmployeeCard({ employee, onEdit, onDelete, onViewImage }) {
         <div>
           <h3 className="font-semibold text-lg">{employee.username}</h3>
           <p className="text-gray-400 text-sm">{employee.email}</p>
+          {/* FIXED: Handle undefined id_card */}
+          <p className="text-gray-400 text-sm">
+            ID: {employee.id_card || 'Not provided'}
+          </p>
           {imageSrc && (
             <button
               onClick={handleImageClick}

@@ -136,18 +136,7 @@ function Home() {
           />
 
           
-          {/* Show welcome message for employee */}
-          {currentUser && currentUser.role === 'employee' && (
-            <div className="mb-6 p-4 bg-gradient-to-r from-green-600 to-blue-600 rounded-lg border border-green-400">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">👨‍💼</span>
-                <div>
-                  <h3 className="font-bold text-lg">Employee Access</h3>
-                  <p className="text-green-100 text-sm">Level {currentUser.user_type} employee privileges</p>
-                </div>
-              </div>
-            </div>
-          )}
+          
 
           {/* Product grid with POS-style animations */}
           <section className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 mt-6 transform-gpu">

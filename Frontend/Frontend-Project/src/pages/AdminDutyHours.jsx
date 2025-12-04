@@ -1,0 +1,275 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useLocalSession } from '../hooks/useLocalSession.js';
+import AdminSidebar from '../components/AdminSidebar.jsx';
+import toast, { Toaster } from 'react-hot-toast';
+import EmployeeDropdown from '../components/AdminDutyHours/EmployeeDropdown.jsx';
+import DateInput from '../components/AdminDutyHours/DateInput.jsx';
+import SummaryCards from '../components/AdminDutyHours/SummaryCards.jsx';
+import AdminDutyHoursTable from '../components/AdminDutyHours/AdminDutyHoursTable.jsx';
+import EditSessionModal from '../components/AdminDutyHours/EditSessionModal.jsx';
+import CreateSessionModal from '../components/AdminDutyHours/CreateSessionModal.jsx';
+import CreateSessionFromRowModal from '../components/AdminDutyHours/CreateSessionFromRowModal.jsx';
+import FiltersSection from '../components/AdminDutyHours/FiltersSection.jsx';
+import DayActionsModal from '../components/AdminDutyHours/DayActionsModal.jsx';
+
+function AdminDutyHours() {
+  const [sessions, setSessions] = useState([]);
+  const [workers, setWorkers] = useState([]);
+  const [filter, setFilter] = useState({
+    userId: '',
+    startDate: '2025-11-01',  // FIXED: Set to include your data
+    endDate: '2025-11-30'     // FIXED: Set to include your data
+  });
+  const [isLoading, setIsLoading] = useState(false);
+  const [editingSession, setEditingSession] = useState(null);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showCreateFromRowModal, setShowCreateFromRowModal] = useState(false);
+  const [selectedRowData, setSelectedRowData] = useState(null);
+  const [dayActions, setDayActions] = useState(null);
+  const [newSession, setNewSession] = useState({
+    user_id: '', session_type: 'work', in_time: '', out_time: '', date: new Date().toISOString().split('T')[0], notes: ''
+  });
+  const { currentUser } = useLocalSession();
+
+  const apiCall = async (url, options = {}) => {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers,
+        },
+        ...options,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || `HTTP ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      throw error;
+    }
+  };
+
+  const fetchWorkers = useCallback(async () => {
+    try {
+      const data = await apiCall('http://localhost:5000/api/duty-hours/admin/workers');
+      console.log('Workers fetched:', data);
+      setWorkers(data);
+    } catch (error) {
+      console.error('Error fetching workers:', error);
+      toast.error(error.message);
+    }
+  }, []);
+
+  const fetchDutyHours = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const { userId, startDate, endDate } = filter;
+      let url = 'http://localhost:5000/api/duty-hours/admin/all?';
+      if (userId) url += `user_id=${userId}&`;
+      if (startDate && endDate) url += `start_date=${startDate}&end_date=${endDate}`;
+
+      console.log('Fetching from URL:', url);
+      
+      const data = await apiCall(url);
+      console.log('Sessions fetched:', data);
+      console.log('Number of sessions:', data.length);
+      
+      setSessions(data);
+    } catch (error) {
+      console.error('Error fetching duty hours:', error);
+      toast.error(error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [filter]);
+
+  useEffect(() => {
+    fetchWorkers();
+  }, [fetchWorkers]);
+
+  useEffect(() => {
+    fetchDutyHours();
+  }, [fetchDutyHours]);
+
+  const handleDeleteSession = async (sessionId) => {
+    if (!confirm('Are you sure you want to delete this session?')) return;
+    try {
+      await apiCall(`http://localhost:5000/api/duty-hours/${sessionId}`, { method: 'DELETE' });
+      toast.success('Session deleted successfully!');
+      fetchDutyHours();
+    } catch (error) {
+      toast.error(error.message);
+    }
+  };
+
+  const handleUpdateSession = async (sessionData) => {
+    try {
+      const updateData = {
+        ...sessionData,
+        update_by: currentUser.id
+      };
+
+      await apiCall(`http://localhost:5000/api/duty-hours/${sessionData.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(updateData),
+      });
+      toast.success('Session updated successfully!');
+      setEditingSession(null);
+      setDayActions(null);
+      fetchDutyHours();
+    } catch (error) {
+      console.error('Error updating session:', error);
+      toast.error(error.message);
+    }
+  };
+
+  const handleCreateSession = async (sessionData) => {
+    try {
+      const createData = {
+        ...sessionData,
+        update_by: currentUser.id
+      };
+
+      await apiCall('http://localhost:5000/api/duty-hours/admin/create', {
+        method: 'POST',
+        body: JSON.stringify(createData),
+      });
+      toast.success('Session created successfully!');
+      setShowCreateModal(false);
+      setShowCreateFromRowModal(false);
+      setDayActions(null);
+      setNewSession({ user_id: '', session_type: 'work', in_time: '', out_time: '', date: new Date().toISOString().split('T')[0], notes: '' });
+      fetchDutyHours();
+    } catch (error) {
+      console.error('Error creating session:', error);
+      toast.error(error.message);
+    }
+  };
+
+  const handleDayAction = (dayData) => {
+    setDayActions(dayData);
+  };
+
+  const handleEditSession = (sessionData) => {
+    setEditingSession(sessionData);
+    setDayActions(null);
+  };
+
+  const handleAddSession = (dayData) => {
+    setNewSession(prev => ({
+      ...prev,
+      user_id: dayData.userId,
+      date: dayData.rawDate
+    }));
+    setShowCreateModal(true);
+    setDayActions(null);
+  };
+
+  const handleAddSessionFromRow = (rowData) => {
+    setSelectedRowData(rowData);
+    setShowCreateFromRowModal(true);
+    setDayActions(null);
+  };
+
+  const calculateTotals = () => {
+    let totalWork = 0, totalBreak = 0;
+    sessions.forEach(session => {
+      if (session.out_time && session.duration) {
+        if (session.session_type === 'work') totalWork += parseFloat(session.duration);
+        else totalBreak += parseFloat(session.duration);
+      }
+    });
+    return { work: totalWork.toFixed(2), break: totalBreak.toFixed(2), total: (totalWork + totalBreak).toFixed(2) };
+  };
+
+  const totals = calculateTotals();
+
+  return (
+    <div className="min-h-screen bg-[#0e1830] text-white">
+      <Toaster position="top-center" />
+      {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
+
+      <main className={`flex-1 min-h-screen transition-all duration-300 ${
+        currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : ''
+      }`}>
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-8">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-2">
+                Duty Hours Management
+              </h1>
+              <p className="text-gray-400">Manage and monitor employee duty hours</p>
+            </div>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-green-500/20"
+            >
+              + Add Session
+            </button>
+          </div>
+
+          <FiltersSection
+            filter={filter}
+            setFilter={setFilter}
+            workers={workers}
+            isLoading={isLoading}
+          />
+
+          <SummaryCards totals={totals} />
+
+          <AdminDutyHoursTable
+            sessions={sessions}
+            isLoading={isLoading}
+            onDayAction={handleDayAction}
+            onDeleteSession={handleDeleteSession}
+          />
+        </div>
+      </main>
+
+      {editingSession && (
+        <EditSessionModal
+          session={editingSession}
+          onUpdate={handleUpdateSession}
+          onClose={() => setEditingSession(null)}
+          currentUser={currentUser}
+        />
+      )}
+
+      {showCreateModal && (
+        <CreateSessionModal
+          newSession={newSession}
+          setNewSession={setNewSession}
+          workers={workers}
+          onCreate={handleCreateSession}
+          onClose={() => setShowCreateModal(false)}
+          currentUser={currentUser}
+        />
+      )}
+
+      {showCreateFromRowModal && (
+        <CreateSessionFromRowModal
+          rowData={selectedRowData}
+          workers={workers}
+          onCreate={handleCreateSession}
+          onClose={() => setShowCreateFromRowModal(false)}
+          currentUser={currentUser}
+        />
+      )}
+
+      {dayActions && (
+        <DayActionsModal
+          dayData={dayActions}
+          onEditSession={handleEditSession}
+          onAddSession={handleAddSessionFromRow}
+          onDeleteSession={handleDeleteSession}
+          onClose={() => setDayActions(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+export default AdminDutyHours;

@@ -68,6 +68,38 @@ class PosApi {
     }
   }
 
+  // Update item price
+  static async updateItemPrice(itemId, newPrice, userId) {
+    try {
+      const response = await fetch(`${API_BASE}/update-price`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          itemId, 
+          newPrice, 
+          userId 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update price');
+      }
+
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to update price');
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error updating price:', error);
+      throw error;
+    }
+  }
+
   // Health check
   static async healthCheck() {
     try {

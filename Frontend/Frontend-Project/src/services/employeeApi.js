@@ -29,96 +29,68 @@ class EmployeeApi {
     }
   }
 
-  // Create new employee
-  static async createEmployee(employeeData) {
+  // Create new employee - UPDATED FOR NEW FORM
+  static async createEmployee(formData) {
     try {
-      const formData = new FormData();
+      console.log('Sending employee data to backend...');
       
-      // Append all fields to formData
-      formData.append('username', employeeData.username);
-      formData.append('email', employeeData.email);
-      formData.append('phone', employeeData.phone);
-      formData.append('password', employeeData.password);
-      formData.append('user_type', employeeData.userType.toString());
-      
-      // Append image if exists
-      if (employeeData.cardImage && employeeData.cardImage instanceof File) {
-        formData.append('card_image', employeeData.cardImage);
-      } else if (employeeData.cardImage && typeof employeeData.cardImage === 'string') {
-        // If it's a base64 string from editing, convert back to blob
-        const response = await fetch(employeeData.cardImage);
-        const blob = await response.blob();
-        formData.append('card_image', blob);
+      // DEBUG: Log FormData contents
+      console.log('FormData contents:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`${key}:`, value);
       }
-
-      console.log('Sending employee data to backend:', {
-        username: employeeData.username,
-        email: employeeData.email,
-        phone: employeeData.phone,
-        user_type: employeeData.userType,
-        hasPassword: !!employeeData.password,
-        hasImage: !!employeeData.cardImage
-      });
 
       const response = await fetch(`${API_BASE_URL}/employees`, {
         method: 'POST',
-        body: formData,
+        body: formData, // Use the FormData directly
       });
 
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create employee');
+        const errorText = await response.text();
+        console.error('Server error response:', errorText);
+        throw new Error(errorText || 'Failed to create employee');
       }
 
-      return await response.json();
+      const result = await response.json();
+      console.log('Create employee success:', result);
+      return result;
+      
     } catch (error) {
       console.error('Error creating employee:', error);
       throw error;
     }
   }
 
-  // Update employee
-  static async updateEmployee(id, employeeData) {
+  // Update employee - UPDATED FOR NEW FORM
+  static async updateEmployee(id, formData) {
     try {
-      const formData = new FormData();
+      console.log('Updating employee ID:', id);
       
-      // Append all fields to formData
-      formData.append('username', employeeData.username);
-      formData.append('email', employeeData.email);
-      formData.append('phone', employeeData.phone);
-      formData.append('user_type', employeeData.userType.toString());
-      
-      // Append password only if provided (for updates)
-      if (employeeData.password) {
-        formData.append('password', employeeData.password);
+      // DEBUG: Log FormData contents
+      console.log('FormData contents:');
+      for (let [key, value] of formData.entries()) {
+        console.log(`${key}:`, value);
       }
-      
-      // Append image if exists and is a new file
-      if (employeeData.cardImage && employeeData.cardImage instanceof File) {
-        formData.append('card_image', employeeData.cardImage);
-      }
-
-      console.log('Updating employee data to backend:', {
-        id: id,
-        username: employeeData.username,
-        email: employeeData.email,
-        phone: employeeData.phone,
-        user_type: employeeData.userType,
-        hasPassword: !!employeeData.password,
-        hasImage: !!employeeData.cardImage
-      });
 
       const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
         method: 'PUT',
-        body: formData,
+        body: formData, // Use the FormData directly
       });
 
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update employee');
+        const errorText = await response.text();
+        console.error('Server error response:', errorText);
+        throw new Error(errorText || 'Failed to update employee');
       }
 
-      return await response.json();
+      const result = await response.json();
+      console.log('Update employee success:', result);
+      return result;
+      
     } catch (error) {
       console.error('Error updating employee:', error);
       throw error;
