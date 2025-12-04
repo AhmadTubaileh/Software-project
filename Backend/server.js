@@ -15,6 +15,7 @@ const taskRoutes = require('./routes/tasks');
 const dutyHoursRoutes = require('./routes/dutyHours');
 const projectRoutes = require('./routes/projects');
 const chatRoutes = require('./routes/chats');
+const overdueRoutes = require('./routes/overdue');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -58,6 +59,7 @@ app.use('/api/tasks', taskRoutes);
 app.use('/api/duty-hours', dutyHoursRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/chats', chatRoutes);
+app.use('/api/overdue', overdueRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -74,7 +76,8 @@ app.get('/api/health', (req, res) => {
       '/api/tasks',
       '/api/duty-hours',
       '/api/projects',
-      '/api/chats'
+      '/api/chats',
+      '/api/overdue'
     ]
   });
 });
