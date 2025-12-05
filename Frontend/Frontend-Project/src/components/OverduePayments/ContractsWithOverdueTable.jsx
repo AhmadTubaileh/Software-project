@@ -191,7 +191,7 @@ const ContractsWithOverdueTable = ({
                   
                   {/* Quick Status Update Buttons */}
                   <div className="flex gap-1">
-                    {overdueStatus !== 'pending' && (
+                    {/*{overdueStatus !== 'pending' && (
                       <button
                         onClick={() => onUpdateStatus(payment.payment_id || payment.id, 'pending')}
                         className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs"
@@ -199,8 +199,8 @@ const ContractsWithOverdueTable = ({
                       >
                         📞
                       </button>
-                    )}
-                    {overdueStatus !== 'waiting' && (
+                    )}*/}
+                    {/*{overdueStatus !== 'waiting' && (
                       <button
                         onClick={() => onUpdateStatus(payment.payment_id || payment.id, 'waiting')}
                         className="px-2 py-1 bg-blue-600 hover:bg-blue-700 rounded text-xs"
@@ -208,8 +208,8 @@ const ContractsWithOverdueTable = ({
                       >
                         ⏳
                       </button>
-                    )}
-                    {overdueStatus !== 'not_responding' && (
+                    )}*/}
+                    {/*{overdueStatus !== 'not_responding' && (
                       <button
                         onClick={() => onUpdateStatus(payment.payment_id || payment.id, 'not_responding')}
                         className="px-2 py-1 bg-red-600 hover:bg-red-700 rounded text-xs"
@@ -217,8 +217,8 @@ const ContractsWithOverdueTable = ({
                       >
                         🚫
                       </button>
-                    )}
-                    {overdueStatus !== 'resolved' && (
+                    )}*/}
+                    {/*{overdueStatus !== 'resolved' && (
                       <button
                         onClick={() => onUpdateStatus(payment.payment_id || payment.id, 'resolved')}
                         className="px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-xs"
@@ -226,7 +226,7 @@ const ContractsWithOverdueTable = ({
                       >
                         ✅
                       </button>
-                    )}
+                    )}*/}
                   </div>
                 </div>
                 

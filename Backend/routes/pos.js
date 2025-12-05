@@ -1,10 +1,11 @@
+// routes/pos.js
 const express = require('express');
 const router = express.Router();
 const POS = require('../models/POS');
 
 // GET /api/pos/items - Get ALL items for POS (including out of stock)
 router.get('/items', (req, res) => {
-  console.log('🛒 POS: Fetching ALL items...');
+  console.log('🛒 POS: Fetching ALL items with latest prices...');
   
   POS.getAvailableItems((err, results) => {
     if (err) {
@@ -17,20 +18,33 @@ router.get('/items', (req, res) => {
     }
     
     console.log(`✅ POS: Found ${results.length} total items`);
-    console.log(`📊 Available: ${results.filter(item => item.available === 1 && item.quantity > 0).length}`);
-    console.log(`📊 Out of stock: ${results.filter(item => item.available === 0 || item.quantity <= 0).length}`);
     
     // Convert image to base64 if exists
     const items = results.map(item => {
+      const processedItem = {
+        ...item,
+        price_id: item.price_id || null,
+        // Ensure all price fields exist
+        price_cash: item.price_cash || 0,
+        price_installment_total: item.price_installment_total || null,
+        installment_months: item.installment_months || null,
+        installment_per_month: item.installment_per_month || null,
+        installment_last_payment: item.installment_last_payment || null,
+        on_sale_price: item.on_sale_price || null,
+        price_date: item.price_date || null,
+        updated_by: item.updated_by || 'System'
+      };
+      
       if (item.item_image) {
         try {
-          item.item_image = Buffer.from(item.item_image).toString('base64');
+          processedItem.item_image = Buffer.from(item.item_image).toString('base64');
         } catch (error) {
           console.error('Error converting image:', error);
-          item.item_image = null;
+          processedItem.item_image = null;
         }
       }
-      return item;
+      
+      return processedItem;
     });
     
     res.json({ 
@@ -41,63 +55,15 @@ router.get('/items', (req, res) => {
   });
 });
 
-// PUT /api/pos/update-price - Update item price
-router.put('/update-price', (req, res) => {
-  const { itemId, newPrice, userId } = req.body;
-  
-  console.log('💰 POS Update Price:', { itemId, newPrice, userId });
-  
-  // Validate input
-  if (!itemId || !newPrice || !userId) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Item ID, new price, and user ID are required' 
-    });
-  }
-
-  if (isNaN(newPrice) || newPrice <= 0) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Price must be a valid positive number' 
-    });
-  }
-
-  // Update item price
-  POS.updateItemPrice(itemId, newPrice, (err, result) => {
-    if (err) {
-      console.error('❌ Error updating price:', err);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Failed to update price',
-        error: err.message 
-      });
-    }
-
-    // Create price change log
-    POS.createPriceLog(itemId, userId, newPrice, (logErr) => {
-      if (logErr) {
-        console.error('❌ Error creating price log:', logErr);
-        // Don't fail the price update if log fails
-      }
-
-      console.log(`✅ Price updated for item ${itemId} to $${newPrice}`);
-      
-      res.json({
-        success: true,
-        message: 'Price updated successfully',
-        itemId,
-        newPrice,
-        timestamp: new Date().toISOString()
-      });
-    });
-  });
-});
-
 // POST /api/pos/checkout - Process sale
 router.post('/checkout', (req, res) => {
   const { cart, userId } = req.body;
   
-  console.log('💰 POS Checkout:', { userId, cartItems: cart?.length });
+  console.log('💰 POS Checkout Request:', { 
+    userId, 
+    cartItems: cart?.length,
+    totalUnits: cart?.reduce((sum, item) => sum + item.qty, 0) || 0
+  });
   
   // Validate input
   if (!cart || !Array.isArray(cart) || cart.length === 0) {
@@ -115,7 +81,7 @@ router.post('/checkout', (req, res) => {
   }
 
   // Step 1: Check if all items have sufficient quantity
-  POS.checkQuantities(cart, (err, availableItems) => {
+  POS.checkQuantities(cart, (err, insufficientItems) => {
     if (err) {
       console.error('❌ Error checking quantities:', err);
       return res.status(500).json({ 
@@ -124,20 +90,6 @@ router.post('/checkout', (req, res) => {
         error: err.message 
       });
     }
-
-    // Check for insufficient quantities
-    const insufficientItems = [];
-    cart.forEach(cartItem => {
-      const availableItem = availableItems.find(item => item.id === cartItem.id);
-      if (!availableItem || availableItem.quantity < cartItem.qty) {
-        insufficientItems.push({
-          id: cartItem.id,
-          name: cartItem.name,
-          requested: cartItem.qty,
-          available: availableItem ? availableItem.quantity : 0
-        });
-      }
-    });
 
     if (insufficientItems.length > 0) {
       console.log('❌ Insufficient quantities:', insufficientItems);
@@ -148,10 +100,12 @@ router.post('/checkout', (req, res) => {
       });
     }
 
-    // Step 2: Get next sale ID
-    POS.getNextSaleId((err, saleIdResult) => {
+    console.log('✅ All items have sufficient quantity, processing sale...');
+
+    // Step 2: Process sale transaction
+    POS.processSaleTransaction({ cart, userId }, (err, result) => {
       if (err) {
-        console.error('❌ Error getting sale ID:', err);
+        console.error('❌ Error processing sale:', err);
         return res.status(500).json({ 
           success: false, 
           message: 'Error processing sale',
@@ -159,91 +113,112 @@ router.post('/checkout', (req, res) => {
         });
       }
 
-      const saleId = saleIdResult[0].next_sale_id;
-      const totalPrice = cart.reduce((sum, item) => sum + (item.price_cash * item.qty), 0);
-
-      console.log(`🆕 Sale ID: ${saleId}, Total: $${totalPrice}`);
-
-      // Step 3: Prepare data for database
-      const salesData = cart.map(item => [
-        userId,                    // user_id (employee who made sale)
-        null,                      // customer_id (null for walk-in customers)
-        item.id,                   // item_id
-        'cash',                    // sale_type
-        item.price_cash * item.qty, // total_price for this item line
-        saleId                     // sale_id (groups all items in one sale)
-      ]);
-
-      const inventoryLogData = cart.map(item => [
-        item.id,                   // item_id
-        userId,                    // worker_id
-        'sale',                    // change_type
-        -item.qty                  // quantity_changed (negative for sales)
-      ]);
-
-      // Step 4: Update item quantities
-      const updatePromises = cart.map(item => {
-        return new Promise((resolve, reject) => {
-          const newQuantity = item.quantity - item.qty;
-          POS.updateItemQuantity(item.id, newQuantity, (err) => {
-            if (err) {
-              console.error(`❌ Error updating quantity for item ${item.id}:`, err);
-              reject(err);
-            } else {
-              console.log(`✅ Updated item ${item.id} quantity to ${newQuantity}`);
-              resolve();
-            }
-          });
-        });
+      console.log(`✅ Sale ${result.saleId} completed successfully!`);
+      console.log(`📦 Items: ${result.totalItems}, Units: ${result.totalUnits}`);
+      
+      res.json({
+        success: true,
+        message: 'Sale processed successfully',
+        saleId: result.saleId,
+        totalItems: result.totalItems,
+        totalUnits: result.totalUnits,
+        timestamp: result.timestamp
       });
-
-      // Step 5: Execute all database operations
-      Promise.all(updatePromises)
-        .then(() => {
-          console.log('✅ All quantities updated, creating sales records...');
-          
-          // Create sales records
-          POS.createSale(salesData, (err) => {
-            if (err) {
-              console.error('❌ Error creating sales:', err);
-              return res.status(500).json({ 
-                success: false, 
-                message: 'Error recording sale',
-                error: err.message 
-              });
-            }
-
-            console.log('✅ Sales records created, creating inventory logs...');
-            
-            // Create inventory logs
-            POS.createInventoryLog(inventoryLogData, (err) => {
-              if (err) {
-                console.error('❌ Error creating inventory logs:', err);
-                // Don't fail the sale if logs fail
-              }
-
-              console.log(`✅ Sale ${saleId} completed successfully!`);
-              
-              res.json({
-                success: true,
-                message: 'Sale processed successfully',
-                saleId,
-                totalPrice,
-                itemsSold: cart.length,
-                timestamp: new Date().toISOString()
-              });
-            });
-          });
-        })
-        .catch(error => {
-          console.error('❌ Error updating quantities:', error);
-          res.status(500).json({ 
-            success: false, 
-            message: 'Error updating inventory',
-            error: error.message 
-          });
-        });
     });
+  });
+});
+
+// routes/pos.js - Add debugging to checkout route:
+router.post('/checkout', (req, res) => {
+  const { cart, userId } = req.body;
+  
+  console.log('💰 POS Checkout Request:', { 
+    userId, 
+    cartItems: cart?.length,
+    totalUnits: cart?.reduce((sum, item) => sum + item.qty, 0) || 0
+  });
+  
+  // Debug: Check if price_id is coming from frontend
+  cart?.forEach((item, index) => {
+    console.log(`📦 Cart Item ${index + 1}:`, {
+      id: item.id,
+      name: item.name,
+      qty: item.qty,
+      price_cash: item.price_cash,
+      price_id: item.price_id,
+      has_price_id: !!item.price_id
+    });
+  });
+  
+  // Validate input
+  if (!cart || !Array.isArray(cart) || cart.length === 0) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'Cart is empty' 
+    });
+  }
+
+  if (!userId) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'User ID is required' 
+    });
+  }
+
+  // Step 1: Check if all items have sufficient quantity
+  POS.checkQuantities(cart, (err, insufficientItems) => {
+    if (err) {
+      console.error('❌ Error checking quantities:', err);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Error checking inventory',
+        error: err.message 
+      });
+    }
+
+    if (insufficientItems.length > 0) {
+      console.log('❌ Insufficient quantities:', insufficientItems);
+      return res.status(400).json({
+        success: false,
+        message: 'Insufficient quantity for some items',
+        insufficientItems
+      });
+    }
+
+    console.log('✅ All items have sufficient quantity, processing sale...');
+
+    // Step 2: Process sale transaction
+    POS.processSaleTransaction({ cart, userId }, (err, result) => {
+      if (err) {
+        console.error('❌ Error processing sale:', err);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Error processing sale',
+          error: err.message 
+        });
+      }
+
+      console.log(`✅ Sale ${result.saleId} completed successfully!`);
+      console.log(`📦 Items: ${result.totalItems}, Units: ${result.totalUnits}`);
+      
+      res.json({
+        success: true,
+        message: 'Sale processed successfully',
+        saleId: result.saleId,
+        totalItems: result.totalItems,
+        totalUnits: result.totalUnits,
+        timestamp: result.timestamp
+      });
+    });
+  });
+});
+
+// PUT /api/pos/update-price - Update item price (not used in new logic but kept for compatibility)
+router.put('/update-price', (req, res) => {
+  // This endpoint is kept for compatibility but price changes are now handled in sales records only
+  res.json({
+    success: true,
+    message: 'Price changes are now recorded directly in sales records'
   });
 });
 
