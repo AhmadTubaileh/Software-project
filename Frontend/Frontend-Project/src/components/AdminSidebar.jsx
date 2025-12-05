@@ -158,7 +158,7 @@ function AdminSidebar() {
     'Main': '🏠',
     'Sales': '💰',
     'Installment Management': '📊',
-    'Mangerial': '⚙️',
+    'Managerial': '⚙️',
     'Projects': '🏗️',
     'Personal': '👤'
   };
