@@ -17,6 +17,7 @@ import ProjectManagement from './pages/ProjectManagement.jsx'; // NEW
 import ProjectDetails from './pages/ProjectDetails.jsx'; // NEW
 import TaskArchive from './pages/TaskArchive.jsx'; // NEW
 import OverduePayments from './pages/OverduePayments.jsx'; // NEW
+import Returns from './pages/Returns.jsx'; // NEW
 
 function App() {
   return (
@@ -37,6 +38,7 @@ function App() {
         <Route path="/project/:id" element={<ProjectDetails />} /> {/* NEW */}
         <Route path="/task-archive" element={<TaskArchive />} /> {/* NEW */}
         <Route path="/overdue-payments" element={<OverduePayments />} /> {/* NEW */}
+        <Route path="/returns" element={<Returns />} /> {/* NEW */}
       </Routes>
     </Router>
   );

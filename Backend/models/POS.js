@@ -61,6 +61,243 @@ static getAvailableItems(callback) {
     callback(null, results);
   });
 }
+
+// Process return transaction
+  static processReturnTransaction(returnData, callback) {
+    const { saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice } = returnData;
+    
+    db.getConnection((err, connection) => {
+      if (err) {
+        console.error('❌ Error getting database connection:', err);
+        return callback(err);
+      }
+      
+      connection.beginTransaction(async (transErr) => {
+        if (transErr) {
+          connection.release();
+          console.error('❌ Error starting transaction:', transErr);
+          return callback(transErr);
+        }
+        
+        try {
+          // 1. Check available quantity for return
+          const checkQuery = `
+            SELECT 
+              (SELECT SUM(quantity) FROM sales 
+               WHERE sale_id = ? AND item_id = ? AND sale_type = 'cash') as original_qty,
+              (SELECT COALESCE(SUM(quantity), 0) FROM sales 
+               WHERE sale_id = ? AND item_id = ? AND sale_type = 'retrieve') as returned_qty
+          `;
+          
+          const checkResults = await new Promise((resolve, reject) => {
+            connection.query(checkQuery, [saleId, itemId, saleId, itemId], (err, results) => {
+              if (err) reject(err);
+              else resolve(results);
+            });
+          });
+          
+          const originalQty = checkResults[0].original_qty || 0;
+          const returnedQty = checkResults[0].returned_qty || 0;
+          const availableQty = originalQty - returnedQty;
+          
+          if (returnQuantity > availableQty) {
+            throw new Error(`Cannot return ${returnQuantity} items. Only ${availableQty} available for return.`);
+          }
+          
+          // 2. Get price_id from cash record
+          const getPriceIdQuery = 'SELECT price_id FROM sales WHERE id = ?';
+          const priceIdResults = await new Promise((resolve, reject) => {
+            connection.query(getPriceIdQuery, [cashRecordId], (err, results) => {
+              if (err) reject(err);
+              else resolve(results);
+            });
+          });
+          
+          const priceId = priceIdResults[0]?.price_id || null;
+          
+          // 3. Create retrieve record in sales table
+          const createRetrieveQuery = `
+            INSERT INTO sales 
+              (sale_id, item_id, user_id, sale_type, price, quantity, price_id)
+            VALUES (?, ?, ?, 'retrieve', ?, ?, ?)
+          `;
+          
+          await new Promise((resolve, reject) => {
+            connection.query(createRetrieveQuery, 
+              [saleId, itemId, userId, originalPrice, returnQuantity, priceId], 
+              (err, result) => {
+                if (err) reject(err);
+                else {
+                  console.log('✅ Created retrieve record, ID:', result.insertId);
+                  resolve(result);
+                }
+              }
+            );
+          });
+          
+          // 4. If return type is 'resale', update items quantity
+          if (returnType === 'resale') {
+            const updateItemQuery = 'UPDATE items SET quantity = quantity + ? WHERE id = ?';
+            await new Promise((resolve, reject) => {
+              connection.query(updateItemQuery, [returnQuantity, itemId], (err, result) => {
+                if (err) reject(err);
+                else {
+                  console.log(`✅ Updated item ${itemId} quantity by +${returnQuantity}`);
+                  resolve(result);
+                }
+              });
+            });
+            
+            // 5. Create inventory log for resale return
+            const createLogQuery = `
+              INSERT INTO inventory_logs 
+                (item_id, worker_id, change_type, quantity_changed)
+              VALUES (?, ?, 'return', ?)
+            `;
+            await new Promise((resolve, reject) => {
+              connection.query(createLogQuery, [itemId, userId, returnQuantity], (err, result) => {
+                if (err) reject(err);
+                else {
+                  console.log('✅ Created inventory log for return');
+                  resolve(result);
+                }
+              });
+            });
+          }
+          
+          // Commit transaction
+          connection.commit((commitErr) => {
+            if (commitErr) {
+              return connection.rollback(() => {
+                connection.release();
+                console.error('❌ Error committing transaction:', commitErr);
+                callback(commitErr);
+              });
+            }
+            
+            connection.release();
+            console.log(`✅ Return transaction completed for sale ${saleId}, item ${itemId}`);
+            
+            callback(null, {
+              success: true,
+              saleId: saleId,
+              itemId: itemId,
+              returnQuantity: returnQuantity,
+              returnType: returnType
+            });
+          });
+          
+        } catch (error) {
+          connection.rollback(() => {
+            connection.release();
+            console.error('❌ Error in return processing:', error);
+            callback(error);
+          });
+        }
+      });
+    });
+  }
+  
+  // Search sales by sale ID
+  static searchSalesBySaleId(saleId, callback) {
+    const query = `
+      SELECT 
+        s.*,
+        i.name as item_name,
+        i.description as item_description,
+        i.quantity as current_stock,
+        u.username as worker_name
+      FROM sales s
+      LEFT JOIN items i ON s.item_id = i.id
+      LEFT JOIN users u ON s.user_id = u.id
+      WHERE s.sale_id = ? 
+        AND s.sale_type IN ('cash', 'retrieve')
+      ORDER BY s.item_id, s.sale_type, s.date
+    `;
+    
+    db.query(query, [saleId], (err, results) => {
+      if (err) {
+        console.error('❌ Error searching sales by ID:', err);
+        return callback(err);
+      }
+      callback(null, results);
+    });
+  }
+  
+  // Search cash sales by worker and time period
+  static searchSalesByWorkerTime(userId, startDate, endDate, callback) {
+    const query = `
+      SELECT DISTINCT
+        s.sale_id,
+        s.user_id,
+        u.username as worker_name,
+        COUNT(DISTINCT s.item_id) as total_items,
+        SUM(s.quantity) as total_units,
+        MAX(s.date) as sale_date,
+        GROUP_CONCAT(DISTINCT i.name SEPARATOR ', ') as items_list
+      FROM sales s
+      LEFT JOIN items i ON s.item_id = i.id
+      LEFT JOIN users u ON s.user_id = u.id
+      WHERE s.user_id = ? 
+        AND s.date BETWEEN ? AND ?
+        AND s.sale_type = 'cash'
+      GROUP BY s.sale_id, s.user_id
+      ORDER BY s.sale_id DESC
+    `;
+    
+    db.query(query, [userId, startDate, endDate], (err, results) => {
+      if (err) {
+        console.error('❌ Error searching sales by worker/time:', err);
+        return callback(err);
+      }
+      callback(null, results);
+    });
+  }
+  
+  // Get sale details with item information
+  static getSaleDetails(saleId, callback) {
+    const query = `
+      SELECT 
+        s.*,
+        i.name as item_name,
+        i.description as item_description,
+        i.quantity as current_stock,
+        u.username as worker_name
+      FROM sales s
+      LEFT JOIN items i ON s.item_id = i.id
+      LEFT JOIN users u ON s.user_id = u.id
+      WHERE s.sale_id = ? 
+        AND s.sale_type IN ('cash', 'retrieve')
+      ORDER BY s.item_id, s.sale_type, s.date
+    `;
+    
+    db.query(query, [saleId], (err, results) => {
+      if (err) {
+        console.error('❌ Error getting sale details:', err);
+        return callback(err);
+      }
+      callback(null, results);
+    });
+  }
+  
+  // Get all workers (users with user_type 0-9)
+  static getWorkers(callback) {
+    const query = `
+      SELECT id, username, email, phone, user_type
+      FROM users
+      WHERE user_type BETWEEN 0 AND 9
+      ORDER BY username
+    `;
+    
+    db.query(query, (err, results) => {
+      if (err) {
+        console.error('❌ Error fetching workers:', err);
+        return callback(err);
+      }
+      callback(null, results);
+    });
+  }
+
   // Get item by ID with latest price
   static getItemById(id, callback) {
     const query = `

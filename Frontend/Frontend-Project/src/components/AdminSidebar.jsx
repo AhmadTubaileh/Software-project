@@ -69,7 +69,8 @@ function AdminSidebar() {
       items: [
         { name: 'POS', path: '/pos', icon: '💳' },
         { name: 'New Contract', path: '/contract-application', icon: '📝' },
-        { name: 'Payment Processing', path: '/payment-processing', icon: '💰' }
+        { name: 'Payment Processing', path: '/payment-processing', icon: '💰' },
+        {name: 'Returns', path: '/returns', icon: '↩️' }
       ]
     },
     {
