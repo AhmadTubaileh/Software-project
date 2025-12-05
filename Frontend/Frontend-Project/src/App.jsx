@@ -18,6 +18,7 @@ import ProjectDetails from './pages/ProjectDetails.jsx'; // NEW
 import TaskArchive from './pages/TaskArchive.jsx'; // NEW
 import OverduePayments from './pages/OverduePayments.jsx'; // NEW
 import Returns from './pages/Returns.jsx'; // NEW
+import WorkerInventory from './pages/WorkerInventory.jsx'; // NEW
 
 function App() {
   return (
@@ -39,6 +40,7 @@ function App() {
         <Route path="/task-archive" element={<TaskArchive />} /> {/* NEW */}
         <Route path="/overdue-payments" element={<OverduePayments />} /> {/* NEW */}
         <Route path="/returns" element={<Returns />} /> {/* NEW */}
+        <Route path="/worker-inventory" element={<WorkerInventory />} /> {/* NEW */}
       </Routes>
     </Router>
   );

@@ -79,6 +79,157 @@ router.get('/', (req, res) => {
   });
 });
 
+
+// GET /api/items/inventory - Get items for worker inventory management
+router.get('/inventory', (req, res) => {
+  Item.getInventoryItems((err, items) => {
+    if (err) {
+      console.error('Error fetching inventory items:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch inventory items'
+      });
+    }
+    
+    // Convert images to base64 if they exist
+    const serializedItems = items.map(item => ({
+      id: item.id,
+      name: item.name,
+      description: item.description,
+      quantity: item.quantity,
+      available: item.available,
+      item_image: item.item_image ? item.item_image.toString('base64') : null,
+      // Include current price for reference (but workers can't edit it)
+      price_cash: item.price_cash || 0
+    }));
+    
+    res.json(serializedItems);
+  });
+});
+
+// POST /api/items/:id/adjust-quantity - Adjust item quantity
+router.post('/:id/adjust-quantity', (req, res) => {
+  try {
+    const itemId = req.params.id;
+    const { workerId, changeType, quantity } = req.body;
+    
+    // Validate required fields
+    if (!workerId || !changeType || !quantity) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: workerId, changeType, quantity'
+      });
+    }
+    
+    // Validate changeType
+    if (!['add', 'remove'].includes(changeType)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid changeType. Must be "add" or "remove"'
+      });
+    }
+    
+    // Validate quantity
+    const quantityNum = parseInt(quantity);
+    if (isNaN(quantityNum) || quantityNum <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Quantity must be a positive number'
+      });
+    }
+    
+    // Check if item exists
+    Item.getById(itemId, (err, item) => {
+      if (err) {
+        console.error('Error checking item:', err);
+        return res.status(500).json({
+          success: false,
+          message: 'Server error'
+        });
+      }
+      
+      if (!item) {
+        return res.status(404).json({
+          success: false,
+          message: 'Item not found'
+        });
+      }
+      
+      // For remove operations, check if enough stock exists
+      if (changeType === 'remove' && item.quantity < quantityNum) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot remove ${quantityNum} items. Only ${item.quantity} available.`
+        });
+      }
+      
+      // Adjust quantity and create log
+      Item.adjustQuantity(itemId, workerId, changeType, quantityNum, (err, result) => {
+        if (err) {
+          console.error('Error adjusting quantity:', err);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to adjust quantity',
+            error: err.message
+          });
+        }
+        
+        // Get updated item
+        Item.getById(itemId, (err, updatedItem) => {
+          if (err) {
+            console.error('Error fetching updated item:', err);
+            return res.json({
+              success: true,
+              message: 'Quantity adjusted successfully'
+            });
+          }
+          
+          // Convert image if exists
+          if (updatedItem.item_image) {
+            updatedItem.item_image = updatedItem.item_image.toString('base64');
+          }
+          
+          res.json({
+            success: true,
+            message: `Successfully ${changeType === 'add' ? 'added' : 'removed'} ${quantityNum} items`,
+            item: {
+              id: updatedItem.id,
+              name: updatedItem.name,
+              quantity: updatedItem.quantity,
+              available: updatedItem.available
+            }
+          });
+        });
+      });
+    });
+    
+  } catch (error) {
+    console.error('Error adjusting quantity:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to adjust quantity',
+      error: error.message
+    });
+  }
+});
+
+// GET /api/items/:id/inventory-logs - Get inventory logs for an item
+router.get('/:id/inventory-logs', (req, res) => {
+  const itemId = req.params.id;
+  
+  Item.getInventoryLogs(itemId, (err, logs) => {
+    if (err) {
+      console.error('Error fetching inventory logs:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch inventory logs'
+      });
+    }
+    
+    res.json(logs);
+  });
+});
+
 // GET /api/items/:id/prices - Get price history for an item
 router.get('/:id/prices', (req, res) => {
   const itemId = req.params.id;

@@ -83,6 +83,7 @@ function AdminSidebar() {
     {
       name: 'Managerial',
       items: [
+        { name: 'Manage Stock', path: '/worker-inventory', icon: '📦' },
         { name: 'Employees', path: '/employees', icon: '👨‍💼' },
         { name: 'Items', path: '/items', icon: '📦' },
         { name: 'Project Management', path: '/project-management', icon: '🏗️' },
