@@ -213,6 +213,264 @@ router.post('/checkout', (req, res) => {
   });
 });
 
+// GET /api/pos/search-sales - Search sales by criteria
+router.get('/search-sales', (req, res) => {
+  const { searchType, saleId, userId, startDate, endDate } = req.query;
+  
+  console.log('🔍 Searching sales:', { searchType, saleId, userId, startDate, endDate });
+  
+  if (searchType === 'saleId' && saleId) {
+    // Search by sale ID - get ALL records (cash and retrieve) for that sale_id
+    POS.searchSalesBySaleId(saleId, (err, results) => {
+      if (err) {
+        console.error('❌ Error searching sales by ID:', err);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Error searching sales',
+          error: err.message 
+        });
+      }
+      
+      // Group by item_id for better display
+      const groupedResults = {};
+      results.forEach(record => {
+        const itemId = record.item_id;
+        if (!groupedResults[itemId]) {
+          groupedResults[itemId] = {
+            item_id: itemId,
+            item_name: record.item_name,
+            item_description: record.item_description,
+            original_quantity: 0,
+            returned_quantity: 0,
+            available_for_return: 0,
+            cash_records: [],
+            retrieve_records: []
+          };
+        }
+        
+        if (record.sale_type === 'cash') {
+          groupedResults[itemId].cash_records.push({
+            id: record.id,
+            sale_id: record.sale_id,
+            quantity: record.quantity,
+            price: record.price,
+            date: record.date,
+            worker_name: record.worker_name,
+            user_id: record.user_id,
+            price_id: record.price_id
+          });
+          groupedResults[itemId].original_quantity += record.quantity;
+        } else if (record.sale_type === 'retrieve') {
+          groupedResults[itemId].retrieve_records.push({
+            id: record.id,
+            sale_id: record.sale_id,
+            quantity: record.quantity,
+            price: record.price,
+            date: record.date,
+            worker_name: record.worker_name,
+            user_id: record.user_id,
+            price_id: record.price_id
+          });
+          groupedResults[itemId].returned_quantity += record.quantity;
+        }
+      });
+      
+      // Calculate available for return for each item
+      Object.values(groupedResults).forEach(item => {
+        item.available_for_return = item.original_quantity - item.returned_quantity;
+      });
+      
+      res.json({
+        success: true,
+        searchType: 'saleId',
+        saleId: saleId,
+        items: Object.values(groupedResults),
+        totalItems: Object.keys(groupedResults).length
+      });
+    });
+    
+  } else if (searchType === 'workerTime' && userId && startDate && endDate) {
+    // Search by worker and time period - get only cash records first
+    POS.searchSalesByWorkerTime(userId, startDate, endDate, (err, results) => {
+      if (err) {
+        console.error('❌ Error searching sales by worker/time:', err);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Error searching sales',
+          error: err.message 
+        });
+      }
+      
+      res.json({
+        success: true,
+        searchType: 'workerTime',
+        userId: userId,
+        startDate: startDate,
+        endDate: endDate,
+        results: results,
+        totalSales: results.length
+      });
+    });
+    
+  } else {
+    res.status(400).json({
+      success: false,
+      message: 'Invalid search parameters'
+    });
+  }
+});
+
+// GET /api/pos/sale-details - Get complete details for a sale_id
+router.get('/sale-details/:saleId', (req, res) => {
+  const saleId = req.params.saleId;
+  
+  console.log('📋 Getting details for sale:', saleId);
+  
+  // Get all records for this sale_id (cash and retrieve)
+  POS.getSaleDetails(saleId, (err, results) => {
+    if (err) {
+      console.error('❌ Error getting sale details:', err);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Error getting sale details',
+        error: err.message 
+      });
+    }
+    
+    // Group by item_id
+    const groupedByItem = {};
+    results.forEach(record => {
+      const itemId = record.item_id;
+      if (!groupedByItem[itemId]) {
+        groupedByItem[itemId] = {
+          item_id: itemId,
+          item_name: record.item_name,
+          item_description: record.item_description,
+          current_stock: record.current_stock,
+          original_quantity: 0,
+          returned_quantity: 0,
+          available_for_return: 0,
+          cash_records: [],
+          retrieve_records: []
+        };
+      }
+      
+      if (record.sale_type === 'cash') {
+        groupedByItem[itemId].cash_records.push({
+          id: record.id,
+          sale_type: record.sale_type,
+          sale_id: record.sale_id,
+          quantity: record.quantity,
+          price: record.price,
+          date: record.date,
+          worker_name: record.worker_name,
+          user_id: record.user_id,
+          price_id: record.price_id
+        });
+        groupedByItem[itemId].original_quantity += record.quantity;
+      } else if (record.sale_type === 'retrieve') {
+        groupedByItem[itemId].retrieve_records.push({
+          id: record.id,
+          sale_type: record.sale_type,
+          sale_id: record.sale_id,
+          quantity: record.quantity,
+          price: record.price,
+          date: record.date,
+          worker_name: record.worker_name,
+          user_id: record.user_id,
+          price_id: record.price_id
+        });
+        groupedByItem[itemId].returned_quantity += record.quantity;
+      }
+    });
+    
+    // Calculate available for return for each item
+    Object.values(groupedByItem).forEach(item => {
+      item.available_for_return = item.original_quantity - item.returned_quantity;
+    });
+    
+    res.json({
+      success: true,
+      saleId: saleId,
+      items: Object.values(groupedByItem),
+      totalItems: Object.keys(groupedByItem).length
+    });
+  });
+});
+
+// POST /api/pos/process-return - Process item return
+router.post('/process-return', (req, res) => {
+  const { saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice } = req.body;
+  
+  console.log('🔄 Processing return:', {
+    saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice
+  });
+  
+  // Validate input
+  if (!saleId || !itemId || !cashRecordId || !returnQuantity || !returnType || !userId || !originalPrice) {
+    return res.status(400).json({
+      success: false,
+      message: 'Missing required fields'
+    });
+  }
+  
+  if (returnQuantity <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Return quantity must be positive'
+    });
+  }
+  
+  // Use the existing POS model method for return processing
+  POS.processReturnTransaction({
+    saleId,
+    itemId,
+    cashRecordId,
+    returnQuantity,
+    returnType,
+    userId,
+    originalPrice
+  }, (err, result) => {
+    if (err) {
+      console.error('❌ Error processing return:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Error processing return',
+        error: err.message
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: `Return processed successfully. ${returnQuantity} item(s) returned.`,
+      returnType: returnType,
+      quantity: returnQuantity,
+      refundAmount: returnQuantity * originalPrice,
+      saleId: saleId
+    });
+  });
+});
+
+// GET /api/pos/workers - Get all workers (users with user_type 0-9)
+router.get('/workers', (req, res) => {
+  POS.getWorkers((err, workers) => {
+    if (err) {
+      console.error('❌ Error fetching workers:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Error fetching workers',
+        error: err.message
+      });
+    }
+    
+    res.json({
+      success: true,
+      workers: workers,
+      count: workers.length
+    });
+  });
+});
+
 // PUT /api/pos/update-price - Update item price (not used in new logic but kept for compatibility)
 router.put('/update-price', (req, res) => {
   // This endpoint is kept for compatibility but price changes are now handled in sales records only

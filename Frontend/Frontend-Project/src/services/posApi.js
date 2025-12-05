@@ -115,6 +115,34 @@ static async checkout(cart, userId) {
     }
   }
 
+  // Add to existing PosApi class
+static async searchSales(params) {
+  const queryString = new URLSearchParams(params).toString();
+  const response = await fetch(`${API_BASE}/search-sales?${queryString}`);
+  return response.json();
+}
+
+static async getSaleDetails(saleId) {
+  const response = await fetch(`${API_BASE}/sale-details/${saleId}`);
+  return response.json();
+}
+
+static async processReturn(returnData) {
+  const response = await fetch(`${API_BASE}/process-return`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(returnData),
+  });
+  return response.json();
+}
+
+static async getWorkers() {
+  const response = await fetch(`${API_BASE}/workers`);
+  return response.json();
+}
+
   // Health check
   static async healthCheck() {
     try {

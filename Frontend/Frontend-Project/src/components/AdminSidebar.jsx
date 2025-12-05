@@ -69,7 +69,8 @@ function AdminSidebar() {
       items: [
         { name: 'POS', path: '/pos', icon: '💳' },
         { name: 'New Contract', path: '/contract-application', icon: '📝' },
-        { name: 'Payment Processing', path: '/payment-processing', icon: '💰' }
+        { name: 'Payment Processing', path: '/payment-processing', icon: '💰' },
+        {name: 'Returns', path: '/returns', icon: '↩️' }
       ]
     },
     {
@@ -82,6 +83,7 @@ function AdminSidebar() {
     {
       name: 'Managerial',
       items: [
+        { name: 'Manage Stock', path: '/worker-inventory', icon: '📦' },
         { name: 'Employees', path: '/employees', icon: '👨‍💼' },
         { name: 'Items', path: '/items', icon: '📦' },
         { name: 'Project Management', path: '/project-management', icon: '🏗️' },

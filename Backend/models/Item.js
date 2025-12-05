@@ -469,6 +469,127 @@ class Item {
     });
   }
 
+
+  // Get items for inventory management (simple view)
+static getInventoryItems(callback) {
+  const query = `
+    SELECT 
+      i.*,
+      ip.price_cash
+    FROM items i
+    LEFT JOIN item_prices ip ON i.id = ip.item_id
+    WHERE ip.date = (
+      SELECT MAX(date) 
+      FROM item_prices 
+      WHERE item_id = i.id
+    )
+    OR ip.date IS NULL
+    ORDER BY i.name ASC
+  `;
+  
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error('Error in getInventoryItems:', err);
+      return callback(err, null);
+    }
+    callback(null, results);
+  });
+}
+
+// Adjust item quantity and log the change
+static adjustQuantity(itemId, workerId, changeType, quantity, callback) {
+  db.getConnection((err, connection) => {
+    if (err) {
+      console.error('Error getting database connection:', err);
+      return callback(err);
+    }
+
+    connection.beginTransaction((err) => {
+      if (err) {
+        console.error('Error starting transaction:', err);
+        connection.release();
+        return callback(err);
+      }
+
+      // Calculate new quantity
+      const operator = changeType === 'add' ? '+' : '-';
+      const updateQuery = `
+        UPDATE items 
+        SET quantity = quantity ${operator} ?
+        WHERE id = ?
+      `;
+      
+      connection.query(updateQuery, [quantity, itemId], (err, updateResult) => {
+        if (err) {
+          console.error('Error updating quantity:', err);
+          return connection.rollback(() => {
+            connection.release();
+            callback(err);
+          });
+        }
+
+        // Create inventory log
+        const logQuery = `
+          INSERT INTO inventory_logs 
+          (item_id, worker_id, change_type, quantity_changed) 
+          VALUES (?, ?, ?, ?)
+        `;
+        
+        connection.query(logQuery, [itemId, workerId, changeType, quantity], (err, logResult) => {
+          if (err) {
+            console.error('Error creating inventory log:', err);
+            return connection.rollback(() => {
+              connection.release();
+              callback(err);
+            });
+          }
+
+          connection.commit((err) => {
+            if (err) {
+              console.error('Error committing transaction:', err);
+              return connection.rollback(() => {
+                connection.release();
+                callback(err);
+              });
+            }
+            
+            connection.release();
+            callback(null, {
+              itemId,
+              newLogId: logResult.insertId,
+              success: true
+            });
+          });
+        });
+      });
+    });
+  });
+}
+
+// Get inventory logs for an item
+static getInventoryLogs(itemId, callback) {
+  const query = `
+    SELECT 
+      il.*,
+      u.username as worker_name,
+      i.name as item_name
+    FROM inventory_logs il
+    JOIN users u ON il.worker_id = u.id
+    JOIN items i ON il.item_id = i.id
+    WHERE il.item_id = ?
+    ORDER BY il.date DESC
+    LIMIT 50
+  `;
+  
+  db.query(query, [itemId], (err, results) => {
+    if (err) {
+      console.error('Error in getInventoryLogs:', err);
+      return callback(err, null);
+    }
+    callback(null, results);
+  });
+}
+
   // Get user by ID - callback version
   static getUserById(userId, callback) {
     const query = 'SELECT id, username FROM users WHERE id = ?';
