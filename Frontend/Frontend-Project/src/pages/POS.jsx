@@ -21,7 +21,7 @@ function POS() {
   const [priceEdit, setPriceEdit] = useState('');
   const { currentUser } = useLocalSession();
 
-  // Access control - same as Employees page
+  // Access control
   if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'employee')) {
     return (
       <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
@@ -33,7 +33,7 @@ function POS() {
     );
   }
 
-  // Fetch all items from backend (including out of stock)
+  // Fetch all items with latest prices
   useEffect(() => {
     fetchItems();
   }, []);
@@ -56,13 +56,31 @@ function POS() {
   const filteredProducts = useMemo(() => {
     let filtered = items.filter(item => 
       item.name.toLowerCase().includes(query.toLowerCase()) ||
-      item.description.toLowerCase().includes(query.toLowerCase())
+      (item.description && item.description.toLowerCase().includes(query.toLowerCase()))
     );
+
+    // Handle sale filter
+  if (query === 'sale' || query === '__sale__' || query === '🔥') {
+    filtered = items.filter(item => {
+      const priceCash = parseFloat(item.price_cash) || 0;
+      const onSalePrice = item.on_sale_price ? parseFloat(item.on_sale_price) : null;
+      return onSalePrice !== null && onSalePrice > 0 && onSalePrice < priceCash;
+    });
+  } 
+  // Regular search
+  else if (query) {
+    filtered = items.filter(item => 
+      item.name.toLowerCase().includes(query.toLowerCase()) ||
+      (item.description && item.description.toLowerCase().includes(query.toLowerCase()))
+    );
+  }
 
     // Sort products - available items first, then out of stock
     filtered.sort((a, b) => {
       const aAvailable = a.available === 1 && a.quantity > 0;
       const bAvailable = b.available === 1 && b.quantity > 0;
+
+
       
       // Available items come first
       if (aAvailable && !bAvailable) return -1;
@@ -71,9 +89,9 @@ function POS() {
       // Then sort by the selected criteria
       switch (sortBy) {
         case 'price-asc':
-          return a.price_cash - b.price_cash;
+          return (a.display_price || a.price_cash || 0) - (b.display_price || b.price_cash || 0);
         case 'price-desc':
-          return b.price_cash - a.price_cash;
+          return (b.display_price || b.price_cash || 0) - (a.display_price || a.price_cash || 0);
         case 'relevance':
         default:
           return a.name.localeCompare(b.name);
@@ -83,39 +101,88 @@ function POS() {
     return filtered;
   }, [items, query, sortBy]);
 
-  // Add product to cart - only if available and quantity > 0
-  const addToCart = (product) => {
-    // Check if product is available and has quantity
-    if (product.available !== 1 || product.quantity <= 0) {
-      toast.error(`${product.name} is out of stock`);
-      return;
+  // In POS.jsx - Fix the getDisplayPrice function
+const getDisplayPrice = (product) => {
+  const priceCash = typeof product.price_cash === 'number' 
+    ? product.price_cash 
+    : parseFloat(product.price_cash) || 0;
+  
+  const onSalePrice = product.on_sale_price 
+    ? (typeof product.on_sale_price === 'number' 
+        ? product.on_sale_price 
+        : parseFloat(product.on_sale_price))
+    : null;
+  
+  // Return on_sale_price only if it exists AND is lower than price_cash
+  if (onSalePrice !== null && onSalePrice < priceCash) {
+    return onSalePrice;
+  }
+  return priceCash;
+};
+
+// Add this function to check if item is on sale
+const isItemOnSale = (product) => {
+  const priceCash = typeof product.price_cash === 'number' 
+    ? product.price_cash 
+    : parseFloat(product.price_cash) || 0;
+  
+  const onSalePrice = product.on_sale_price 
+    ? (typeof product.on_sale_price === 'number' 
+        ? product.on_sale_price 
+        : parseFloat(product.on_sale_price))
+    : null;
+  
+  return onSalePrice !== null && onSalePrice < priceCash;
+};
+
+  // In POS.jsx, update the addToCart function:
+const addToCart = (product) => {
+  // Check if product is available and has quantity
+  if (product.available !== 1 || product.quantity <= 0) {
+    toast.error(`${product.name} is out of stock`);
+    return;
+  }
+
+  const displayPrice = getDisplayPrice(product);
+
+  // Ensure price is a valid number
+  if (isNaN(displayPrice) || displayPrice <= 0) {
+    toast.error(`${product.name} has invalid price`);
+    return;
+  }
+
+  // Ensure price_id is available
+  if (!product.price_id) {
+    console.warn('Product missing price_id:', product);
+  }
+
+  setCart(prev => {
+    const existing = prev.find(item => item.id === product.id);
+    
+    // Check if adding would exceed available quantity
+    const newQty = existing ? existing.qty + 1 : 1;
+    if (newQty > product.quantity) {
+      toast.error(`Only ${product.quantity} ${product.name}(s) available`);
+      return prev;
     }
 
-    setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
-      
-      // Check if adding would exceed available quantity
-      const newQty = existing ? existing.qty + 1 : 1;
-      if (newQty > product.quantity) {
-        toast.error(`Only ${product.quantity} ${product.name}(s) available`);
-        return prev;
-      }
-
-      if (existing) {
-        return prev.map(item =>
-          item.id === product.id ? { ...item, qty: item.qty + 1 } : item
-        );
-      }
-      return [...prev, { 
-        ...product, 
-        qty: 1,
-        // Use original price from database
-        original_price: product.price_cash,
-        price_cash: product.price_cash
-      }];
-    });
-    toast.success(`${product.name} added to cart`);
-  };
+    if (existing) {
+      return prev.map(item =>
+        item.id === product.id ? { ...item, qty: item.qty + 1 } : item
+      );
+    }
+    return [...prev, { 
+      ...product, 
+      qty: 1,
+      // Store original price for reference
+      original_price: displayPrice,
+      price_cash: displayPrice, // Use display price as default
+      price_id: product.price_id || null, // Make sure price_id is included
+      display_price: displayPrice
+    }];
+  });
+  toast.success(`${product.name} added to cart`);
+};
 
   // Remove product from cart
   const removeFromCart = (productId) => {
@@ -151,7 +218,7 @@ function POS() {
   // Start editing item price for this sale only
   const startEditPrice = (item) => {
     const cartItem = cart.find(cartItem => cartItem.id === item.id);
-    const currentPrice = cartItem ? cartItem.price_cash : item.price_cash;
+    const currentPrice = cartItem ? cartItem.price_cash : getDisplayPrice(item);
     
     setEditingItem(item);
     setPriceEdit(currentPrice.toString());
@@ -180,26 +247,31 @@ function POS() {
         : item
     ));
 
-    toast.success(`Sale price updated to $${newPrice.toFixed(2)} (original: $${editingItem.price_cash})`);
+    toast.success(`Sale price updated to $${newPrice.toFixed(2)}`);
     setEditingItem(null);
     setPriceEdit('');
   };
 
-  // Process checkout using PosApi
+  // Process checkout
   const processCheckout = async () => {
     if (!currentUser) {
       toast.error('You must be logged in to process sales');
       return;
     }
 
+    if (cart.length === 0) {
+      toast.error('Cart is empty');
+      return;
+    }
+
     setProcessing(true);
     try {
-      // Send the cart with custom prices to backend
+      // Send checkout data to POS API
       const result = await PosApi.checkout(cart, currentUser.id);
       
       toast.success(`Sale #${result.saleId} processed successfully!`);
       setCart([]);
-      // Refresh items to get updated quantities and availability
+      // Refresh items to get updated quantities
       await fetchItems();
       
     } catch (error) {
@@ -228,7 +300,10 @@ function POS() {
   };
 
   // Calculate total
-  const total = cart.reduce((sum, item) => sum + (item.price_cash * item.qty), 0);
+  const total = useMemo(() => 
+    cart.reduce((sum, item) => sum + (item.price_cash * item.qty), 0),
+    [cart]
+  );
 
   // Function to check if item is available
   const isItemAvailable = (item) => {
@@ -278,6 +353,8 @@ function POS() {
                 priceEdit={priceEdit}
                 setPriceEdit={setPriceEdit}
                 isItemAvailable={isItemAvailable}
+                getDisplayPrice={getDisplayPrice}
+                isItemOnSale={isItemOnSale} // Add this prop
               />
             </div>
 
