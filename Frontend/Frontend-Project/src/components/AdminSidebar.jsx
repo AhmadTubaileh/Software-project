@@ -61,7 +61,7 @@ function AdminSidebar() {
     {
       name: 'Main',
       items: [
-        { name: 'Dashboard', path: '/', icon: '📊' }
+        { name: 'Online Store', path: '/', icon: '💰' }
       ]
     },
     {
@@ -73,12 +73,17 @@ function AdminSidebar() {
       ]
     },
     {
-      name: 'Management',
+      name: 'Installment Management',
+      items: [
+        { name: 'Manage Contracts', path: '/contract-management', icon: '⚡' },
+        { name: 'Overdue Payments', path: '/overdue-payments', icon: '⏰' },
+      ]
+    },
+    {
+      name: 'Managerial',
       items: [
         { name: 'Employees', path: '/employees', icon: '👨‍💼' },
         { name: 'Items', path: '/items', icon: '📦' },
-        { name: 'Manage Contracts', path: '/contract-management', icon: '⚡' },
-        { name: 'Overdue Payments', path: '/overdue-payments', icon: '⏰' },
         { name: 'Project Management', path: '/project-management', icon: '🏗️' },
         { name: 'Task Archive', path: '/task-archive', icon: '📚' },
         { name: 'Manage Duty Hours', path: '/admin-duty-hours', icon: '👨‍💼' }
@@ -114,7 +119,8 @@ function AdminSidebar() {
     setExpandedSections({
       'Main': true,
       'Sales': true,
-      'Management': true,
+      'Installment Management': true,
+      'Mangerial': true,
       'Projects': true,
       'Personal': true
     });
@@ -125,7 +131,8 @@ function AdminSidebar() {
     setExpandedSections({
       'Main': false,
       'Sales': false,
-      'Management': false,
+      'Installment Management': false,
+      'Mangerial': false,
       'Projects': false,
       'Personal': false
     });
@@ -150,7 +157,8 @@ function AdminSidebar() {
   const sectionIcons = {
     'Main': '🏠',
     'Sales': '💰',
-    'Management': '⚙️',
+    'Installment Management': '📊',
+    'Mangerial': '⚙️',
     'Projects': '🏗️',
     'Personal': '👤'
   };
@@ -158,7 +166,8 @@ function AdminSidebar() {
   const sectionColors = {
     'Main': 'from-blue-500/20 to-blue-600/20 border-blue-500/30',
     'Sales': 'from-green-500/20 to-emerald-500/20 border-green-500/30',
-    'Management': 'from-purple-500/20 to-pink-500/20 border-purple-500/30',
+    'Installment Management': 'from-purple-500/20 to-pink-500/20 border-purple-500/30',
+    'Managerial': 'from-teal-500/20 to-cyan-500/20 border-teal-500/30',
     'Projects': 'from-amber-500/20 to-orange-500/20 border-amber-500/30',
     'Personal': 'from-orange-500/20 to-amber-500/20 border-orange-500/30'
   };

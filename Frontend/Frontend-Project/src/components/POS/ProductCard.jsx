@@ -193,7 +193,7 @@ const ProductCard = ({
               </div>
               
               {/* Edit Price Button (Admin only) */}
-              {currentUser && currentUser.role === 'admin' && inCart && (
+              {currentUser && currentUser.role === 'admin'|| currentUser.role === 'employee' && inCart && (
                 <button
                   onClick={() => onStartEditPrice(product)}
                   className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-medium transition-colors duration-200"
