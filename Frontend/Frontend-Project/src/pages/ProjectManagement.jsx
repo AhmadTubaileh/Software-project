@@ -11,6 +11,46 @@ import DeleteConfirmationModal from '../components/ProjectManagement/DeleteConfi
 import ProjectMembersModal from '../components/ProjectManagement/ProjectMembersModal.jsx';
 
 function ProjectManagement() {
+  const { currentUser } = useLocalSession();
+  
+  // ========== ACCESS CONTROL START ==========
+  // Get user_type from currentUser
+  const userType = currentUser?.user_type ?? 5; // Default to trainee if not set
+  
+  // Only Admin (0), Senior Manager (1), and Manager (2) can access this page
+  // Supervisor (3), Employee (4), and Trainee (5) cannot access
+  const allowedRoles = [0, 1, 2];
+  
+  if (!allowedRoles.includes(userType)) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white">
+        <AdminSidebar />
+        <div className="ml-64 min-h-screen flex items-center justify-center">
+          <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+              <p className="text-gray-400 mb-4">
+                Your account ({getRoleName(userType)}) does not have permission to access this page.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                This page is only accessible to Administrators and Managers.
+                Supervisors, Employees, and Trainees cannot access project management.
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+              >
+                Return to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ========== ACCESS CONTROL END ==========
+
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [workers, setWorkers] = useState([]);
@@ -41,7 +81,6 @@ function ProjectManagement() {
   const [showHeaderAddMemberDropdown, setShowHeaderAddMemberDropdown] = useState(false);
   const [showProjectCardAddMemberDropdown, setShowProjectCardAddMemberDropdown] = useState({});
   const [loading, setLoading] = useState(true);
-  const { currentUser } = useLocalSession();
 
   // Debug currentUser
   useEffect(() => {
@@ -610,13 +649,16 @@ function ProjectManagement() {
     };
   }, [showHeaderAddTaskDropdown, showHeaderAddMemberDropdown]);
 
+  // Check if user should see sidebar (based on original logic)
+  const showSidebar = currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee');
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0e1830] text-white">
         <Toaster position="top-center" />
-        {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
+        {showSidebar && <AdminSidebar />}
         <main className={`flex-1 min-h-screen transition-all duration-300 ${
-          currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : ''
+          showSidebar ? 'ml-64' : ''
         }`}>
           <div className="p-6 flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -631,11 +673,11 @@ function ProjectManagement() {
       <Toaster position="top-center" />
 
       {/* Sidebar */}
-      {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
+      {showSidebar && <AdminSidebar />}
 
       {/* Main Content */}
       <main className={`flex-1 min-h-screen bg-[#0e1830] transition-all duration-300 ${
-        currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : 'ml-0'
+        showSidebar ? 'ml-64' : 'ml-0'
       }`}>
         <div className="p-6">
           {/* Header */}
@@ -645,6 +687,9 @@ function ProjectManagement() {
                 Project Management
               </h1>
               <p className="text-gray-400">Full administrative control over all projects and tasks</p>
+              <p className="text-gray-500 text-sm mt-1">
+                Logged in as: {currentUser?.username} ({getRoleName(userType)})
+              </p>
             </div>
             <div className="flex gap-3">
               {/* Header Add Task Button with Enhanced Dropdown */}
@@ -1082,6 +1127,19 @@ function ProjectManagement() {
       )}
     </div>
   );
+}
+
+// Helper function to get role name
+function getRoleName(userType) {
+  switch(userType) {
+    case 0: return 'Administrator';
+    case 1: return 'Senior Manager';
+    case 2: return 'Manager';
+    case 3: return 'Supervisor';
+    case 4: return 'Employee';
+    case 5: return 'Trainee';
+    default: return 'User';
+  }
 }
 
 export default ProjectManagement;

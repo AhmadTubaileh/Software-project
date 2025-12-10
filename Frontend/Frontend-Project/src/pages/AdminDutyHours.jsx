@@ -13,6 +13,43 @@ import FiltersSection from '../components/AdminDutyHours/FiltersSection.jsx';
 import DayActionsModal from '../components/AdminDutyHours/DayActionsModal.jsx';
 
 function AdminDutyHours() {
+  const { currentUser } = useLocalSession();
+  
+  // Check user permissions
+  const userType = currentUser?.user_type ?? 5; // Default to trainee
+  
+  // Only Admin (0), Senior Manager (1), and Manager (2) can access this page
+  const allowedRoles = [0, 1, 2];
+  
+  if (!allowedRoles.includes(userType)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0e1830]">
+        <AdminSidebar />
+        <div className="ml-64 flex-1 p-6">
+          <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md mx-auto">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+              <p className="text-gray-400 mb-4">
+                Your account ({getRoleName(userType)}) does not have permission to access this page.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                This page is only accessible to Administrators, Senior Managers, and Managers.
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+              >
+                Return to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Original component code continues here...
   const [sessions, setSessions] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [filter, setFilter] = useState({
@@ -29,7 +66,6 @@ function AdminDutyHours() {
   const [newSession, setNewSession] = useState({
     user_id: '', session_type: 'work', in_time: '', out_time: '', date: new Date().toISOString().split('T')[0], notes: ''
   });
-  const { currentUser } = useLocalSession();
 
   const apiCall = async (url, options = {}) => {
     try {
@@ -270,6 +306,19 @@ function AdminDutyHours() {
       )}
     </div>
   );
+}
+
+// Helper function to get role name
+function getRoleName(userType) {
+  switch(userType) {
+    case 0: return 'Administrator';
+    case 1: return 'Senior Manager';
+    case 2: return 'Manager';
+    case 3: return 'Supervisor';
+    case 4: return 'Employee';
+    case 5: return 'Trainee';
+    default: return 'User';
+  }
 }
 
 export default AdminDutyHours;

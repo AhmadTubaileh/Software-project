@@ -7,13 +7,47 @@ import SummaryCards from '../components/DutyHoursReport/SummaryCards.jsx';
 import DutyHoursTable from '../components/DutyHoursReport/DutyHoursTable.jsx';
 
 function DutyHoursReport() {
+  const { currentUser } = useLocalSession();
+  
+  // ========== ACCESS CONTROL START ==========
+  // Get user_type from currentUser
+  const userType = currentUser?.user_type ?? 5; // Default to trainee if not set
+  
+  // This page is accessible to ALL user types (0-5) - Everyone can see their own duty hours
+  const allowedRoles = [0, 1, 2, 3, 4, 5];
+  
+  if (!allowedRoles.includes(userType)) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white">
+        <AdminSidebar />
+        <div className="ml-64 min-h-screen flex items-center justify-center">
+          <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+              <p className="text-gray-400 mb-4">
+                Please log in to view your duty hours.
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+              >
+                Return to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ========== ACCESS CONTROL END ==========
+
   const [sessions, setSessions] = useState([]);
   const [filter, setFilter] = useState({
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0]
   });
   const [isLoading, setIsLoading] = useState(false);
-  const { currentUser } = useLocalSession();
 
   const fetchDutyHours = useCallback(async () => {
     if (!currentUser?.id) return;
@@ -56,13 +90,16 @@ function DutyHoursReport() {
 
   const totals = calculateTotals();
 
+  // Check if user should see sidebar (based on original logic)
+  const showSidebar = currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee');
+
   return (
     <div className="min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
-      {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
+      {showSidebar && <AdminSidebar />}
 
       <main className={`flex-1 min-h-screen transition-all duration-300 ${
-        currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : ''
+        showSidebar ? 'ml-64' : ''
       }`}>
         <div className="p-6">
           <div className="mb-8">
@@ -70,6 +107,9 @@ function DutyHoursReport() {
               My Duty Hours
             </h1>
             <p className="text-gray-400">View your work sessions in table format</p>
+            <p className="text-gray-500 text-sm mt-1">
+              Logged in as: {currentUser?.username} ({getRoleName(userType)})
+            </p>
           </div>
 
           <DateFilters
@@ -89,6 +129,19 @@ function DutyHoursReport() {
       </main>
     </div>
   );
+}
+
+// Helper function to get role name
+function getRoleName(userType) {
+  switch(userType) {
+    case 0: return 'Administrator';
+    case 1: return 'Senior Manager';
+    case 2: return 'Manager';
+    case 3: return 'Supervisor';
+    case 4: return 'Employee';
+    case 5: return 'Trainee';
+    default: return 'User';
+  }
 }
 
 export default DutyHoursReport;

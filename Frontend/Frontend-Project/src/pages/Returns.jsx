@@ -13,24 +13,51 @@ import ReturnForm from '../components/Returns/ReturnForm.jsx';
 function Returns() {
   const navigate = useNavigate();
   const { currentUser } = useLocalSession();
+  
+  // ========== ACCESS CONTROL START ==========
+  // Get user_type from currentUser
+  const userType = currentUser?.user_type ?? 5; // Default to trainee if not set
+  
+  // Only Admin (0), Senior Manager (1), Manager (2), and Supervisor (3) can access this page
+  // Employee (4) and Trainee (5) cannot access
+  const allowedRoles = [0, 1, 2, 3];
+  
+  if (!allowedRoles.includes(userType)) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white">
+        <AdminSidebar />
+        <div className="ml-64 min-h-screen flex items-center justify-center">
+          <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+              <p className="text-gray-400 mb-4">
+                Your account ({getRoleName(userType)}) does not have permission to access this page.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                This page is only accessible to Administrators, Managers, and Supervisors.
+                Employees and Trainees cannot process returns.
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+              >
+                Return to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ========== ACCESS CONTROL END ==========
+
   const [activeTab, setActiveTab] = useState('saleId'); // 'saleId' or 'workerTime'
   const [searchResults, setSearchResults] = useState(null);
   const [selectedSale, setSelectedSale] = useState(null);
   const [selectedCashRecord, setSelectedCashRecord] = useState(null);
   const [loading, setLoading] = useState(false);
   const [workers, setWorkers] = useState([]);
-
-  // Access control
-  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'employee')) {
-    return (
-      <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p>You need admin or employee privileges to access this page.</p>
-        </div>
-      </div>
-    );
-  }
 
   // Fetch workers on component mount
   useEffect(() => {
@@ -164,15 +191,18 @@ function Returns() {
     setSelectedCashRecord(null);
   };
 
+  // Check if user should see sidebar (based on original logic)
+  const showSidebar = currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee');
+
   return (
     <div className="flex min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
       
       {/* Sidebar */}
-      {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
+      {showSidebar && <AdminSidebar />}
       
       {/* Main Content */}
-      <main className={`flex-1 flex flex-col min-h-screen ${currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : ''}`}>
+      <main className={`flex-1 flex flex-col min-h-screen ${showSidebar ? 'ml-64' : ''}`}>
         <div className="p-6 flex-1">
           {/* Header */}
           <div className="mb-8">
@@ -180,6 +210,9 @@ function Returns() {
               Returns & Retrievals
             </h1>
             <p className="text-gray-400 mt-2">Process returns for cash sales only</p>
+            <p className="text-gray-500 text-sm mt-1">
+              Logged in as: {currentUser?.username} ({getRoleName(userType)})
+            </p>
             
             {/* Navigation Tabs */}
             <div className="flex border-b border-gray-700 mt-6">
@@ -316,6 +349,19 @@ function Returns() {
       </main>
     </div>
   );
+}
+
+// Helper function to get role name
+function getRoleName(userType) {
+  switch(userType) {
+    case 0: return 'Administrator';
+    case 1: return 'Senior Manager';
+    case 2: return 'Manager';
+    case 3: return 'Supervisor';
+    case 4: return 'Employee';
+    case 5: return 'Trainee';
+    default: return 'User';
+  }
 }
 
 export default Returns;

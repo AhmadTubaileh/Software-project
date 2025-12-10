@@ -21,17 +21,69 @@ function POS() {
   const [priceEdit, setPriceEdit] = useState('');
   const { currentUser } = useLocalSession();
 
-  // Access control
-  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'employee')) {
+  // ========== ACCESS CONTROL START ==========
+  // Get user_type from currentUser
+  const userType = currentUser?.user_type ?? 5;
+  
+  // Define allowed roles for POS
+  // According to AdminSidebar, ALL user types (0-5) can access POS
+  const allowedRoles = [0, 1, 2, 3, 4, 5];
+  
+  // Check if user is authenticated
+  if (!currentUser) {
     return (
       <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p>You need admin or employee privileges to access this page.</p>
+        <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md w-full mx-4">
+          <div className="text-center">
+            <div className="text-6xl mb-4">🔒</div>
+            <h2 className="text-2xl font-bold text-white mb-2">Authentication Required</h2>
+            <p className="text-gray-400 mb-4">
+              Please log in to access the Point of Sale system.
+            </p>
+            <a
+              href="/"
+              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+            >
+              Go to Login
+            </a>
+          </div>
         </div>
       </div>
     );
   }
+  
+  // Check if user has permission
+  if (!allowedRoles.includes(userType)) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white">
+        {/* Show sidebar if user has access to other parts */}
+        {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
+        <div className={`min-h-screen flex items-center justify-center ${
+          currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : ''
+        }`}>
+          <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+              <p className="text-gray-400 mb-4">
+                Your account ({getRoleName(userType)}) does not have permission to access this page.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                Contact your administrator if you believe this is an error.
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+              >
+                Return to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ========== ACCESS CONTROL END ==========
 
   // Fetch all items with latest prices
   useEffect(() => {
@@ -60,28 +112,26 @@ function POS() {
     );
 
     // Handle sale filter
-  if (query === 'sale' || query === '__sale__' || query === '🔥') {
-    filtered = items.filter(item => {
-      const priceCash = parseFloat(item.price_cash) || 0;
-      const onSalePrice = item.on_sale_price ? parseFloat(item.on_sale_price) : null;
-      return onSalePrice !== null && onSalePrice > 0 && onSalePrice < priceCash;
-    });
-  } 
-  // Regular search
-  else if (query) {
-    filtered = items.filter(item => 
-      item.name.toLowerCase().includes(query.toLowerCase()) ||
-      (item.description && item.description.toLowerCase().includes(query.toLowerCase()))
-    );
-  }
+    if (query === 'sale' || query === '__sale__' || query === '🔥') {
+      filtered = items.filter(item => {
+        const priceCash = parseFloat(item.price_cash) || 0;
+        const onSalePrice = item.on_sale_price ? parseFloat(item.on_sale_price) : null;
+        return onSalePrice !== null && onSalePrice > 0 && onSalePrice < priceCash;
+      });
+    } 
+    // Regular search
+    else if (query) {
+      filtered = items.filter(item => 
+        item.name.toLowerCase().includes(query.toLowerCase()) ||
+        (item.description && item.description.toLowerCase().includes(query.toLowerCase()))
+      );
+    }
 
     // Sort products - available items first, then out of stock
     filtered.sort((a, b) => {
       const aAvailable = a.available === 1 && a.quantity > 0;
       const bAvailable = b.available === 1 && b.quantity > 0;
 
-
-      
       // Available items come first
       if (aAvailable && !bAvailable) return -1;
       if (!aAvailable && bAvailable) return 1;
@@ -102,87 +152,87 @@ function POS() {
   }, [items, query, sortBy]);
 
   // In POS.jsx - Fix the getDisplayPrice function
-const getDisplayPrice = (product) => {
-  const priceCash = typeof product.price_cash === 'number' 
-    ? product.price_cash 
-    : parseFloat(product.price_cash) || 0;
-  
-  const onSalePrice = product.on_sale_price 
-    ? (typeof product.on_sale_price === 'number' 
-        ? product.on_sale_price 
-        : parseFloat(product.on_sale_price))
-    : null;
-  
-  // Return on_sale_price only if it exists AND is lower than price_cash
-  if (onSalePrice !== null && onSalePrice < priceCash) {
-    return onSalePrice;
-  }
-  return priceCash;
-};
+  const getDisplayPrice = (product) => {
+    const priceCash = typeof product.price_cash === 'number' 
+      ? product.price_cash 
+      : parseFloat(product.price_cash) || 0;
+    
+    const onSalePrice = product.on_sale_price 
+      ? (typeof product.on_sale_price === 'number' 
+          ? product.on_sale_price 
+          : parseFloat(product.on_sale_price))
+      : null;
+    
+    // Return on_sale_price only if it exists AND is lower than price_cash
+    if (onSalePrice !== null && onSalePrice < priceCash) {
+      return onSalePrice;
+    }
+    return priceCash;
+  };
 
-// Add this function to check if item is on sale
-const isItemOnSale = (product) => {
-  const priceCash = typeof product.price_cash === 'number' 
-    ? product.price_cash 
-    : parseFloat(product.price_cash) || 0;
-  
-  const onSalePrice = product.on_sale_price 
-    ? (typeof product.on_sale_price === 'number' 
-        ? product.on_sale_price 
-        : parseFloat(product.on_sale_price))
-    : null;
-  
-  return onSalePrice !== null && onSalePrice < priceCash;
-};
+  // Add this function to check if item is on sale
+  const isItemOnSale = (product) => {
+    const priceCash = typeof product.price_cash === 'number' 
+      ? product.price_cash 
+      : parseFloat(product.price_cash) || 0;
+    
+    const onSalePrice = product.on_sale_price 
+      ? (typeof product.on_sale_price === 'number' 
+          ? product.on_sale_price 
+          : parseFloat(product.on_sale_price))
+      : null;
+    
+    return onSalePrice !== null && onSalePrice < priceCash;
+  };
 
   // In POS.jsx, update the addToCart function:
-const addToCart = (product) => {
-  // Check if product is available and has quantity
-  if (product.available !== 1 || product.quantity <= 0) {
-    toast.error(`${product.name} is out of stock`);
-    return;
-  }
-
-  const displayPrice = getDisplayPrice(product);
-
-  // Ensure price is a valid number
-  if (isNaN(displayPrice) || displayPrice <= 0) {
-    toast.error(`${product.name} has invalid price`);
-    return;
-  }
-
-  // Ensure price_id is available
-  if (!product.price_id) {
-    console.warn('Product missing price_id:', product);
-  }
-
-  setCart(prev => {
-    const existing = prev.find(item => item.id === product.id);
-    
-    // Check if adding would exceed available quantity
-    const newQty = existing ? existing.qty + 1 : 1;
-    if (newQty > product.quantity) {
-      toast.error(`Only ${product.quantity} ${product.name}(s) available`);
-      return prev;
+  const addToCart = (product) => {
+    // Check if product is available and has quantity
+    if (product.available !== 1 || product.quantity <= 0) {
+      toast.error(`${product.name} is out of stock`);
+      return;
     }
 
-    if (existing) {
-      return prev.map(item =>
-        item.id === product.id ? { ...item, qty: item.qty + 1 } : item
-      );
+    const displayPrice = getDisplayPrice(product);
+
+    // Ensure price is a valid number
+    if (isNaN(displayPrice) || displayPrice <= 0) {
+      toast.error(`${product.name} has invalid price`);
+      return;
     }
-    return [...prev, { 
-      ...product, 
-      qty: 1,
-      // Store original price for reference
-      original_price: displayPrice,
-      price_cash: displayPrice, // Use display price as default
-      price_id: product.price_id || null, // Make sure price_id is included
-      display_price: displayPrice
-    }];
-  });
-  toast.success(`${product.name} added to cart`);
-};
+
+    // Ensure price_id is available
+    if (!product.price_id) {
+      console.warn('Product missing price_id:', product);
+    }
+
+    setCart(prev => {
+      const existing = prev.find(item => item.id === product.id);
+      
+      // Check if adding would exceed available quantity
+      const newQty = existing ? existing.qty + 1 : 1;
+      if (newQty > product.quantity) {
+        toast.error(`Only ${product.quantity} ${product.name}(s) available`);
+        return prev;
+      }
+
+      if (existing) {
+        return prev.map(item =>
+          item.id === product.id ? { ...item, qty: item.qty + 1 } : item
+        );
+      }
+      return [...prev, { 
+        ...product, 
+        qty: 1,
+        // Store original price for reference
+        original_price: displayPrice,
+        price_cash: displayPrice, // Use display price as default
+        price_id: product.price_id || null, // Make sure price_id is included
+        display_price: displayPrice
+      }];
+    });
+    toast.success(`${product.name} added to cart`);
+  };
 
   // Remove product from cart
   const removeFromCart = (productId) => {
@@ -310,17 +360,20 @@ const addToCart = (product) => {
     return item.available === 1 && item.quantity > 0;
   };
 
+  // Check if user should see sidebar (based on original logic)
+  const showSidebar = currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee');
+
   return (
     <div className="flex min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
 
       {/* Sidebar for Admin/Employee */}
-      {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
+      {showSidebar && <AdminSidebar />}
 
       {/* Main POS Content */}
       <main
         className={`flex-1 flex flex-col min-h-screen ${
-          currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : ''
+          showSidebar ? 'ml-64' : ''
         }`}
       >
         <div className="p-6 flex-1">
@@ -328,6 +381,7 @@ const addToCart = (product) => {
             currentUser={currentUser}
             items={items}
             isItemAvailable={isItemAvailable}
+            userType={userType}
           />
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -354,7 +408,7 @@ const addToCart = (product) => {
                 setPriceEdit={setPriceEdit}
                 isItemAvailable={isItemAvailable}
                 getDisplayPrice={getDisplayPrice}
-                isItemOnSale={isItemOnSale} // Add this prop
+                isItemOnSale={isItemOnSale}
               />
             </div>
 
@@ -373,6 +427,19 @@ const addToCart = (product) => {
       </main>
     </div>
   );
+}
+
+// Helper function to get role name
+function getRoleName(userType) {
+  switch(userType) {
+    case 0: return 'Administrator';
+    case 1: return 'Senior Manager';
+    case 2: return 'Manager';
+    case 3: return 'Supervisor';
+    case 4: return 'Employee';
+    case 5: return 'Trainee';
+    default: return 'User';
+  }
 }
 
 export default POS;

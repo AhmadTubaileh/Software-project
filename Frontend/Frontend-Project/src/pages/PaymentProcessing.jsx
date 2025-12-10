@@ -7,6 +7,46 @@ import PaymentForm from '../components/PaymentProcessing/PaymentForm.jsx';
 import toast, { Toaster } from 'react-hot-toast';
 
 function PaymentProcessing() {
+  const { currentUser } = useLocalSession();
+  
+  // ========== ACCESS CONTROL START ==========
+  // Get user_type from currentUser
+  const userType = currentUser?.user_type ?? 5; // Default to trainee if not set
+  
+  // Only Admin (0), Senior Manager (1), Manager (2), Supervisor (3), and Employee (4) can access this page
+  // Trainee (5) cannot access
+  const allowedRoles = [0, 1, 2, 3, 4];
+  
+  if (!allowedRoles.includes(userType)) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white">
+        <AdminSidebar />
+        <div className="ml-64 min-h-screen flex items-center justify-center">
+          <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+              <p className="text-gray-400 mb-4">
+                Your account ({getRoleName(userType)}) does not have permission to access this page.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                This page is only accessible to Administrators, Managers, Supervisors, and Employees.
+                Trainees cannot process payments.
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+              >
+                Return to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ========== ACCESS CONTROL END ==========
+
   const [searchTerm, setSearchTerm] = useState('');
   const [searchType, setSearchType] = useState('name'); // 'name' or 'id_card'
   const [searchResults, setSearchResults] = useState([]);
@@ -16,43 +56,10 @@ function PaymentProcessing() {
   const [processing, setProcessing] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [selectedPayment, setSelectedPayment] = useState(null);
-  const { currentUser } = useLocalSession();
   
   // Ref for scrolling to payment form
   const paymentFormRef = useRef(null);
 
-  // Access control - Check user_type field (0-9) instead of role
-  if (!currentUser || currentUser.user_type === undefined || currentUser.user_type === null) {
-    return (
-      <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p>You need to be logged in to access this page.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Convert user_type to number and check if it's between 0-9
-  const userType = parseInt(currentUser.user_type);
-  const isAllowedUserType = userType >= 0 && userType <= 9;
-  
-  if (!isAllowedUserType) {
-    return (
-      <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p>Your user type "{currentUser.user_type}" does not have permission to access the payment processing page.</p>
-          <p className="text-gray-400 mt-2">Only user types 0-9 are allowed to access payment processing.</p>
-          <p className="text-sm text-gray-500 mt-2">
-            Current user info: {currentUser.username} (User Type: {currentUser.user_type})
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Rest of your component code...
   // Search for contracts by customer name OR ID card number
   const handleSearch = useCallback(async () => {
     if (!searchTerm.trim()) {
@@ -250,23 +257,6 @@ function PaymentProcessing() {
     }
   };
 
-  // Get user type description for display
-  const getUserTypeDescription = (userType) => {
-    const userTypeNames = {
-      0: 'Admin',
-      1: 'Manager',
-      2: 'Senior Worker',
-      3: 'Worker',
-      4: 'Junior Worker',
-      5: 'Trainee',
-      6: 'Cashier',
-      7: 'Accountant',
-      8: 'Supervisor',
-      9: 'Operator'
-    };
-    return userTypeNames[userType] || `User Type ${userType}`;
-  };
-
   return (
     <div className="flex min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
@@ -287,12 +277,8 @@ function PaymentProcessing() {
                 <p className="text-gray-400 mt-2">
                   Process installment payments for approved contracts
                 </p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm text-gray-400">Logged in as:</p>
-                <p className="font-semibold">{currentUser.username}</p>
-                <p className="text-xs text-gray-400">
-                  {getUserTypeDescription(userType)}
+                <p className="text-gray-500 text-sm mt-1">
+                  Logged in as: {currentUser?.username} ({getRoleName(userType)})
                 </p>
               </div>
             </div>
@@ -501,5 +487,18 @@ const formatCurrency = (amount) => {
     currency: 'USD'
   }).format(amount);
 };
+
+// Helper function to get role name
+function getRoleName(userType) {
+  switch(userType) {
+    case 0: return 'Administrator';
+    case 1: return 'Senior Manager';
+    case 2: return 'Manager';
+    case 3: return 'Supervisor';
+    case 4: return 'Employee';
+    case 5: return 'Trainee';
+    default: return 'User';
+  }
+}
 
 export default PaymentProcessing;
