@@ -21,7 +21,7 @@ import TaskArchive from './pages/TaskArchive.jsx'; // NEW
 
 import StoreHome from './pages/StoreHome.jsx'; //Ahmad new
 import StoreProduct from './pages/StoreProduct.jsx';
-
+import StoreCart from './pages/storeCart.jsx';
 
 
 function App() {
@@ -31,6 +31,8 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/store" element={<StoreHome />} />{/*Ahmad New*/}
         <Route path="/store/product/:id" element={<StoreProduct />} />
+        <Route path="/storeCart" element={<StoreCart />} />
+        
         <Route path="/pos" element={<POS />} />
         <Route path="/employees" element={<Employees />} />
         <Route path="/items" element={<Items />} />

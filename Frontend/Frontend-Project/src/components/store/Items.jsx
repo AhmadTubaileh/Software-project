@@ -1,7 +1,10 @@
 import React from "react";
+import { Link } from "react-router-dom";
+import { storeProducts } from "../../data/storeProducts";
+
 
 export default function Items() {
-
+/*
     const products = [
                     {
                         id: 1,
@@ -28,23 +31,21 @@ export default function Items() {
                         image: "https://www.asus.com/media/Odin/Websites/global/ProductLine/20200824120814.jpg"
                     }
                 ];
+*/
+    return (
+        <div className="items-grid">
+        {storeProducts.map((product) => (
+            <div key={product.id} className="item-card">
+            <Link to={`/store/product/${product.id}`}>
+                <img src={product.img} className="item-image" alt={product.name} />
+            </Link>
 
-                return (
-                    
-                    <div className="items-grid">
-                        {products.map((product) => (
-                            <div key={product.id} className="item-card">
-                                <img src={product.image} className="item-image" />
+            <h3 className="item-title">{product.name}</h3>
+            <p className="item-price">${product.price}</p>
 
-                                <h3 className="item-title">{product.name}</h3>
-
-                                <p className="item-price">{product.price}</p>
-
-                                <button className="item-btn">Add to Cart</button>
-                            </div>
-                        ))}
-                    </div>
-                            
-                    
-                );
+            <button className="item-btn">Add to Cart</button>
+            </div>
+        ))}
+        </div>
+  );
 }

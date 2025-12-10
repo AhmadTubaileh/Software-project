@@ -1,4 +1,6 @@
 import React from "react";
+import { Link } from "react-router-dom";
+
 
 export default function Header() {
   const [searchText, setSearchText] = React.useState("");
@@ -45,6 +47,11 @@ export default function Header() {
           <button type="button" className="mars-header-button" onClick={signup}>
             Signup
           </button>
+
+          <Link to="/storeCart">
+            <button type="button" className="mars-header-button">Cart</button>
+          </Link>
+
         </form>
       </div>
 

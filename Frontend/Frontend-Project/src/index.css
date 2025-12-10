@@ -1,5 +1,4 @@
 /* Import legacy styles first to satisfy PostCSS */
-
 @import url('./legacy-home.css');
 
 /* Minimal base */
