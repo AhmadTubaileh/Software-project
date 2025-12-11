@@ -61,9 +61,18 @@ function AdminSidebar() {
 
   // Function to check if user can see a specific menu item
   const canSeeItem = (itemName, sectionName) => {
-    // Admin, Senior Manager, Manager can see everything
-    if (userType === 0 || userType === 1 || userType === 2) {
-      return true;
+    // Special case: Branches is ADMIN ONLY (user_type = 0)
+    if (itemName === 'Branches') {
+      return userType === 0; // Only admin can see Branches
+    }
+    
+    // Admin, Senior Manager, Manager can see everything (except Branches which is admin-only)
+    if (userType === 0) {
+      return true; // Admin can see everything including Branches
+    } else if (userType === 1 || userType === 2) {
+      // Senior Manager and Manager can see everything except Branches
+      const adminOnlyItems = ['Branches'];
+      return !adminOnlyItems.includes(itemName);
     }
     
     // Supervisor (3) restrictions
@@ -73,7 +82,8 @@ function AdminSidebar() {
         'Items', 
         'Project Management', 
         'Task Archive', 
-        'Manage Duty Hours'
+        'Manage Duty Hours',
+        'Branches' // Supervisor cannot see Branches
       ];
       return !restrictedItems.includes(itemName);
     }
@@ -87,7 +97,8 @@ function AdminSidebar() {
         'Task Archive', 
         'Manage Duty Hours',
         'Returns',
-        'Overdue Payments'
+        'Overdue Payments',
+        'Branches' // Employee cannot see Branches
       ];
       return !restrictedItems.includes(itemName);
     }
@@ -174,6 +185,7 @@ function AdminSidebar() {
       items: [
         { name: 'Manage Stock', path: '/worker-inventory', icon: '📦' },
         { name: 'Employees', path: '/employees', icon: '👨‍💼' },
+        { name: 'Branches', path: '/branches', icon: '🏢' }, // NEW: Added Branches
         { name: 'Items', path: '/items', icon: '📦' },
         { name: 'Project Management', path: '/project-management', icon: '🏗️' },
         { name: 'Task Archive', path: '/task-archive', icon: '📚' },
@@ -249,7 +261,7 @@ function AdminSidebar() {
     }, 100);
   };
 
-  // Section icons and colors
+  // Section icons and colors - Add Managerial section if not present
   const sectionIcons = {
     'Main': '🏠',
     'Sales': '💰',
@@ -341,6 +353,7 @@ function AdminSidebar() {
               <p className="text-xs text-gray-400 capitalize">
                 {getRoleName(userType)}
                 {currentUser?.user_type !== undefined && ` • Level ${currentUser.user_type}`}
+                {userType === 0 && <span className="ml-1 text-amber-400">🔐</span>}
               </p>
             </div>
           </div>
@@ -424,12 +437,16 @@ function AdminSidebar() {
                     isActive(item.path)
                       ? 'bg-gradient-to-r from-blue-500/20 to-purple-500/20 border border-blue-500/30 shadow-lg shadow-blue-500/10'
                       : 'hover:bg-gray-800/50 border border-transparent hover:border-gray-700/50'
+                  } ${
+                    item.name === 'Branches' && userType === 0 
+                      ? 'border-amber-500/30 hover:border-amber-500/50' 
+                      : ''
                   }`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`text-2xl transition-transform duration-300 group-hover:scale-110 ${
                       isActive(item.path) ? 'text-blue-400' : 'text-gray-400 group-hover:text-white'
-                    }`}>
+                    } ${item.name === 'Branches' ? 'text-amber-400' : ''}`}>
                       {item.icon}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -439,6 +456,11 @@ function AdminSidebar() {
                         }`}>
                           {item.name}
                         </span>
+                        {item.name === 'Branches' && userType === 0 && (
+                          <span className="text-xs bg-amber-900/30 text-amber-400 px-2 py-0.5 rounded-full">
+                            Admin Only
+                          </span>
+                        )}
                       </div>
                     </div>
                     {isActive(item.path) && (
