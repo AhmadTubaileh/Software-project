@@ -66,7 +66,7 @@ function Employees() {
     loadEmployees();
     loadBranches();
     loadUserBranches();
-  }, [retryCount]); // Retry when retryCount changes
+  }, [retryCount]);
 
   // Load all employees with access control
   const loadEmployees = async () => {
@@ -74,41 +74,33 @@ function Employees() {
       setLoading(true);
       console.log('Loading employees for user:', currentUser);
       
-      // Try with credentials first
-      let response;
-      try {
-        response = await fetch(`${API_BASE_URL}/employees`, {
-          credentials: 'include', // Try with credentials
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        // If we get a CORS error, try without credentials
-        if (!response.ok && response.status === 0) {
-          throw new Error('CORS error, trying without credentials');
-        }
-        
-      } catch (corsError) {
-        console.log('CORS error detected, trying without credentials...');
-        // Try without credentials
-        response = await fetch(`${API_BASE_URL}/employees`, {
-          headers: {
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-          }
-        });
+      // Add user ID to the request for backend filtering
+      const url = `${API_BASE_URL}/employees`;
+      const params = new URLSearchParams();
+      
+      // If user is not admin, send their ID for filtering
+      if (userType !== 0 && currentUser?.id) {
+        params.append('userId', currentUser.id);
       }
+      
+      const fullUrl = params.toString() ? `${url}?${params.toString()}` : url;
+      
+      console.log('Fetching from:', fullUrl);
+      
+      const response = await fetch(fullUrl, {
+        credentials: 'include',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         const errorMessage = errorData.error || `Failed to load employees: ${response.status}`;
         
-        // Handle specific status codes
         if (response.status === 401) {
           toast.error('Session expired. Please log in again.');
-          // You might want to redirect to login here
           return;
         }
         
@@ -118,23 +110,18 @@ function Employees() {
       const employeesData = await response.json();
       
       console.log(`Loaded ${employeesData.length} employees`);
+      console.log('First employee sample:', employeesData[0]);
       
-      // The backend already filters based on user access, so we can use all data
       setEmployees(employeesData);
       
     } catch (error) {
       console.error('Error loading employees:', error);
       
-      // Show user-friendly error message
       if (error.message.includes('Failed to fetch') || error.message.includes('CORS')) {
         toast.error(
           <div>
             <p className="font-semibold">Connection Error</p>
-            <p className="text-sm">Cannot connect to the server. Please check:</p>
-            <ul className="text-sm list-disc pl-4 mt-1">
-              <li>Backend server is running on port 5000</li>
-              <li>CORS is properly configured</li>
-            </ul>
+            <p className="text-sm">Cannot connect to the server.</p>
             <button 
               onClick={() => setRetryCount(prev => prev + 1)}
               className="mt-2 text-blue-400 hover:text-blue-300"
@@ -142,7 +129,7 @@ function Employees() {
               Click to retry
             </button>
           </div>,
-          { duration: 10000 }
+          { duration: 5000 }
         );
       } else {
         toast.error(error.message || 'Failed to load employees');
@@ -153,41 +140,62 @@ function Employees() {
     }
   };
 
-  // Load all branches for filter dropdown
+  // Load all branches for admin, accessible branches for others
   const loadBranches = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/employees/branches/all`);
-      if (!response.ok) {
-        throw new Error('Failed to load branches');
+      // If user is admin, load all branches
+      if (userType === 0) {
+        const response = await fetch(`${API_BASE_URL}/employees/branches/all`);
+        if (!response.ok) {
+          throw new Error('Failed to load branches');
+        }
+        const branchesData = await response.json();
+        console.log('Admin loaded all branches:', branchesData.length);
+        setAllBranches(branchesData);
+        setUserBranches(branchesData); // Admin sees all branches
+      } else {
+        // For non-admin, load only accessible branches
+        await loadUserBranches();
       }
-      const branchesData = await response.json();
-      console.log('Loaded branches:', branchesData.length);
-      setAllBranches(branchesData);
     } catch (error) {
       console.error('Error loading branches:', error);
-      // Use empty array as fallback instead of mock data
       setAllBranches([]);
-      toast.error('Failed to load branches');
     }
   };
 
   // Load accessible branches for current user
   const loadUserBranches = async () => {
-    if (!currentUser?.id) return;
+    if (!currentUser?.id) {
+      console.log('No current user ID, skipping branch load');
+      setUserBranches([]);
+      return;
+    }
     
     try {
       console.log('Loading accessible branches for user:', currentUser.id);
       const response = await fetch(`${API_BASE_URL}/employees/branches/accessible?userId=${currentUser.id}`);
+      
       if (!response.ok) {
-        throw new Error('Failed to load user branches');
+        console.error('Failed to load accessible branches:', response.status);
+        throw new Error('Failed to load accessible branches');
       }
+      
       const branchesData = await response.json();
-      console.log('User accessible branches:', branchesData.length);
+      console.log('User accessible branches:', branchesData);
+      
       setUserBranches(branchesData);
+      
+      // If user is not admin, also set allBranches to accessible branches for filter dropdown
+      if (userType !== 0) {
+        setAllBranches(branchesData);
+      }
+      
     } catch (error) {
       console.error('Error loading user branches:', error);
-      // Fallback to empty array
       setUserBranches([]);
+      if (userType !== 0) {
+        setAllBranches([]);
+      }
     }
   };
 
@@ -198,14 +206,14 @@ function Employees() {
       const response = await fetch(`${API_BASE_URL}/employees/branches/accessible?userId=${userId}`);
       if (!response.ok) {
         console.log('Failed to load accessible branches for modal');
-        return [];
+        return userType === 0 ? allBranches : userBranches;
       }
       const branches = await response.json();
       console.log(`Found ${branches.length} accessible branches for modal`);
       return branches;
     } catch (error) {
       console.error('Error loading accessible branches for modal:', error);
-      return [];
+      return userType === 0 ? allBranches : userBranches;
     }
   };
 
@@ -215,7 +223,9 @@ function Employees() {
       total: employees.length,
       searchQuery,
       levelFilter,
-      branchFilter
+      branchFilter,
+      userType: userType,
+      userBranchesCount: userBranches.length
     });
     
     return employees.filter(employee => {
@@ -234,24 +244,35 @@ function Employees() {
       // Branch filter
       let matchesBranch = false;
       if (branchFilter === 'all') {
-        matchesBranch = true;
+        // For non-admin users, filter by accessible branches even when "all" is selected
+        if (userType !== 0 && userBranches.length > 0) {
+          const employeeBranches = [
+            employee.primary_branch_id,
+            ...(employee.accessible_branches || [])
+          ];
+          // Only show employees in user's accessible branches
+          matchesBranch = employeeBranches.some(bid => 
+            userBranches.some(ub => ub.id === bid)
+          );
+        } else {
+          // Admin can see all employees
+          matchesBranch = true;
+        }
       } else {
         const branchId = parseInt(branchFilter);
-        // Check primary branch
-        if (employee.primary_branch_id === branchId) {
-          matchesBranch = true;
-        }
-        // Check accessible branches
-        if (employee.accessible_branches && employee.accessible_branches.includes(branchId)) {
-          matchesBranch = true;
-        }
+        // Check if employee belongs to this branch (primary or accessible)
+        const employeeBranches = [
+          employee.primary_branch_id,
+          ...(employee.accessible_branches || [])
+        ];
+        matchesBranch = employeeBranches.includes(branchId);
       }
       
       const isMatch = matchesSearch && matchesLevel && matchesBranch;
       
       return isMatch;
     });
-  }, [employees, searchQuery, levelFilter, branchFilter]);
+  }, [employees, searchQuery, levelFilter, branchFilter, userType, userBranches]);
 
   // Handle level filter change
   const handleLevelFilterChange = (e) => {
@@ -397,7 +418,6 @@ function Employees() {
         await handleAddEmployee(formData, currentUserId);
       }
     } catch (error) {
-      // Error is already handled in the individual functions
       console.error('Form submission error:', error);
     }
   };
@@ -410,13 +430,39 @@ function Employees() {
     return null;
   };
 
-  // Get branches for filter dropdown (admin sees all, others see only accessible)
+  // Get branches for filter dropdown
   const getFilterBranches = () => {
-    if (userType === 0) {
-      return allBranches;
-    }
-    return userBranches.length > 0 ? userBranches : allBranches;
+    // Admin sees all branches, others see only their accessible branches
+    return userType === 0 ? allBranches : userBranches;
   };
+
+  // Get accessible branch IDs for current user
+  const getUserBranchIds = () => {
+    return userBranches.map(branch => branch.id);
+  };
+
+  // Check if employee is in user's accessible branches
+  const isEmployeeAccessible = (employee) => {
+    if (userType === 0) return true; // Admin can see all
+    
+    const userBranchIds = getUserBranchIds();
+    const employeeBranches = [
+      employee.primary_branch_id,
+      ...(employee.accessible_branches || [])
+    ];
+    
+    // Check if employee has any branch in common with user's accessible branches
+    return employeeBranches.some(branchId => 
+      userBranchIds.includes(branchId)
+    );
+  };
+
+  // Filter employees to only show accessible ones (extra safety)
+  const accessibleEmployees = useMemo(() => {
+    if (userType === 0) return employees; // Admin sees all
+    
+    return employees.filter(employee => isEmployeeAccessible(employee));
+  }, [employees, userType, userBranches]);
 
   // Retry loading data
   const handleRetry = () => {
@@ -486,6 +532,31 @@ function Employees() {
             currentUser={currentUser}
           />
 
+          {/* Access Information Banner */}
+          {userType !== 0 && (
+            <div className="mb-6 p-4 bg-yellow-900/30 border border-yellow-700 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-yellow-300">📋 Access Information</h3>
+                  <p className="text-sm text-yellow-200">
+                    You can only view and manage employees in your accessible branches.
+                  </p>
+                  <p className="text-xs text-yellow-300 mt-1">
+                    Accessible Branches: {userBranches.map(b => b.name).join(', ')}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-yellow-300">
+                    User Type: {getRoleName(userType)}
+                  </p>
+                  <p className="text-xs text-yellow-300">
+                    Can assign levels: {userType === 1 ? '2-10' : userType === 2 ? '3-10' : 'All'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Filter Summary */}
           {!loading && employees.length > 0 && (
             <div className="mb-6 p-4 bg-gray-800 rounded-lg border border-gray-700">
@@ -493,6 +564,7 @@ function Employees() {
                 <span className="text-gray-400">Showing:</span>
                 <span className="text-white font-medium">
                   {filteredEmployees.length} of {employees.length} employees
+                  {userType !== 0 && ` (Only from your ${userBranches.length} accessible branches)`}
                 </span>
                 
                 {levelFilter !== 'all' && (
@@ -503,20 +575,13 @@ function Employees() {
                 
                 {branchFilter !== 'all' && (
                   <span className="bg-green-600 px-3 py-1 rounded-full text-xs">
-                    Branch: {allBranches.find(b => b.id == branchFilter)?.name || branchFilter}
+                    Branch: {getFilterBranches().find(b => b.id == branchFilter)?.name || branchFilter}
                   </span>
                 )}
                 
                 {searchQuery && (
                   <span className="bg-purple-600 px-3 py-1 rounded-full text-xs">
                     Search: "{searchQuery}"
-                  </span>
-                )}
-
-                {/* User Access Info */}
-                {userType !== 0 && (
-                  <span className="bg-yellow-600 px-3 py-1 rounded-full text-xs">
-                    Viewing only accessible branches
                   </span>
                 )}
 
@@ -544,8 +609,8 @@ function Employees() {
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
               <p className="mt-4 text-gray-400">Loading employees...</p>
               <p className="text-xs text-gray-500 mt-2">User type: {getRoleName(userType)}</p>
-              {retryCount > 0 && (
-                <p className="text-xs text-gray-400 mt-1">Retry attempt: {retryCount}</p>
+              {userType !== 0 && (
+                <p className="text-xs text-gray-400 mt-1">Filtering by your accessible branches</p>
               )}
             </div>
           )}
@@ -558,7 +623,7 @@ function Employees() {
               onSubmit={handleFormSubmit}
               onCancel={handleModalClose}
               currentUser={currentUser}
-              allBranches={allBranches}
+              allBranches={userType === 0 ? allBranches : userBranches}
               loadAccessibleBranches={loadAccessibleBranches}
             />
           )}
@@ -585,6 +650,7 @@ function Employees() {
                   onViewImage={handleViewImage}
                   currentUserType={userType}
                   currentUserId={currentUser?.id}
+                  canEditDelete={userType === 0 || employee.user_type > userType}
                 />
               ))}
             </div>
@@ -625,6 +691,7 @@ function Employees() {
             <EmptyState 
               onAddEmployee={handleAddButtonClick}
               userType={userType}
+              userBranches={userBranches}
             />
           )}
 
@@ -634,16 +701,17 @@ function Employees() {
               <h3 className="font-bold mb-2">Debug Info:</h3>
               <p>User Type: {userType} ({getRoleName(userType)})</p>
               <p>User ID: {currentUser?.id}</p>
-              <p>Total Employees: {employees.length}</p>
+              <p>Total Employees from API: {employees.length}</p>
               <p>Filtered Employees: {filteredEmployees.length}</p>
-              <p>All Branches: {allBranches.length}</p>
-              <p>User Branches: {userBranches.length}</p>
-              <p>Retry Count: {retryCount}</p>
+              <p>Accessible Branches: {userBranches.map(b => b.name).join(', ')}</p>
+              <p>Branch IDs: {userBranches.map(b => b.id).join(', ')}</p>
               <div className="mt-2">
                 <button
                   onClick={() => {
                     console.log('Current employees:', employees);
                     console.log('Current user:', currentUser);
+                    console.log('User branches:', userBranches);
+                    console.log('All branches:', allBranches);
                   }}
                   className="bg-gray-700 px-2 py-1 rounded text-xs mr-2"
                 >
@@ -662,7 +730,7 @@ function Employees() {
       </main>
     </div>
   );
-}
+}    
 
 // Helper function to get role name
 function getRoleName(userType) {
