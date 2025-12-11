@@ -446,7 +446,7 @@ function EmployeeForm({ employee, onSubmit, onCancel, currentUser, allBranches, 
               No branches available. You need branch access to create employees.
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {filteredBranches.map(branch => (
                 <div key={branch.id} className="flex items-center">
                   <input
@@ -454,11 +454,11 @@ function EmployeeForm({ employee, onSubmit, onCancel, currentUser, allBranches, 
                     id={`branch-${branch.id}`}
                     checked={formData.branch_ids.includes(branch.id)}
                     onChange={() => handleBranchToggle(branch.id)}
-                    className="h-4 w-4 text-blue-600 rounded focus:ring-blue-500 focus:ring-offset-gray-800"
+                    className="h-5 w-5 text-blue-600 bg-gray-700 border-gray-600 rounded cursor-pointer transition-all duration-200 hover:bg-gray-650 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800"
                   />
                   <label
                     htmlFor={`branch-${branch.id}`}
-                    className="ml-2 text-sm text-gray-300 cursor-pointer"
+                    className="ml-3 text-sm font-medium text-gray-200 cursor-pointer hover:text-white transition-colors duration-150"
                   >
                     {branch.name}
                   </label>
