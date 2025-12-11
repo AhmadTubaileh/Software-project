@@ -35,9 +35,63 @@ if (!fs.existsSync(tasksUploadsDir)) {
   console.log('📁 Created uploads/tasks directory');
 }
 
+// ⭐ UPDATED: CORS Configuration
+// Define allowed origins
+const allowedOrigins = [
+  'http://localhost:5173', // Vite default port
+  'http://localhost:3000', // Create React App default
+  'http://localhost:8080', // Alternative port
+  'http://127.0.0.1:5173', // Localhost alternative
+  'http://127.0.0.1:3000',
+  // Add production URLs here when deploying
+  // 'https://yourdomain.com',
+];
+
+// CORS options
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('⚠️ Blocked by CORS:', origin);
+      callback(new Error('Not allowed by CORS'), false);
+    }
+  },
+  credentials: true, // Allow credentials (cookies, authorization headers)
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'Accept', 
+    'Origin',
+    'Cache-Control',
+    'X-Auth-Token'
+  ],
+  exposedHeaders: [
+    'Content-Range',
+    'X-Content-Range',
+    'Content-Disposition',
+    'X-Total-Count'
+  ],
+  maxAge: 86400, // 24 hours
+  preflightContinue: false,
+  optionsSuccessStatus: 204
+};
+
+// Apply CORS middleware with options
+app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
+
 // ⭐ UPDATED: Increased body size limits for FormData with multiple sponsors
 // Middleware
-app.use(cors());
 app.use(express.json({ limit: '50mb' })); // ⭐ Increase JSON body limit
 app.use(express.urlencoded({ 
   extended: true, 
@@ -63,10 +117,12 @@ app.use('/api/chats', chatRoutes);
 app.use('/api/overdue', overdueRoutes);
 app.use('/api/branches', branchRoutes);
 
-// Health check
+// Health check with CORS headers explicitly
 app.get('/api/health', (req, res) => {
   res.json({ 
     message: 'Server is running!',
+    cors: 'Configured for credentials',
+    timestamp: new Date().toISOString(),
     routes: [
       '/api/employees', 
       '/api/auth', 
@@ -85,9 +141,32 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Add CORS headers manually for all routes (backup)
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  next();
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
+  
+  // Handle CORS errors specifically
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ 
+      error: 'CORS Error', 
+      message: 'Origin not allowed',
+      allowedOrigins: allowedOrigins,
+      yourOrigin: req.headers.origin
+    });
+  }
+  
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
@@ -179,6 +258,8 @@ app.listen(PORT, () => {
   console.log(`💬 Chat System: http://localhost:${PORT}/api/chats`);
   console.log(`📁 File Uploads: http://localhost:${PORT}/uploads`);
   console.log(`✅ All Routes: http://localhost:${PORT}/api/health`);
+  console.log(`🌐 CORS configured for: ${allowedOrigins.join(', ')}`);
+  console.log(`🔐 Credentials allowed: Yes`);
   
   // Start the daily overdue check scheduler
   console.log('\n🔔 Starting automated overdue payments check system...');
