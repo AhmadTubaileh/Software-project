@@ -421,8 +421,12 @@ function AdminSidebar() {
             </button>
 
             {/* Section Items - Animated */}
-            <div className={`space-y-1 transition-all duration-300 overflow-hidden ${
-              expandedSections[section.name] ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+            <div className={`space-y-1 transition-all duration-300 ${
+              expandedSections[section.name]
+                ? (section.name === 'Managerial'
+                    ? 'max-h-[600px] opacity-100 overflow-y-auto'
+                    : 'max-h-96 opacity-100 overflow-hidden')
+                : 'max-h-0 opacity-0 overflow-hidden'
             }`}>
               {/* Static menu items */}
               {section.items.map((item) => (
