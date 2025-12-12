@@ -157,10 +157,10 @@ class Contract {
     });
   }
 
-  // Get items available for installment with latest prices
-  static getInstallmentItems() {
+  // Get items available for installment with latest prices (filtered by branch)
+  static getInstallmentItems(branchId = null) {
     return new Promise((resolve, reject) => {
-      const query = `
+      let query = `
         SELECT 
           i.id,
           i.name,
@@ -169,6 +169,8 @@ class Contract {
           i.installment,
           i.quantity,
           i.item_image,
+          i.branch_id,
+          b.name as branch_name,
           ip.id as price_id,
           ip.price_cash,
           ip.price_installment_total,
@@ -180,6 +182,7 @@ class Contract {
           ip.on_sale_price
         FROM items i
         LEFT JOIN item_prices ip ON i.id = ip.item_id
+        LEFT JOIN branches b ON i.branch_id = b.id
         WHERE i.available = 1 
           AND i.installment = 1
           AND ip.date = (
@@ -187,10 +190,17 @@ class Contract {
             FROM item_prices 
             WHERE item_id = i.id
           )
-        ORDER BY i.name
       `;
       
-      db.query(query, (err, results) => {
+      const params = [];
+      if (branchId) {
+        query += ` AND i.branch_id = ?`;
+        params.push(branchId);
+      }
+      
+      query += ` ORDER BY i.name`;
+      
+      db.query(query, params, (err, results) => {
         if (err) {
           reject(err);
           return;
@@ -414,14 +424,16 @@ class Contract {
               // 3. Create installment contract
               const contractQuery = `
                 INSERT INTO installment_contracts 
-                (user_id, customer_id, item_id, price_id,
+                (branch_id, user_id, customer_id, item_id, price_id,
                  total_price, down_payment, months, monthly_payment, 
                  installment_last_payment, start_date, status, original_contract_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
               `;
               
               console.log('📝 Creating contract...');
+              console.log('📍 Branch ID:', contract_data.branch_id);
               db.query(contractQuery, [
+                contract_data.branch_id,
                 contract_data.worker_id,
                 customerId,
                 contract_data.item_id,
@@ -645,9 +657,9 @@ class Contract {
   }
 
   // Get pending contracts for admin review with price info
-  static getPendingContracts() {
+  static getPendingContracts(branchIds = null) {
     return new Promise((resolve, reject) => {
-      const query = `
+      let query = `
         SELECT 
           ic.*,
           cc.full_name as customer_name,
@@ -663,16 +675,28 @@ class Contract {
           ip.on_sale_price,
           i.quantity as item_quantity,
           u.username as worker_name,
-          ca.status as approval_status
+          ca.status as approval_status,
+          b.name as branch_name
         FROM installment_contracts ic
         LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
         LEFT JOIN items i ON ic.item_id = i.id
         LEFT JOIN item_prices ip ON ic.price_id = ip.id
         LEFT JOIN users u ON ic.user_id = u.id
         LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+        LEFT JOIN branches b ON ic.branch_id = b.id
         WHERE ic.status = 'pending'
-        ORDER BY ic.created_at DESC
       `;
+      
+      const params = [];
+      
+      // Filter by accessible branches if provided
+      if (branchIds && Array.isArray(branchIds) && branchIds.length > 0) {
+        const placeholders = branchIds.map(() => '?').join(',');
+        query += ` AND ic.branch_id IN (${placeholders})`;
+        params.push(...branchIds);
+      }
+      
+      query += ' ORDER BY ic.created_at DESC';
       
       db.query(query, (err, results) => {
         if (err) {
@@ -685,7 +709,7 @@ class Contract {
   }
 
   // Get all contracts with filters and price info
-  static getAllContracts(status = null) {
+  static getAllContracts(status = null, branchIds = null) {
     return new Promise((resolve, reject) => {
       let query = `
         SELECT 
@@ -706,6 +730,7 @@ class Contract {
           ca.reason as rejection_reason,
           ca.approver_id,
           ca.updated_at as decision_date,
+          b.name as branch_name,
           -- Count payments for this contract
           (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as total_payments,
           (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id AND ipay.status = 'paid') as paid_payments,
@@ -727,6 +752,7 @@ class Contract {
         LEFT JOIN item_prices ip ON ic.price_id = ip.id
         LEFT JOIN users u ON ic.user_id = u.id
         LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+        LEFT JOIN branches b ON ic.branch_id = b.id
         -- Left join for original contract (if this is a reapplication)
         LEFT JOIN installment_contracts oic ON ic.original_contract_id = oic.id
         LEFT JOIN contract_customers occ ON oic.customer_id = occ.id
@@ -736,9 +762,22 @@ class Contract {
       `;
       
       const params = [];
+      const conditions = [];
+      
       if (status && status !== 'all') {
-        query += ' WHERE ic.status = ?';
+        conditions.push('ic.status = ?');
         params.push(status);
+      }
+      
+      // Filter by accessible branches if provided
+      if (branchIds && Array.isArray(branchIds) && branchIds.length > 0) {
+        const placeholders = branchIds.map(() => '?').join(',');
+        conditions.push(`ic.branch_id IN (${placeholders})`);
+        params.push(...branchIds);
+      }
+      
+      if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
       }
       
       query += ' ORDER BY ic.created_at DESC';
@@ -1393,6 +1432,118 @@ static rollbackTransaction() {
           return;
         }
         resolve(results[0] || null);
+      });
+    });
+  }
+
+  // Get contracts with branch analysis (for Contract Branches page)
+  static getContractsWithBranchAnalysis(branchIds = null) {
+    return new Promise((resolve, reject) => {
+      let query = `
+        SELECT 
+          ic.id as contract_id,
+          ic.branch_id as contract_branch_id,
+          b.name as contract_branch_name,
+          ic.customer_id,
+          cc.full_name as customer_name,
+          cc.phone as customer_phone,
+          ic.item_id,
+          i.name as item_name,
+          ic.total_price,
+          ic.down_payment,
+          ic.months,
+          ic.monthly_payment,
+          ic.status,
+          ic.created_at,
+          u.username as worker_name
+        FROM installment_contracts ic
+        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+        LEFT JOIN items i ON ic.item_id = i.id
+        LEFT JOIN users u ON ic.user_id = u.id
+        LEFT JOIN branches b ON ic.branch_id = b.id
+        WHERE ic.status IN ('active', 'completed')
+      `;
+      
+      const params = [];
+      if (branchIds && Array.isArray(branchIds) && branchIds.length > 0) {
+        const placeholders = branchIds.map(() => '?').join(',');
+        query += ` AND ic.branch_id IN (${placeholders})`;
+        params.push(...branchIds);
+      }
+      
+      query += ` ORDER BY ic.created_at DESC`;
+      
+      db.query(query, params, (err, contracts) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        // For each contract, get payments and transactions
+        const contractsWithDetails = contracts.map(contract => ({
+          ...contract,
+          payments: []
+        }));
+        
+        // Get payments and transactions for each contract
+        const paymentPromises = contractsWithDetails.map(contract => {
+          return new Promise((resolvePayment) => {
+            // Get payments for this contract
+            const paymentQuery = `
+              SELECT 
+                ip.*,
+                (SELECT COUNT(*) FROM installment_transactions it WHERE it.payment_id = ip.id) as transaction_count
+              FROM installment_payments ip
+              WHERE ip.contract_id = ?
+              ORDER BY ip.month_number ASC
+            `;
+            
+            db.query(paymentQuery, [contract.contract_id], (err, payments) => {
+              if (err) {
+                resolvePayment({ contract, payments: [] });
+                return;
+              }
+              
+              // Get transactions for each payment
+              const transactionPromises = payments.map(payment => {
+                return new Promise((resolveTransaction) => {
+                  const transactionQuery = `
+                    SELECT 
+                      it.*,
+                      b.name as branch_name,
+                      u.username as worker_name
+                    FROM installment_transactions it
+                    LEFT JOIN branches b ON it.branch_id = b.id
+                    LEFT JOIN users u ON it.worker_id = u.id
+                    WHERE it.payment_id = ?
+                    ORDER BY it.payment_date DESC
+                  `;
+                  
+                  db.query(transactionQuery, [payment.id], (err, transactions) => {
+                    if (err) {
+                      resolveTransaction({ ...payment, transactions: [] });
+                    } else {
+                      resolveTransaction({ ...payment, transactions: transactions || [] });
+                    }
+                  });
+                });
+              });
+              
+              Promise.all(transactionPromises).then(paymentsWithTransactions => {
+                resolvePayment({ contract, payments: paymentsWithTransactions });
+              });
+            });
+          });
+        });
+        
+        Promise.all(paymentPromises).then(results => {
+          const finalContracts = results.map(result => ({
+            ...result.contract,
+            payments: result.payments
+          }));
+          
+          resolve(finalContracts);
+        });
       });
     });
   }

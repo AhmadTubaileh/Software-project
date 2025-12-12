@@ -54,6 +54,9 @@ const ContractApplication = () => {
   const [loading, setLoading] = useState(false);
   const [isReapplication, setIsReapplication] = useState(false);
   const [originalContractId, setOriginalContractId] = useState(null);
+  const [accessibleBranches, setAccessibleBranches] = useState([]);
+  const [selectedBranchId, setSelectedBranchId] = useState(null);
+  const [loadingBranches, setLoadingBranches] = useState(true);
   
   // Main form state - UPDATED FOR MULTIPLE ITEMS WITH QUANTITY
   const [formData, setFormData] = useState({
@@ -77,6 +80,44 @@ const ContractApplication = () => {
     // Step 4: Contract Items - ARRAY FOR MULTIPLE ITEMS WITH QUANTITY
     contractItems: []
   });
+
+  // Fetch accessible branches on mount
+  useEffect(() => {
+    const fetchAccessibleBranches = async () => {
+      if (!currentUser?.id) {
+        setLoadingBranches(false);
+        return;
+      }
+      
+      try {
+        setLoadingBranches(true);
+        const response = await fetch(`http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch accessible branches');
+        }
+        
+        const branches = await response.json();
+        setAccessibleBranches(branches);
+        
+        // Default to user's primary branch if available
+        if (currentUser.primary_branch_id) {
+          setSelectedBranchId(currentUser.primary_branch_id);
+        } else if (branches.length > 0) {
+          // If no primary branch, use first accessible branch
+          setSelectedBranchId(branches[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching accessible branches:', error);
+        toast.error('Failed to load branches');
+        setAccessibleBranches([]);
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+
+    fetchAccessibleBranches();
+  }, [currentUser]);
 
   // Load reapplication data from location state or sessionStorage
   useEffect(() => {
@@ -232,6 +273,12 @@ const ContractApplication = () => {
       // Append all contract items with quantity - INCLUDING ORIGINAL CONTRACT ID
       const contractsData = [];
       
+      // Validate branch selection
+      if (!selectedBranchId) {
+        toast.error('Please select a branch for this contract');
+        return;
+      }
+
       formData.contractItems.forEach(item => {
         // For each quantity unit, create a separate contract entry
         for (let i = 0; i < item.quantity; i++) {
@@ -247,6 +294,7 @@ const ContractApplication = () => {
             installment_last_payment: item.installment_last_payment,
             start_date: item.start_date,
             worker_id: currentUser.id,
+            branch_id: selectedBranchId, // Include selected branch_id
             quantity: 1, // Each entry is for 1 item
             contract_number: i + 1, // Which copy this is (1st, 2nd, etc.)
             original_quantity: item.quantity, // Keep original for reference
@@ -384,6 +432,7 @@ const ContractApplication = () => {
             isReapplication={isReapplication}
             originalContractId={originalContractId}
             onCancelEdit={handleCancelEdit}
+            selectedBranchId={selectedBranchId}
           />
         );
       default:
@@ -448,6 +497,37 @@ const ContractApplication = () => {
                 <span>❌</span>
                 Cancel Edit
               </button>
+            )}
+          </div>
+
+          {/* Branch Selection - Always visible */}
+          <div className="mb-6 bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Select Branch <span className="text-red-400">*</span>
+            </label>
+            {loadingBranches ? (
+              <div className="text-gray-400 text-sm">Loading branches...</div>
+            ) : accessibleBranches.length === 0 ? (
+              <div className="text-red-400 text-sm">No accessible branches found. Please contact administrator.</div>
+            ) : (
+              <select
+                value={selectedBranchId || ''}
+                onChange={(e) => setSelectedBranchId(parseInt(e.target.value))}
+                className="w-full md:w-64 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              >
+                <option value="">-- Select Branch --</option>
+                {accessibleBranches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {selectedBranchId && (
+              <p className="mt-2 text-xs text-gray-400">
+                Selected: {accessibleBranches.find(b => b.id === selectedBranchId)?.name || 'Unknown'}
+              </p>
             )}
           </div>
 

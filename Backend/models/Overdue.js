@@ -115,6 +115,8 @@ static syncOverduePayments() {
           ip.amount_paid,
           ip.status as payment_status,
           ic.customer_id,
+          ic.branch_id,
+          b.name as branch_name,
           cc.full_name as customer_name,
           cc.phone as customer_phone,
           i.name as item_name,
@@ -126,6 +128,7 @@ static syncOverduePayments() {
         INNER JOIN contract_customers cc ON ic.customer_id = cc.id
         INNER JOIN items i ON ic.item_id = i.id
         LEFT JOIN users u ON ios.last_worker_id = u.id
+        LEFT JOIN branches b ON ic.branch_id = b.id
         WHERE 1=1
       `;
       
@@ -141,6 +144,13 @@ static syncOverduePayments() {
         params.push(filters.contract_id);
       }
       
+      // Filter by accessible branches if provided
+      if (filters.branchIds && Array.isArray(filters.branchIds) && filters.branchIds.length > 0) {
+        const placeholders = filters.branchIds.map(() => '?').join(',');
+        query += ` AND ic.branch_id IN (${placeholders})`;
+        params.push(...filters.branchIds);
+      }
+      
       query += ' ORDER BY ios.updated_at DESC, ip.due_date ASC';
       
       db.query(query, params, (err, results) => {
@@ -154,15 +164,16 @@ static syncOverduePayments() {
   }
 
   // Get contracts that have overdue payments
-  static getContractsWithOverdue() {
+  static getContractsWithOverdue(branchIds = null) {
     return new Promise((resolve, reject) => {
-      const query = `
+      let query = `
         SELECT DISTINCT
           ic.*,
           cc.full_name as customer_name,
           cc.phone as customer_phone,
           i.name as item_name,
           u.username as worker_name,
+          b.name as branch_name,
           (
             SELECT COUNT(*) 
             FROM installment_payments ip 
@@ -181,6 +192,7 @@ static syncOverduePayments() {
         INNER JOIN contract_customers cc ON ic.customer_id = cc.id
         INNER JOIN items i ON ic.item_id = i.id
         INNER JOIN users u ON ic.user_id = u.id
+        LEFT JOIN branches b ON ic.branch_id = b.id
         WHERE ic.status = 'active'
           AND EXISTS (
             SELECT 1 
@@ -189,10 +201,20 @@ static syncOverduePayments() {
               AND ip.is_overdue = 1
               AND ip.status IN ('pending', 'partial')
           )
-        ORDER BY ic.created_at DESC
       `;
       
-      db.query(query, (err, results) => {
+      const params = [];
+      
+      // Filter by accessible branches if provided
+      if (branchIds && Array.isArray(branchIds) && branchIds.length > 0) {
+        const placeholders = branchIds.map(() => '?').join(',');
+        query += ` AND ic.branch_id IN (${placeholders})`;
+        params.push(...branchIds);
+      }
+      
+      query += ' ORDER BY ic.created_at DESC';
+      
+      db.query(query, params, (err, results) => {
         if (err) {
           reject(err);
           return;
@@ -353,20 +375,53 @@ static syncOverduePayments() {
   }
 
   // Get statistics
-  static getStatistics() {
+  static getStatistics(branchIds = null) {
     return new Promise((resolve, reject) => {
+      let branchFilter = '';
+      const params = [];
+      
+      if (branchIds && Array.isArray(branchIds) && branchIds.length > 0) {
+        const placeholders = branchIds.map(() => '?').join(',');
+        branchFilter = ` AND ic.branch_id IN (${placeholders})`;
+        // Add branchIds for each subquery (7 subqueries total)
+        for (let i = 0; i < 7; i++) {
+          params.push(...branchIds);
+        }
+      }
+      
       const query = `
         SELECT 
-          (SELECT COUNT(*) FROM installment_overdue_summary) as total_overdue,
-          (SELECT COUNT(*) FROM installment_overdue_summary WHERE status = 'pending') as pending_count,
-          (SELECT COUNT(*) FROM installment_overdue_summary WHERE status = 'waiting') as waiting_count,
-          (SELECT COUNT(*) FROM installment_overdue_summary WHERE status = 'not_responding') as not_responding_count,
-          (SELECT COUNT(*) FROM installment_overdue_summary WHERE status = 'resolved') as resolved_count,
-          (SELECT COUNT(DISTINCT contract_id) FROM installment_overdue_summary ios INNER JOIN installment_payments ip ON ios.payment_id = ip.id WHERE ios.status != 'resolved') as active_contracts_count,
-          (SELECT SUM(amount_due - amount_paid) FROM installment_overdue_summary ios INNER JOIN installment_payments ip ON ios.payment_id = ip.id WHERE ios.status != 'resolved') as total_overdue_amount
+          (SELECT COUNT(*) FROM installment_overdue_summary ios 
+           INNER JOIN installment_payments ip ON ios.payment_id = ip.id
+           INNER JOIN installment_contracts ic ON ip.contract_id = ic.id
+           WHERE 1=1 ${branchFilter}) as total_overdue,
+          (SELECT COUNT(*) FROM installment_overdue_summary ios 
+           INNER JOIN installment_payments ip ON ios.payment_id = ip.id
+           INNER JOIN installment_contracts ic ON ip.contract_id = ic.id
+           WHERE ios.status = 'pending' ${branchFilter}) as pending_count,
+          (SELECT COUNT(*) FROM installment_overdue_summary ios 
+           INNER JOIN installment_payments ip ON ios.payment_id = ip.id
+           INNER JOIN installment_contracts ic ON ip.contract_id = ic.id
+           WHERE ios.status = 'waiting' ${branchFilter}) as waiting_count,
+          (SELECT COUNT(*) FROM installment_overdue_summary ios 
+           INNER JOIN installment_payments ip ON ios.payment_id = ip.id
+           INNER JOIN installment_contracts ic ON ip.contract_id = ic.id
+           WHERE ios.status = 'not_responding' ${branchFilter}) as not_responding_count,
+          (SELECT COUNT(*) FROM installment_overdue_summary ios 
+           INNER JOIN installment_payments ip ON ios.payment_id = ip.id
+           INNER JOIN installment_contracts ic ON ip.contract_id = ic.id
+           WHERE ios.status = 'resolved' ${branchFilter}) as resolved_count,
+          (SELECT COUNT(DISTINCT ip.contract_id) FROM installment_overdue_summary ios 
+           INNER JOIN installment_payments ip ON ios.payment_id = ip.id
+           INNER JOIN installment_contracts ic ON ip.contract_id = ic.id
+           WHERE ios.status != 'resolved' ${branchFilter}) as active_contracts_count,
+          (SELECT SUM(ip.amount_due - ip.amount_paid) FROM installment_overdue_summary ios 
+           INNER JOIN installment_payments ip ON ios.payment_id = ip.id
+           INNER JOIN installment_contracts ic ON ip.contract_id = ic.id
+           WHERE ios.status != 'resolved' ${branchFilter}) as total_overdue_amount
       `;
       
-      db.query(query, (err, results) => {
+      db.query(query, params, (err, results) => {
         if (err) {
           reject(err);
           return;
@@ -376,15 +431,16 @@ static syncOverduePayments() {
     });
   }
   // Search contracts with overdue payments by customer name
-static searchContractsByCustomerName(customerName) {
+static searchContractsByCustomerName(customerName, branchIds = null) {
   return new Promise((resolve, reject) => {
-    const query = `
+    let query = `
       SELECT DISTINCT
         ic.*,
         cc.full_name as customer_name,
         cc.phone as customer_phone,
         i.name as item_name,
         u.username as worker_name,
+        b.name as branch_name,
         (
           SELECT COUNT(*) 
           FROM installment_payments ip 
@@ -410,6 +466,7 @@ static searchContractsByCustomerName(customerName) {
       INNER JOIN contract_customers cc ON ic.customer_id = cc.id
       INNER JOIN items i ON ic.item_id = i.id
       INNER JOIN users u ON ic.user_id = u.id
+      LEFT JOIN branches b ON ic.branch_id = b.id
       WHERE ic.status = 'active'
         AND EXISTS (
           SELECT 1 
@@ -419,10 +476,20 @@ static searchContractsByCustomerName(customerName) {
             AND ip.status IN ('pending', 'partial')
         )
         AND cc.full_name LIKE ?
-      ORDER BY ic.created_at DESC
     `;
     
-    db.query(query, [`%${customerName}%`], (err, results) => {
+    const params = [`%${customerName}%`];
+    
+    // Filter by accessible branches if provided
+    if (branchIds && Array.isArray(branchIds) && branchIds.length > 0) {
+      const placeholders = branchIds.map(() => '?').join(',');
+      query += ` AND ic.branch_id IN (${placeholders})`;
+      params.push(...branchIds);
+    }
+    
+    query += ' ORDER BY ic.created_at DESC';
+    
+    db.query(query, params, (err, results) => {
       if (err) {
         reject(err);
         return;

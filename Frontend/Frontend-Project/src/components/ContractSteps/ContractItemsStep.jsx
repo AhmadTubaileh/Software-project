@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 
-const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loading, isReapplication = false }) => {
+const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loading, isReapplication = false, selectedBranchId = null }) => {
   const [items, setItems] = useState([]);
   const [itemsLoading, setItemsLoading] = useState(true);
   const [itemsError, setItemsError] = useState(null);
@@ -83,14 +83,23 @@ const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loadi
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Fetch available installment items with their latest prices
+  // Fetch available installment items with their latest prices (filtered by selected branch)
   useEffect(() => {
     const fetchItems = async () => {
+      // Don't fetch if no branch is selected
+      if (!selectedBranchId) {
+        setItemsLoading(false);
+        setItemsError('Please select a branch first');
+        setItems([]);
+        return;
+      }
+
       try {
         setItemsLoading(true);
         setItemsError(null);
         
-        const response = await fetch('http://localhost:5000/api/contracts/items');
+        const url = `http://localhost:5000/api/contracts/items?branch_id=${selectedBranchId}`;
+        const response = await fetch(url);
         
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
@@ -98,6 +107,10 @@ const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loadi
         
         const data = await response.json();
         setItems(data);
+        
+        if (data.length === 0) {
+          setItemsError('No items available for the selected branch');
+        }
       } catch (error) {
         console.error('Error fetching installment items:', error);
         setItemsError(error.message);
@@ -108,7 +121,7 @@ const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loadi
     };
 
     fetchItems();
-  }, []);
+  }, [selectedBranchId]);
 
   // Filter items based on search term
   const filteredItems = items.filter(item => 
@@ -335,17 +348,31 @@ const ContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, loadi
       <div className="space-y-6">
         {/* Add Item Section */}
         <div className="bg-gray-700/50 rounded-xl p-6 border border-gray-600/50">
-          <h3 className="text-xl font-semibold mb-4 text-white">Add Items to Contract</h3>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-xl font-semibold text-white">Add Items to Contract</h3>
+            {selectedBranchId && items.length > 0 && (
+              <div className="text-sm text-gray-400">
+                Showing {items.length} item{items.length !== 1 ? 's' : ''} from selected branch
+              </div>
+            )}
+          </div>
           
           <div className="relative mb-6" ref={dropdownRef}>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Search and Select Items *
             </label>
             
-            {itemsLoading ? (
+            {!selectedBranchId ? (
+              <div className="text-yellow-400 bg-yellow-900/20 p-4 rounded-lg border border-yellow-500">
+                <div className="flex items-center gap-2">
+                  <span>⚠️</span>
+                  <span>Please select a branch in the header above to view available items</span>
+                </div>
+              </div>
+            ) : itemsLoading ? (
               <div className="flex items-center gap-2 text-gray-400 p-4 bg-gray-700 rounded-lg">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                Loading available items...
+                Loading available items for selected branch...
               </div>
             ) : itemsError ? (
               <div className="text-red-400 bg-red-900/20 p-4 rounded-lg border border-red-500">

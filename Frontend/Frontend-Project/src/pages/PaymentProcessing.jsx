@@ -61,6 +61,7 @@ function PaymentProcessing() {
   const paymentFormRef = useRef(null);
 
   // Search for contracts by customer name OR ID card number
+  // Note: PaymentProcessing shows ALL contracts from ALL branches (no branch filter)
   const handleSearch = useCallback(async () => {
     if (!searchTerm.trim()) {
       toast.error(`Please enter a ${searchType === 'name' ? 'customer name' : 'ID card number'} to search`);
@@ -69,6 +70,7 @@ function PaymentProcessing() {
 
     setLoading(true);
     try {
+      // PaymentProcessing should show all contracts regardless of branch
       const response = await fetch(
         `http://localhost:5000/api/payments/search?${searchType}=${encodeURIComponent(searchTerm)}`
       );
@@ -379,6 +381,12 @@ function PaymentProcessing() {
                           </div>
                           <div className="flex-1">
                             <p className="font-semibold text-white text-lg">{contract.item_name}</p>
+                            {contract.branch_name && (
+                              <p className="text-sm text-blue-400 mt-1 flex items-center gap-1">
+                                <span>📍</span>
+                                <span>Branch: {contract.branch_name}</span>
+                              </p>
+                            )}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
                               <div>
                                 <p className="text-sm text-gray-400">Customer</p>
