@@ -2,63 +2,135 @@
 const db = require('../config/database');
 
 class POS {
-  // models/POS.js - Update the getAvailableItems function:
-static getAvailableItems(callback) {
-  const query = `
-    SELECT 
-      i.id, 
-      i.name, 
-      i.description, 
-      i.available,
-      i.quantity,
-      i.installment,
-      i.item_image,
-      ip.id as price_id,
-      ip.price_cash,
-      ip.buy_price,
-      ip.price_installment_total,
-      ip.installment_first_payment,
-      ip.installment_months,
-      ip.installment_per_month,
-      ip.installment_last_payment,
-      ip.on_sale_price,
-      ip.date as price_date,
-      u.username as updated_by
-    FROM items i
-    LEFT JOIN item_prices ip ON i.id = ip.item_id
-    LEFT JOIN users u ON ip.user_id = u.id
-    WHERE ip.id = (
-      SELECT id 
-      FROM item_prices 
-      WHERE item_id = i.id 
-      ORDER BY date DESC 
-      LIMIT 1
-    )
-    OR ip.id IS NULL
-    ORDER BY 
-      CASE 
-        WHEN i.available = 1 AND i.quantity > 0 THEN 1  -- Available items first
-        ELSE 2  -- Out of stock items last
-      END,
-      i.name
+  // models/POS.js - Update the getAvailableItems function to filter by accessible branches:
+static getAvailableItems(userId, callback) {
+  // If no userId provided, return all items (for admin or backward compatibility)
+  if (!userId) {
+    const query = `
+      SELECT 
+        i.id, 
+        i.name, 
+        i.description, 
+        i.available,
+        i.quantity,
+        i.installment,
+        i.item_image,
+        ip.id as price_id,
+        ip.price_cash,
+        ip.buy_price,
+        ip.price_installment_total,
+        ip.installment_first_payment,
+        ip.installment_months,
+        ip.installment_per_month,
+        ip.installment_last_payment,
+        ip.on_sale_price,
+        ip.date as price_date,
+        u.username as updated_by
+      FROM items i
+      LEFT JOIN item_prices ip ON i.id = ip.item_id
+      LEFT JOIN users u ON ip.user_id = u.id
+      WHERE ip.id = (
+        SELECT id 
+        FROM item_prices 
+        WHERE item_id = i.id 
+        ORDER BY date DESC 
+        LIMIT 1
+      )
+      OR ip.id IS NULL
+      ORDER BY 
+        CASE 
+          WHEN i.available = 1 AND i.quantity > 0 THEN 1  -- Available items first
+          ELSE 2  -- Out of stock items last
+        END,
+        i.name
+    `;
+    
+    db.query(query, (err, results) => {
+      if (err) {
+        console.error('❌ POS.getAvailableItems Error:', err);
+        return callback(err);
+      }
+      
+      console.log(`✅ POS: Found ${results.length} total items (no user filter)`);
+      callback(null, results);
+    });
+    return;
+  }
+
+  // Get user's accessible branches
+  const branchQuery = `
+    SELECT DISTINCT branch_id 
+    FROM user_branches 
+    WHERE user_id = ?
   `;
   
-  db.query(query, (err, results) => {
+  db.query(branchQuery, [userId], (err, branchResults) => {
     if (err) {
-      console.error('❌ POS.getAvailableItems Error:', err);
+      console.error('❌ Error fetching accessible branches:', err);
       return callback(err);
     }
     
-    console.log(`✅ POS: Found ${results.length} total items`);
+    if (!branchResults || branchResults.length === 0) {
+      console.log(`⚠️ User ${userId} has no accessible branches, returning empty array`);
+      return callback(null, []);
+    }
     
-    // Debug: Check if price_id is being returned
-    results.forEach((item, index) => {
-      if (!item.price_id) {
-        console.warn(`⚠️ Item ${item.id} (${item.name}) has no price_id`);
+    const branchIds = branchResults.map(b => b.branch_id);
+    console.log(`✅ User ${userId} has access to ${branchIds.length} branches:`, branchIds);
+    
+    // Query items filtered by accessible branches
+    const query = `
+      SELECT 
+        i.id, 
+        i.name, 
+        i.description, 
+        i.available,
+        i.quantity,
+        i.installment,
+        i.item_image,
+        ip.id as price_id,
+        ip.price_cash,
+        ip.buy_price,
+        ip.price_installment_total,
+        ip.installment_first_payment,
+        ip.installment_months,
+        ip.installment_per_month,
+        ip.installment_last_payment,
+        ip.on_sale_price,
+        ip.date as price_date,
+        u.username as updated_by
+      FROM items i
+      LEFT JOIN item_prices ip ON i.id = ip.item_id
+      LEFT JOIN users u ON ip.user_id = u.id
+      WHERE i.branch_id IN (?)
+        AND (
+          ip.id = (
+            SELECT id 
+            FROM item_prices 
+            WHERE item_id = i.id 
+            ORDER BY date DESC 
+            LIMIT 1
+          )
+          OR ip.id IS NULL
+        )
+      ORDER BY 
+        CASE 
+          WHEN i.available = 1 AND i.quantity > 0 THEN 1  -- Available items first
+          ELSE 2  -- Out of stock items last
+        END,
+        i.name
+    `;
+    
+    db.query(query, [branchIds], (err, results) => {
+      if (err) {
+        console.error('❌ POS.getAvailableItems Error:', err);
+        return callback(err);
       }
+      
+      console.log(`✅ POS: Found ${results.length} total items for user ${userId} (filtered by ${branchIds.length} branches)`);
+      
+      callback(null, results);
     });
-    
-    callback(null, results);
   });
 }
 
@@ -80,7 +152,23 @@ static getAvailableItems(callback) {
         }
         
         try {
-          // 1. Check available quantity for return
+          // 1. Get user's primary_branch_id
+          const getUserQuery = 'SELECT primary_branch_id FROM users WHERE id = ?';
+          const userResults = await new Promise((resolve, reject) => {
+            connection.query(getUserQuery, [userId], (err, results) => {
+              if (err) reject(err);
+              else resolve(results);
+            });
+          });
+          
+          if (!userResults || userResults.length === 0) {
+            throw new Error('User not found');
+          }
+          
+          const primaryBranchId = userResults[0].primary_branch_id;
+          console.log(`📍 User ${userId} primary branch: ${primaryBranchId}`);
+          
+          // 2. Check available quantity for return
           const checkQuery = `
             SELECT 
               (SELECT SUM(quantity) FROM sales 
@@ -104,27 +192,30 @@ static getAvailableItems(callback) {
             throw new Error(`Cannot return ${returnQuantity} items. Only ${availableQty} available for return.`);
           }
           
-          // 2. Get price_id from cash record
-          const getPriceIdQuery = 'SELECT price_id FROM sales WHERE id = ?';
-          const priceIdResults = await new Promise((resolve, reject) => {
-            connection.query(getPriceIdQuery, [cashRecordId], (err, results) => {
+          // 3. Get price_id and branch_id from cash record
+          const getCashRecordQuery = 'SELECT price_id, branch_id FROM sales WHERE id = ?';
+          const cashRecordResults = await new Promise((resolve, reject) => {
+            connection.query(getCashRecordQuery, [cashRecordId], (err, results) => {
               if (err) reject(err);
               else resolve(results);
             });
           });
           
-          const priceId = priceIdResults[0]?.price_id || null;
+          const priceId = cashRecordResults[0]?.price_id || null;
+          // Use branch_id from original sale, or fallback to user's primary branch
+          const branchId = cashRecordResults[0]?.branch_id || primaryBranchId;
           
-          // 3. Create retrieve record in sales table
+          // 4. Create retrieve record in sales table (with branch_id)
+          // Column order: branch_id, user_id, customer_id, item_id, sale_type, price, sale_id, price_id, quantity
           const createRetrieveQuery = `
             INSERT INTO sales 
-              (sale_id, item_id, user_id, sale_type, price, quantity, price_id)
-            VALUES (?, ?, ?, 'retrieve', ?, ?, ?)
+              (branch_id, user_id, customer_id, item_id, sale_type, price, sale_id, price_id, quantity)
+            VALUES (?, ?, NULL, ?, 'retrieve', ?, ?, ?, ?)
           `;
           
           await new Promise((resolve, reject) => {
             connection.query(createRetrieveQuery, 
-              [saleId, itemId, userId, originalPrice, returnQuantity, priceId], 
+              [branchId, userId, itemId, originalPrice, saleId, priceId, returnQuantity], 
               (err, result) => {
                 if (err) reject(err);
                 else {
@@ -135,7 +226,7 @@ static getAvailableItems(callback) {
             );
           });
           
-          // 4. If return type is 'resale', update items quantity
+          // 5. If return type is 'resale', update items quantity
           if (returnType === 'resale') {
             const updateItemQuery = 'UPDATE items SET quantity = quantity + ? WHERE id = ?';
             await new Promise((resolve, reject) => {
@@ -148,17 +239,17 @@ static getAvailableItems(callback) {
               });
             });
             
-            // 5. Create inventory log for resale return
+            // 6. Create inventory log for resale return (with branch_id)
             const createLogQuery = `
               INSERT INTO inventory_logs 
-                (item_id, worker_id, change_type, quantity_changed)
-              VALUES (?, ?, 'return', ?)
+                (branch_id, item_id, worker_id, change_type, quantity_changed)
+              VALUES (?, ?, ?, 'return', ?)
             `;
             await new Promise((resolve, reject) => {
-              connection.query(createLogQuery, [itemId, userId, returnQuantity], (err, result) => {
+              connection.query(createLogQuery, [branchId, itemId, userId, returnQuantity], (err, result) => {
                 if (err) reject(err);
                 else {
-                  console.log('✅ Created inventory log for return');
+                  console.log(`✅ Created inventory log for return with branch_id ${branchId}`);
                   resolve(result);
                 }
               });
@@ -262,10 +353,13 @@ static getAvailableItems(callback) {
         i.name as item_name,
         i.description as item_description,
         i.quantity as current_stock,
-        u.username as worker_name
+        u.username as worker_name,
+        u.id as worker_id,
+        b.name as branch_name
       FROM sales s
       LEFT JOIN items i ON s.item_id = i.id
       LEFT JOIN users u ON s.user_id = u.id
+      LEFT JOIN branches b ON s.branch_id = b.id
       WHERE s.sale_id = ? 
         AND s.sale_type IN ('cash', 'retrieve')
       ORDER BY s.item_id, s.sale_type, s.date
@@ -428,172 +522,200 @@ static getAvailableItems(callback) {
           return callback(err);
         }
 
-        // Step 1: Get next sale_id for cash sales
+        // Step 1: Get user's primary_branch_id
         connection.query(
-          `SELECT COALESCE(MAX(sale_id), 0) + 1 as next_sale_id FROM sales WHERE sale_type = 'cash'`,
-          (err, results) => {
+          `SELECT primary_branch_id FROM users WHERE id = ?`,
+          [saleData.userId],
+          (err, userResults) => {
             if (err) {
-              console.error('❌ Error getting sale ID:', err);
+              console.error('❌ Error getting user primary branch:', err);
               return connection.rollback(() => {
                 connection.release();
                 callback(err);
               });
             }
 
-            const saleId = results[0].next_sale_id;
-            console.log(`🆕 New Sale ID: ${saleId}`);
-
-            // Group items by item_id for batch processing
-            const groupedItems = {};
-            saleData.cart.forEach(item => {
-              if (!groupedItems[item.id]) {
-                groupedItems[item.id] = {
-                  id: item.id,
-                  name: item.name,
-                  totalQty: 0,
-                  price_cash: item.price_cash,
-                  price_id: item.price_id,
-                  quantity: item.quantity
-                };
-              }
-              groupedItems[item.id].totalQty += item.qty;
-            });
-
-            const groupedItemsArray = Object.values(groupedItems);
-
-            // Prepare data arrays
-            const salesRecords = [];
-            const inventoryLogs = [];
-            const quantityUpdates = [];
-
-            // Prepare data for each grouped item
-            groupedItemsArray.forEach(item => {
-              // Sales record (one per item type with quantity)
-              salesRecords.push([
-                saleData.userId,      // user_id
-                null,                 // customer_id (walk-in)
-                item.id,              // item_id
-                'cash',               // sale_type
-                item.price_cash,      // price (actual charged price)
-                saleId,               // sale_id
-                item.totalQty,        // quantity
-                item.price_id         // price_id
-              ]);
-
-              // Inventory log
-              inventoryLogs.push([
-                item.id,              // item_id
-                saleData.userId,      // worker_id
-                'sale',               // change_type
-                -item.totalQty        // quantity_changed (negative for sales)
-              ]);
-
-              // Quantity update
-              quantityUpdates.push({
-                id: item.id,
-                newQuantity: item.quantity - item.totalQty
+            if (!userResults || userResults.length === 0) {
+              return connection.rollback(() => {
+                connection.release();
+                callback(new Error('User not found'));
               });
-            });
+            }
 
-            // Process sequentially
-            const processSequentially = async () => {
-              try {
-                // Step 2: Update quantities sequentially
-                for (const update of quantityUpdates) {
-                  await new Promise((resolve, reject) => {
-                    connection.query(
-                      'UPDATE items SET quantity = ?, available = CASE WHEN ? <= 0 THEN 0 ELSE 1 END WHERE id = ?',
-                      [update.newQuantity, update.newQuantity, update.id],
-                      (err) => {
-                        if (err) {
-                          reject(err);
-                        } else {
-                          console.log(`✅ Updated item ${update.id} quantity to ${update.newQuantity}`);
-                          resolve();
-                        }
-                      }
-                    );
+            const primaryBranchId = userResults[0].primary_branch_id;
+            console.log(`📍 User ${saleData.userId} primary branch: ${primaryBranchId}`);
+
+            // Step 2: Get next sale_id for cash sales
+            connection.query(
+              `SELECT COALESCE(MAX(sale_id), 0) + 1 as next_sale_id FROM sales WHERE sale_type = 'cash'`,
+              (err, results) => {
+                if (err) {
+                  console.error('❌ Error getting sale ID:', err);
+                  return connection.rollback(() => {
+                    connection.release();
+                    callback(err);
                   });
                 }
 
-                // Step 3: Create sales records
-                await new Promise((resolve, reject) => {
-                  if (salesRecords.length === 0) {
-                    resolve();
-                    return;
+                const saleId = results[0].next_sale_id;
+                console.log(`🆕 New Sale ID: ${saleId}`);
+
+                // Group items by item_id for batch processing
+                const groupedItems = {};
+                saleData.cart.forEach(item => {
+                  if (!groupedItems[item.id]) {
+                    groupedItems[item.id] = {
+                      id: item.id,
+                      name: item.name,
+                      totalQty: 0,
+                      price_cash: item.price_cash,
+                      price_id: item.price_id,
+                      quantity: item.quantity
+                    };
                   }
-                  
-                  const salesQuery = `
-                    INSERT INTO sales 
-                      (user_id, customer_id, item_id, sale_type, price, sale_id, quantity, price_id) 
-                    VALUES ?
-                  `;
-                  
-                  connection.query(salesQuery, [salesRecords], (err) => {
-                    if (err) {
-                      reject(err);
-                    } else {
-                      console.log(`✅ Created ${salesRecords.length} sales records`);
-                      resolve();
-                    }
+                  groupedItems[item.id].totalQty += item.qty;
+                });
+
+                const groupedItemsArray = Object.values(groupedItems);
+
+                // Prepare data arrays
+                const salesRecords = [];
+                const inventoryLogs = [];
+                const quantityUpdates = [];
+
+                // Prepare data for each grouped item
+                groupedItemsArray.forEach(item => {
+                  // Sales record (one per item type with quantity) - includes branch_id
+                  // Column order: branch_id, user_id, customer_id, item_id, sale_type, price, sale_id, price_id, quantity
+                  salesRecords.push([
+                    primaryBranchId,      // branch_id
+                    saleData.userId,      // user_id
+                    null,                 // customer_id (walk-in)
+                    item.id,              // item_id
+                    'cash',               // sale_type
+                    item.price_cash,      // price (actual charged price)
+                    saleId,               // sale_id
+                    item.price_id,        // price_id
+                    item.totalQty         // quantity
+                  ]);
+
+                  // Inventory log - includes branch_id
+                  inventoryLogs.push([
+                    primaryBranchId,     // branch_id
+                    item.id,              // item_id
+                    saleData.userId,      // worker_id
+                    'sale',               // change_type
+                    -item.totalQty        // quantity_changed (negative for sales)
+                  ]);
+
+                  // Quantity update
+                  quantityUpdates.push({
+                    id: item.id,
+                    newQuantity: item.quantity - item.totalQty
                   });
                 });
 
-                // Step 4: Create inventory logs
-                await new Promise((resolve, reject) => {
-                  if (inventoryLogs.length === 0) {
-                    resolve();
-                    return;
-                  }
-                  
-                  const logsQuery = `
-                    INSERT INTO inventory_logs 
-                      (item_id, worker_id, change_type, quantity_changed) 
-                    VALUES ?
-                  `;
-                  
-                  connection.query(logsQuery, [inventoryLogs], (err) => {
-                    if (err) {
-                      reject(err);
-                    } else {
-                      console.log(`✅ Created ${inventoryLogs.length} inventory logs`);
-                      resolve();
+                // Process sequentially
+                const processSequentially = async () => {
+                  try {
+                    // Step 3: Update quantities sequentially
+                    for (const update of quantityUpdates) {
+                      await new Promise((resolve, reject) => {
+                        connection.query(
+                          'UPDATE items SET quantity = ?, available = CASE WHEN ? <= 0 THEN 0 ELSE 1 END WHERE id = ?',
+                          [update.newQuantity, update.newQuantity, update.id],
+                          (err) => {
+                            if (err) {
+                              reject(err);
+                            } else {
+                              console.log(`✅ Updated item ${update.id} quantity to ${update.newQuantity}`);
+                              resolve();
+                            }
+                          }
+                        );
+                      });
                     }
-                  });
-                });
 
-                // Commit transaction
-                connection.commit((err) => {
-                  if (err) {
-                    console.error('❌ Error committing transaction:', err);
-                    return connection.rollback(() => {
+                    // Step 4: Create sales records (with branch_id)
+                    await new Promise((resolve, reject) => {
+                      if (salesRecords.length === 0) {
+                        resolve();
+                        return;
+                      }
+                      
+                      const salesQuery = `
+                        INSERT INTO sales 
+                          (branch_id, user_id, customer_id, item_id, sale_type, price, sale_id, price_id, quantity) 
+                        VALUES ?
+                      `;
+                      
+                      connection.query(salesQuery, [salesRecords], (err) => {
+                        if (err) {
+                          reject(err);
+                        } else {
+                          console.log(`✅ Created ${salesRecords.length} sales records with branch_id ${primaryBranchId}`);
+                          resolve();
+                        }
+                      });
+                    });
+
+                    // Step 5: Create inventory logs (with branch_id)
+                    await new Promise((resolve, reject) => {
+                      if (inventoryLogs.length === 0) {
+                        resolve();
+                        return;
+                      }
+                      
+                      const logsQuery = `
+                        INSERT INTO inventory_logs 
+                          (branch_id, item_id, worker_id, change_type, quantity_changed) 
+                        VALUES ?
+                      `;
+                      
+                      connection.query(logsQuery, [inventoryLogs], (err) => {
+                        if (err) {
+                          reject(err);
+                        } else {
+                          console.log(`✅ Created ${inventoryLogs.length} inventory logs with branch_id ${primaryBranchId}`);
+                          resolve();
+                        }
+                      });
+                    });
+
+                    // Commit transaction
+                    connection.commit((err) => {
+                      if (err) {
+                        console.error('❌ Error committing transaction:', err);
+                        return connection.rollback(() => {
+                          connection.release();
+                          callback(err);
+                        });
+                      }
+                      
+                      console.log(`✅ Transaction committed successfully for sale ${saleId}`);
                       connection.release();
-                      callback(err);
+                      callback(null, {
+                        success: true,
+                        saleId: saleId,
+                        totalItems: groupedItemsArray.length,
+                        totalUnits: saleData.cart.reduce((sum, item) => sum + item.qty, 0),
+                        timestamp: new Date().toISOString()
+                      });
+                    });
+
+                  } catch (error) {
+                    console.error('❌ Error in sequential processing:', error);
+                    connection.rollback(() => {
+                      connection.release();
+                      callback(error);
                     });
                   }
-                  
-                  console.log(`✅ Transaction committed successfully for sale ${saleId}`);
-                  connection.release();
-                  callback(null, {
-                    success: true,
-                    saleId: saleId,
-                    totalItems: groupedItemsArray.length,
-                    totalUnits: saleData.cart.reduce((sum, item) => sum + item.qty, 0),
-                    timestamp: new Date().toISOString()
-                  });
-                });
+                };
 
-              } catch (error) {
-                console.error('❌ Error in sequential processing:', error);
-                connection.rollback(() => {
-                  connection.release();
-                  callback(error);
-                });
+                // Start sequential processing
+                processSequentially();
               }
-            };
-
-            // Start sequential processing
-            processSequentially();
+            );
           }
         );
       });

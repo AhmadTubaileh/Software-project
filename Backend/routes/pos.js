@@ -3,11 +3,14 @@ const express = require('express');
 const router = express.Router();
 const POS = require('../models/POS');
 
-// GET /api/pos/items - Get ALL items for POS (including out of stock)
+// GET /api/pos/items - Get ALL items for POS (including out of stock, filtered by accessible branches)
 router.get('/items', (req, res) => {
-  console.log('🛒 POS: Fetching ALL items with latest prices...');
+  // Get userId from query params or request body
+  const userId = req.query.userId || req.body.userId || (req.user ? req.user.id : null);
   
-  POS.getAvailableItems((err, results) => {
+  console.log('🛒 POS: Fetching items with latest prices...', { userId });
+  
+  POS.getAvailableItems(userId, (err, results) => {
     if (err) {
       console.error('❌ Error fetching POS items:', err);
       return res.status(500).json({ 
@@ -56,79 +59,6 @@ router.get('/items', (req, res) => {
 });
 
 // POST /api/pos/checkout - Process sale
-router.post('/checkout', (req, res) => {
-  const { cart, userId } = req.body;
-  
-  console.log('💰 POS Checkout Request:', { 
-    userId, 
-    cartItems: cart?.length,
-    totalUnits: cart?.reduce((sum, item) => sum + item.qty, 0) || 0
-  });
-  
-  // Validate input
-  if (!cart || !Array.isArray(cart) || cart.length === 0) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Cart is empty' 
-    });
-  }
-
-  if (!userId) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'User ID is required' 
-    });
-  }
-
-  // Step 1: Check if all items have sufficient quantity
-  POS.checkQuantities(cart, (err, insufficientItems) => {
-    if (err) {
-      console.error('❌ Error checking quantities:', err);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Error checking inventory',
-        error: err.message 
-      });
-    }
-
-    if (insufficientItems.length > 0) {
-      console.log('❌ Insufficient quantities:', insufficientItems);
-      return res.status(400).json({
-        success: false,
-        message: 'Insufficient quantity for some items',
-        insufficientItems
-      });
-    }
-
-    console.log('✅ All items have sufficient quantity, processing sale...');
-
-    // Step 2: Process sale transaction
-    POS.processSaleTransaction({ cart, userId }, (err, result) => {
-      if (err) {
-        console.error('❌ Error processing sale:', err);
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Error processing sale',
-          error: err.message 
-        });
-      }
-
-      console.log(`✅ Sale ${result.saleId} completed successfully!`);
-      console.log(`📦 Items: ${result.totalItems}, Units: ${result.totalUnits}`);
-      
-      res.json({
-        success: true,
-        message: 'Sale processed successfully',
-        saleId: result.saleId,
-        totalItems: result.totalItems,
-        totalUnits: result.totalUnits,
-        timestamp: result.timestamp
-      });
-    });
-  });
-});
-
-// routes/pos.js - Add debugging to checkout route:
 router.post('/checkout', (req, res) => {
   const { cart, userId } = req.body;
   
