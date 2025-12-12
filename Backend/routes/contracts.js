@@ -509,4 +509,127 @@ router.get('/search/customer', async (req, res) => {
   }
 });
 
+// POST /api/contracts/transfer-transactions - Transfer transaction(s) to contract's branch
+// Updates transaction branch_id to contract's branch_id
+router.post('/transfer-transactions', async (req, res) => {
+  try {
+    const { transaction_ids } = req.body; // Array of transaction IDs
+    
+    if (!transaction_ids || !Array.isArray(transaction_ids) || transaction_ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Transaction IDs array is required'
+      });
+    }
+
+    // Get user info (optional - for logging)
+    const userId = req.body.userId || (req.user ? req.user.id : null);
+
+    // Start transaction
+    db.query('START TRANSACTION', async (startErr) => {
+      if (startErr) {
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to start transaction'
+        });
+      }
+
+      try {
+        let updatedCount = 0;
+        const errors = [];
+
+        // Process each transaction
+        for (const transactionId of transaction_ids) {
+          // Get transaction details and contract branch_id
+          const transactionData = await new Promise((resolve, reject) => {
+            const query = `
+              SELECT 
+                it.id,
+                it.branch_id as current_branch_id,
+                ip.contract_id,
+                ic.branch_id as contract_branch_id
+              FROM installment_transactions it
+              INNER JOIN installment_payments ip ON it.payment_id = ip.id
+              INNER JOIN installment_contracts ic ON ip.contract_id = ic.id
+              WHERE it.id = ?
+            `;
+            
+            db.query(query, [transactionId], (err, results) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              if (results.length === 0) {
+                reject(new Error(`Transaction ${transactionId} not found`));
+                return;
+              }
+              resolve(results[0]);
+            });
+          });
+
+          // Check if transfer is needed
+          if (transactionData.current_branch_id === transactionData.contract_branch_id) {
+            // Already in correct branch, skip
+            continue;
+          }
+
+          // Update transaction branch_id to contract's branch_id
+          await new Promise((resolve, reject) => {
+            const updateQuery = `
+              UPDATE installment_transactions
+              SET branch_id = ?
+              WHERE id = ?
+            `;
+            
+            db.query(updateQuery, [transactionData.contract_branch_id, transactionId], (err, result) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              resolve(result);
+            });
+          });
+
+          updatedCount++;
+        }
+
+        // Commit transaction
+        await new Promise((resolve, reject) => {
+          db.query('COMMIT', (err) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve();
+            }
+          });
+        });
+
+        res.json({
+          success: true,
+          message: `Successfully transferred ${updatedCount} transaction(s)`,
+          updated_count: updatedCount,
+          total_requested: transaction_ids.length
+        });
+      } catch (error) {
+        // Rollback on error
+        await new Promise((resolve) => {
+          db.query('ROLLBACK', () => resolve());
+        });
+
+        console.error('Transfer transactions error:', error);
+        res.status(500).json({
+          success: false,
+          error: error.message || 'Failed to transfer transactions'
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Transfer transactions error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to transfer transactions'
+    });
+  }
+});
+
 module.exports = router;

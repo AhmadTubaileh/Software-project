@@ -46,6 +46,8 @@ function ContractBranches() {
   const [loadingBranches, setLoadingBranches] = useState(true);
   const [expandedContracts, setExpandedContracts] = useState(new Set());
   const [summary, setSummary] = useState(null);
+  const [selectedTransactions, setSelectedTransactions] = useState(new Set());
+  const [transferring, setTransferring] = useState(false);
 
   // Fetch accessible branches
   useEffect(() => {
@@ -194,6 +196,162 @@ function ContractBranches() {
     return new Date(dateString).toLocaleDateString();
   };
 
+  // Check if transaction needs transfer (payment branch != contract branch)
+  const needsTransfer = (transaction, contractBranchId) => {
+    return transaction.branch_id !== contractBranchId;
+  };
+
+  // Handle single transaction transfer
+  const handleTransferTransaction = async (transactionId) => {
+    try {
+      setTransferring(true);
+      const response = await fetch('http://localhost:5000/api/contracts/transfer-transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transaction_ids: [transactionId],
+          userId: currentUser?.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to transfer transaction');
+      }
+
+      toast.success(data.message || 'Transaction transferred successfully!');
+      
+      // Refresh contracts data
+      await fetchContracts();
+    } catch (error) {
+      console.error('Transfer transaction error:', error);
+      toast.error(error.message || 'Failed to transfer transaction');
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  // Handle bulk transfer
+  const handleBulkTransfer = async () => {
+    if (selectedTransactions.size === 0) {
+      toast.error('Please select at least one transaction to transfer');
+      return;
+    }
+
+    try {
+      setTransferring(true);
+      const transactionIds = Array.from(selectedTransactions);
+      
+      const response = await fetch('http://localhost:5000/api/contracts/transfer-transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transaction_ids: transactionIds,
+          userId: currentUser?.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to transfer transactions');
+      }
+
+      toast.success(data.message || `Successfully transferred ${data.updated_count} transaction(s)!`);
+      
+      // Clear selection and refresh
+      setSelectedTransactions(new Set());
+      await fetchContracts();
+    } catch (error) {
+      console.error('Bulk transfer error:', error);
+      toast.error(error.message || 'Failed to transfer transactions');
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  // Handle transfer all for a contract
+  const handleTransferAllContract = async (contract) => {
+    // Collect all transaction IDs that need transfer
+    const transactionIds = [];
+    contract.payments.forEach(payment => {
+      if (payment.transactions && payment.transactions.length > 0) {
+        payment.transactions.forEach(transaction => {
+          if (needsTransfer(transaction, contract.contract_branch_id)) {
+            transactionIds.push(transaction.id);
+          }
+        });
+      }
+    });
+
+    if (transactionIds.length === 0) {
+      toast.info('No transactions need transfer for this contract');
+      return;
+    }
+
+    try {
+      setTransferring(true);
+      const response = await fetch('http://localhost:5000/api/contracts/transfer-transactions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          transaction_ids: transactionIds,
+          userId: currentUser?.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to transfer transactions');
+      }
+
+      toast.success(data.message || `Successfully transferred ${data.updated_count} transaction(s)!`);
+      
+      // Clear selection and refresh
+      setSelectedTransactions(new Set());
+      await fetchContracts();
+    } catch (error) {
+      console.error('Transfer all error:', error);
+      toast.error(error.message || 'Failed to transfer transactions');
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  // Toggle transaction selection
+  const toggleTransactionSelection = (transactionId) => {
+    const newSelected = new Set(selectedTransactions);
+    if (newSelected.has(transactionId)) {
+      newSelected.delete(transactionId);
+    } else {
+      newSelected.add(transactionId);
+    }
+    setSelectedTransactions(newSelected);
+  };
+
+  // Select all transactions that need transfer for a contract
+  const selectAllContractTransactions = (contract) => {
+    const newSelected = new Set(selectedTransactions);
+    contract.payments.forEach(payment => {
+      if (payment.transactions && payment.transactions.length > 0) {
+        payment.transactions.forEach(transaction => {
+          if (needsTransfer(transaction, contract.contract_branch_id)) {
+            newSelected.add(transaction.id);
+          }
+        });
+      }
+    });
+    setSelectedTransactions(newSelected);
+  };
+
   return (
     <div className="flex min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
@@ -231,6 +389,46 @@ function ContractBranches() {
               </select>
             )}
           </div>
+
+          {/* Bulk Transfer Actions */}
+          {selectedTransactions.size > 0 && (
+            <div className="bg-blue-900/20 border border-blue-500 rounded-xl p-4 mb-6 flex items-center justify-between">
+              <div>
+                <p className="text-blue-300 font-semibold">
+                  {selectedTransactions.size} transaction(s) selected
+                </p>
+                <p className="text-blue-400 text-sm mt-1">
+                  Click "Transfer Selected" to move them to their contract's branch
+                </p>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setSelectedTransactions(new Set())}
+                  className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors duration-200"
+                  disabled={transferring}
+                >
+                  Clear Selection
+                </button>
+                <button
+                  onClick={handleBulkTransfer}
+                  disabled={transferring}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-700 rounded-lg font-medium transition-colors duration-200 flex items-center gap-2"
+                >
+                  {transferring ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Transferring...
+                    </>
+                  ) : (
+                    <>
+                      <span>💸</span>
+                      Transfer Selected ({selectedTransactions.size})
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Summary Section */}
           {summary && summary.length > 0 && (
@@ -309,13 +507,40 @@ function ContractBranches() {
                           </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className="font-semibold text-green-400">
-                          {formatCurrency(contract.total_price)}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          {contract.months} months × {formatCurrency(contract.monthly_payment)}/mo
-                        </p>
+                      <div className="text-right flex flex-col items-end gap-2">
+                        <div>
+                          <p className="font-semibold text-green-400">
+                            {formatCurrency(contract.total_price)}
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            {contract.months} months × {formatCurrency(contract.monthly_payment)}/mo
+                          </p>
+                        </div>
+                        {/* Transfer All Button */}
+                        {contract.payments && contract.payments.some(payment => 
+                          payment.transactions && payment.transactions.some(t => 
+                            needsTransfer(t, contract.contract_branch_id)
+                          )
+                        ) && (
+                          <button
+                            onClick={() => handleTransferAllContract(contract)}
+                            disabled={transferring}
+                            className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-700 rounded-lg text-xs font-medium transition-colors duration-200 flex items-center gap-1"
+                            title="Transfer all transactions for this contract"
+                          >
+                            {transferring ? (
+                              <>
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                Transferring...
+                              </>
+                            ) : (
+                              <>
+                                <span>💸</span>
+                                Transfer All
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -350,26 +575,77 @@ function ContractBranches() {
                               {/* Transactions */}
                               {payment.transactions && payment.transactions.length > 0 ? (
                                 <div className="mt-3 space-y-2">
-                                  <p className="text-xs font-semibold text-gray-400 mb-2">Transactions:</p>
-                                  {payment.transactions.map((transaction) => (
-                                    <div
-                                      key={transaction.id}
-                                      className="bg-gray-600/30 rounded p-2 flex justify-between items-center"
-                                    >
-                                      <div>
-                                        <p className="text-sm">
-                                          {formatCurrency(transaction.amount_paid)} • 
-                                          <span className="text-blue-400 ml-1">
-                                            Branch: {transaction.branch_name}
-                                          </span>
-                                        </p>
-                                        <p className="text-xs text-gray-500">
-                                          {formatDate(transaction.payment_date)} • 
-                                          Worker: {transaction.worker_name}
-                                        </p>
+                                  <div className="flex items-center justify-between mb-2">
+                                    <p className="text-xs font-semibold text-gray-400">Transactions:</p>
+                                    {payment.transactions.some(t => needsTransfer(t, contract.contract_branch_id)) && (
+                                      <button
+                                        onClick={() => selectAllContractTransactions(contract)}
+                                        className="text-xs text-blue-400 hover:text-blue-300"
+                                        title="Select all transactions that need transfer"
+                                      >
+                                        Select All for Transfer
+                                      </button>
+                                    )}
+                                  </div>
+                                  {payment.transactions.map((transaction) => {
+                                    const needsTransferFlag = needsTransfer(transaction, contract.contract_branch_id);
+                                    return (
+                                      <div
+                                        key={transaction.id}
+                                        className={`bg-gray-600/30 rounded p-2 flex justify-between items-center ${
+                                          needsTransferFlag ? 'border border-yellow-500/50' : ''
+                                        }`}
+                                      >
+                                        <div className="flex items-center gap-3 flex-1">
+                                          {/* Checkbox for bulk selection */}
+                                          {needsTransferFlag && (
+                                            <input
+                                              type="checkbox"
+                                              checked={selectedTransactions.has(transaction.id)}
+                                              onChange={() => toggleTransactionSelection(transaction.id)}
+                                              className="w-4 h-4 text-blue-600 bg-gray-700 border-gray-600 rounded focus:ring-blue-500"
+                                            />
+                                          )}
+                                          <div className="flex-1">
+                                            <p className="text-sm">
+                                              {formatCurrency(transaction.amount_paid)} • 
+                                              <span className={`ml-1 ${
+                                                needsTransferFlag ? 'text-yellow-400' : 'text-blue-400'
+                                              }`}>
+                                                Branch: {transaction.branch_name}
+                                                {needsTransferFlag && ' ⚠️ Needs Transfer'}
+                                              </span>
+                                            </p>
+                                            <p className="text-xs text-gray-500">
+                                              {formatDate(transaction.payment_date)} • 
+                                              Worker: {transaction.worker_name}
+                                            </p>
+                                          </div>
+                                        </div>
+                                        {/* Transfer Button */}
+                                        {needsTransferFlag && (
+                                          <button
+                                            onClick={() => handleTransferTransaction(transaction.id)}
+                                            disabled={transferring}
+                                            className="px-3 py-1.5 bg-yellow-600 hover:bg-yellow-700 disabled:bg-gray-700 rounded-lg text-xs font-medium transition-colors duration-200 flex items-center gap-1 ml-2"
+                                            title="Transfer this transaction to contract's branch"
+                                          >
+                                            {transferring ? (
+                                              <>
+                                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                                                ...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <span>💸</span>
+                                                Transfer
+                                              </>
+                                            )}
+                                          </button>
+                                        )}
                                       </div>
-                                    </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               ) : payment.status === 'paid' ? (
                                 <p className="text-xs text-gray-500 mt-2">No transaction records found</p>
