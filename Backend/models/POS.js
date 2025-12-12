@@ -15,6 +15,8 @@ static getAvailableItems(userId, callback) {
         i.quantity,
         i.installment,
         i.item_image,
+        i.branch_id,
+        b.name as branch_name,
         ip.id as price_id,
         ip.price_cash,
         ip.buy_price,
@@ -27,6 +29,7 @@ static getAvailableItems(userId, callback) {
         ip.date as price_date,
         u.username as updated_by
       FROM items i
+      LEFT JOIN branches b ON i.branch_id = b.id
       LEFT JOIN item_prices ip ON i.id = ip.item_id
       LEFT JOIN users u ON ip.user_id = u.id
       WHERE ip.id = (
@@ -88,6 +91,8 @@ static getAvailableItems(userId, callback) {
         i.quantity,
         i.installment,
         i.item_image,
+        i.branch_id,
+        b.name as branch_name,
         ip.id as price_id,
         ip.price_cash,
         ip.buy_price,
@@ -100,6 +105,7 @@ static getAvailableItems(userId, callback) {
         ip.date as price_date,
         u.username as updated_by
       FROM items i
+      LEFT JOIN branches b ON i.branch_id = b.id
       LEFT JOIN item_prices ip ON i.id = ip.item_id
       LEFT JOIN users u ON ip.user_id = u.id
       WHERE i.branch_id IN (?)

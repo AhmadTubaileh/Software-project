@@ -22,6 +22,8 @@ function POS() {
   const [priceEdit, setPriceEdit] = useState('');
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
+  const [selectedBranch, setSelectedBranch] = useState(null); // null = all branches
+  const [accessibleBranches, setAccessibleBranches] = useState([]);
   const { currentUser } = useLocalSession();
 
   // ========== ACCESS CONTROL START ==========
@@ -88,12 +90,37 @@ function POS() {
   }
   // ========== ACCESS CONTROL END ==========
 
+  // Fetch accessible branches
+  useEffect(() => {
+    if (currentUser?.id) {
+      fetchAccessibleBranches();
+    }
+  }, [currentUser?.id]);
+
   // Fetch all items with latest prices (filtered by accessible branches)
   useEffect(() => {
     if (currentUser?.id) {
       fetchItems();
     }
   }, [currentUser?.id]);
+
+  const fetchAccessibleBranches = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch accessible branches');
+      }
+      const branches = await response.json();
+      setAccessibleBranches(branches);
+      // If user has only one branch, auto-select it
+      if (branches.length === 1) {
+        setSelectedBranch(branches[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching accessible branches:', error);
+      setAccessibleBranches([]);
+    }
+  };
 
   const fetchItems = async () => {
     try {
@@ -112,14 +139,15 @@ function POS() {
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
-    let filtered = items.filter(item => 
-      item.name.toLowerCase().includes(query.toLowerCase()) ||
-      (item.description && item.description.toLowerCase().includes(query.toLowerCase()))
-    );
+    // First filter by branch if selected
+    let filtered = items;
+    if (selectedBranch) {
+      filtered = filtered.filter(item => item.branch_id === selectedBranch);
+    }
 
     // Handle sale filter
     if (query === 'sale' || query === '__sale__' || query === '🔥') {
-      filtered = items.filter(item => {
+      filtered = filtered.filter(item => {
         const priceCash = parseFloat(item.price_cash) || 0;
         const onSalePrice = item.on_sale_price ? parseFloat(item.on_sale_price) : null;
         return onSalePrice !== null && onSalePrice > 0 && onSalePrice < priceCash;
@@ -127,7 +155,7 @@ function POS() {
     } 
     // Regular search
     else if (query) {
-      filtered = items.filter(item => 
+      filtered = filtered.filter(item => 
         item.name.toLowerCase().includes(query.toLowerCase()) ||
         (item.description && item.description.toLowerCase().includes(query.toLowerCase()))
       );
@@ -148,6 +176,10 @@ function POS() {
           return (a.display_price || a.price_cash || 0) - (b.display_price || b.price_cash || 0);
         case 'price-desc':
           return (b.display_price || b.price_cash || 0) - (a.display_price || a.price_cash || 0);
+        case 'name-asc':
+          return a.name.localeCompare(b.name);
+        case 'name-desc':
+          return b.name.localeCompare(a.name);
         case 'relevance':
         default:
           return a.name.localeCompare(b.name);
@@ -155,7 +187,7 @@ function POS() {
     });
 
     return filtered;
-  }, [items, query, sortBy]);
+  }, [items, query, sortBy, selectedBranch]);
 
   // In POS.jsx - Fix the getDisplayPrice function
   const getDisplayPrice = (product) => {
@@ -430,6 +462,9 @@ function POS() {
                 setQuery={setQuery}
                 sortBy={sortBy}
                 setSortBy={setSortBy}
+                selectedBranch={selectedBranch}
+                setSelectedBranch={setSelectedBranch}
+                accessibleBranches={accessibleBranches}
               />
 
               <ProductGrid
