@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const POS = require('../models/POS');
+const db = require('../config/database');
 
 // GET /api/pos/items - Get ALL items for POS (including out of stock, filtered by accessible branches)
 router.get('/items', (req, res) => {
@@ -145,13 +146,58 @@ router.post('/checkout', (req, res) => {
 
 // GET /api/pos/search-sales - Search sales by criteria
 router.get('/search-sales', (req, res) => {
-  const { searchType, saleId, userId, startDate, endDate } = req.query;
+  const { searchType, saleId, userId, startDate, endDate, branchId } = req.query;
   
-  console.log('🔍 Searching sales:', { searchType, saleId, userId, startDate, endDate });
+  console.log('🔍 Searching sales:', { searchType, saleId, userId, startDate, endDate, branchId });
+  
+  // Get user's accessible branches if branchId not specified
+  const getBranchIds = (callback) => {
+    if (branchId) {
+      // If specific branch selected, use only that branch
+      return callback(null, [parseInt(branchId)]);
+    }
+    
+    // Get accessible branches for the current user (from userId or req.user)
+    const currentUserId = userId || (req.user ? req.user.id : null);
+    if (!currentUserId) {
+      return callback(null, null); // No filter if no user
+    }
+    
+    const branchQuery = `
+      SELECT DISTINCT branch_id 
+      FROM user_branches 
+      WHERE user_id = ?
+    `;
+    
+    const db = require('../config/database');
+    db.query(branchQuery, [currentUserId], (err, branchResults) => {
+      if (err) {
+        console.error('Error fetching accessible branches:', err);
+        return callback(err);
+      }
+      
+      if (!branchResults || branchResults.length === 0) {
+        return callback(null, null); // No filter if no branches
+      }
+      
+      const branchIds = branchResults.map(b => b.branch_id);
+      callback(null, branchIds);
+    });
+  };
   
   if (searchType === 'saleId' && saleId) {
-    // Search by sale ID - get ALL records (cash and retrieve) for that sale_id
-    POS.searchSalesBySaleId(saleId, (err, results) => {
+    // Get branch IDs for filtering
+    getBranchIds((err, branchIds) => {
+      if (err) {
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Error getting branch access',
+          error: err.message 
+        });
+      }
+      
+      // Search by sale ID - get ALL records (cash and retrieve) for that sale_id
+      POS.searchSalesBySaleId(saleId, branchIds, (err, results) => {
       if (err) {
         console.error('❌ Error searching sales by ID:', err);
         return res.status(500).json({ 
@@ -218,10 +264,21 @@ router.get('/search-sales', (req, res) => {
         totalItems: Object.keys(groupedResults).length
       });
     });
+    });
     
   } else if (searchType === 'workerTime' && userId && startDate && endDate) {
-    // Search by worker and time period - get only cash records first
-    POS.searchSalesByWorkerTime(userId, startDate, endDate, (err, results) => {
+    // Get branch IDs for filtering
+    getBranchIds((err, branchIds) => {
+      if (err) {
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Error getting branch access',
+          error: err.message 
+        });
+      }
+      
+      // Search by worker and time period - get only cash records first
+      POS.searchSalesByWorkerTime(userId, startDate, endDate, branchIds, (err, results) => {
       if (err) {
         console.error('❌ Error searching sales by worker/time:', err);
         return res.status(500).json({ 
@@ -240,6 +297,7 @@ router.get('/search-sales', (req, res) => {
         results: results,
         totalSales: results.length
       });
+    });
     });
     
   } else {
@@ -330,10 +388,10 @@ router.get('/sale-details/:saleId', (req, res) => {
 
 // POST /api/pos/process-return - Process item return
 router.post('/process-return', (req, res) => {
-  const { saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice } = req.body;
+  const { saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice, branchId } = req.body;
   
   console.log('🔄 Processing return:', {
-    saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice
+    saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice, branchId
   });
   
   // Validate input
@@ -359,7 +417,8 @@ router.post('/process-return', (req, res) => {
     returnQuantity,
     returnType,
     userId,
-    originalPrice
+    originalPrice,
+    branchId: branchId || null // Pass branchId if provided
   }, (err, result) => {
     if (err) {
       console.error('❌ Error processing return:', err);

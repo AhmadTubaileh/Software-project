@@ -142,7 +142,7 @@ static getAvailableItems(userId, callback) {
 
 // Process return transaction
   static processReturnTransaction(returnData, callback) {
-    const { saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice } = returnData;
+    const { saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice, branchId } = returnData;
     
     db.getConnection((err, connection) => {
       if (err) {
@@ -208,8 +208,8 @@ static getAvailableItems(userId, callback) {
           });
           
           const priceId = cashRecordResults[0]?.price_id || null;
-          // Use branch_id from original sale, or fallback to user's primary branch
-          const branchId = cashRecordResults[0]?.branch_id || primaryBranchId;
+          // Use provided branchId, or branch_id from original sale, or fallback to user's primary branch
+          const finalBranchId = branchId || cashRecordResults[0]?.branch_id || primaryBranchId;
           
           // 4. Create retrieve record in sales table (with branch_id)
           // Column order: branch_id, user_id, customer_id, item_id, sale_type, price, sale_id, price_id, quantity
@@ -221,7 +221,7 @@ static getAvailableItems(userId, callback) {
           
           await new Promise((resolve, reject) => {
             connection.query(createRetrieveQuery, 
-              [branchId, userId, itemId, originalPrice, saleId, priceId, returnQuantity], 
+              [finalBranchId, userId, itemId, originalPrice, saleId, priceId, returnQuantity], 
               (err, result) => {
                 if (err) reject(err);
                 else {
@@ -252,10 +252,10 @@ static getAvailableItems(userId, callback) {
               VALUES (?, ?, ?, 'return', ?)
             `;
             await new Promise((resolve, reject) => {
-              connection.query(createLogQuery, [branchId, itemId, userId, returnQuantity], (err, result) => {
+              connection.query(createLogQuery, [finalBranchId, itemId, userId, returnQuantity], (err, result) => {
                 if (err) reject(err);
                 else {
-                  console.log(`✅ Created inventory log for return with branch_id ${branchId}`);
+                  console.log(`✅ Created inventory log for return with branch_id ${finalBranchId}`);
                   resolve(result);
                 }
               });
@@ -295,24 +295,35 @@ static getAvailableItems(userId, callback) {
     });
   }
   
-  // Search sales by sale ID
-  static searchSalesBySaleId(saleId, callback) {
-    const query = `
+  // Search sales by sale ID (with optional branch filter)
+  static searchSalesBySaleId(saleId, branchIds, callback) {
+    // If branchIds is not provided or is empty, don't filter by branch
+    let query = `
       SELECT 
         s.*,
         i.name as item_name,
         i.description as item_description,
         i.quantity as current_stock,
-        u.username as worker_name
+        u.username as worker_name,
+        s.branch_id
       FROM sales s
       LEFT JOIN items i ON s.item_id = i.id
       LEFT JOIN users u ON s.user_id = u.id
       WHERE s.sale_id = ? 
         AND s.sale_type IN ('cash', 'retrieve')
-      ORDER BY s.item_id, s.sale_type, s.date
     `;
     
-    db.query(query, [saleId], (err, results) => {
+    const params = [saleId];
+    
+    // Add branch filter if branchIds provided
+    if (branchIds && branchIds.length > 0) {
+      query += ` AND s.branch_id IN (?)`;
+      params.push(branchIds);
+    }
+    
+    query += ` ORDER BY s.item_id, s.sale_type, s.date`;
+    
+    db.query(query, params, (err, results) => {
       if (err) {
         console.error('❌ Error searching sales by ID:', err);
         return callback(err);
@@ -321,9 +332,9 @@ static getAvailableItems(userId, callback) {
     });
   }
   
-  // Search cash sales by worker and time period
-  static searchSalesByWorkerTime(userId, startDate, endDate, callback) {
-    const query = `
+  // Search cash sales by worker and time period (with optional branch filter)
+  static searchSalesByWorkerTime(userId, startDate, endDate, branchIds, callback) {
+    let query = `
       SELECT DISTINCT
         s.sale_id,
         s.user_id,
@@ -338,11 +349,19 @@ static getAvailableItems(userId, callback) {
       WHERE s.user_id = ? 
         AND s.date BETWEEN ? AND ?
         AND s.sale_type = 'cash'
-      GROUP BY s.sale_id, s.user_id
-      ORDER BY s.sale_id DESC
     `;
     
-    db.query(query, [userId, startDate, endDate], (err, results) => {
+    const params = [userId, startDate, endDate];
+    
+    // Add branch filter if branchIds provided
+    if (branchIds && branchIds.length > 0) {
+      query += ` AND s.branch_id IN (?)`;
+      params.push(branchIds);
+    }
+    
+    query += ` GROUP BY s.sale_id, s.user_id ORDER BY s.sale_id DESC`;
+    
+    db.query(query, params, (err, results) => {
       if (err) {
         console.error('❌ Error searching sales by worker/time:', err);
         return callback(err);
