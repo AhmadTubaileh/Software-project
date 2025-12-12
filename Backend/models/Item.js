@@ -148,8 +148,8 @@ class Item {
 
         // Insert into items table
         const itemQuery = `
-          INSERT INTO items (name, description, available, installment, quantity, item_image) 
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO items (name, description, available, installment, quantity, item_image, branch_id) 
+          VALUES (?, ?, ?, ?, ?, ?, ?)
         `;
         
         connection.query(itemQuery, [
@@ -158,7 +158,8 @@ class Item {
           itemData.available,
           itemData.installment,
           itemData.quantity,
-          itemData.item_image
+          itemData.item_image,
+          itemData.branch_id
         ], (err, itemResult) => {
           if (err) {
             console.error('Error inserting item:', err);
@@ -238,7 +239,7 @@ class Item {
         const itemQuery = `
           UPDATE items 
           SET name = ?, description = ?, available = ?, 
-              installment = ?, quantity = ?, item_image = ?
+              installment = ?, quantity = ?, item_image = ?, branch_id = ?
           WHERE id = ?
         `;
         
@@ -249,6 +250,7 @@ class Item {
           itemData.installment,
           itemData.quantity,
           itemData.item_image,
+          itemData.branch_id,
           itemId
         ], (err) => {
           if (err) {

@@ -1,6 +1,6 @@
 import React from 'react';
 
-function ItemCard({ item, onEdit, onUpdate, onDelete, onViewImage, onViewPriceHistory }) {
+function ItemCard({ item, onEdit, onUpdate, onDelete, onViewImage, onViewPriceHistory, onDuplicate, isAdmin }) {
   const getImageSrc = () => {
     if (item.item_image) {
       return typeof item.item_image === 'string'
@@ -68,6 +68,11 @@ function ItemCard({ item, onEdit, onUpdate, onDelete, onViewImage, onViewPriceHi
         <div>
           <h3 className="font-semibold text-lg text-white mb-1">{item.name}</h3>
           <p className="text-gray-400 text-sm line-clamp-2">{item.description}</p>
+          {item.branch_name && (
+            <p className="text-xs text-blue-400 mt-1 flex items-center gap-1">
+              <span>🏢</span> {item.branch_name}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2 text-sm">
@@ -175,7 +180,7 @@ function ItemCard({ item, onEdit, onUpdate, onDelete, onViewImage, onViewPriceHi
       </div>
 
       {/* Action Buttons */}
-      <div className="flex gap-2 mt-4 pt-4 border-t border-gray-700">
+      <div className="flex gap-2 mt-4 pt-4 border-t border-gray-700 flex-wrap">
         <button
           onClick={() => onEdit(item)}
           className="flex-1 bg-blue-600 hover:bg-blue-700 py-2 rounded text-sm transition-all duration-200 hover:scale-105"
@@ -188,6 +193,15 @@ function ItemCard({ item, onEdit, onUpdate, onDelete, onViewImage, onViewPriceHi
         >
           Update
         </button>
+        {isAdmin && (
+          <button
+            onClick={() => onDuplicate(item)}
+            className="flex-1 bg-green-600 hover:bg-green-700 py-2 rounded text-sm transition-all duration-200 hover:scale-105"
+            title="Duplicate item to another branch"
+          >
+            Duplicate
+          </button>
+        )}
         <button
           onClick={() => onDelete(item.id)}
           className="flex-1 bg-red-600 hover:bg-red-700 py-2 rounded text-sm transition-all duration-200 hover:scale-105"

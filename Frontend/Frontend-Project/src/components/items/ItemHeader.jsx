@@ -1,6 +1,6 @@
 import React from 'react';
 
-function ItemHeader({ searchQuery, onSearchChange, onAddItem, availableFilter, onAvailableFilterChange }) {
+function ItemHeader({ searchQuery, onSearchChange, onAddItem, availableFilter, onAvailableFilterChange, branchFilter, onBranchFilterChange, allBranches, currentUser }) {
   return (
     <>
       <div className="flex justify-between items-center mb-6">
@@ -37,6 +37,18 @@ function ItemHeader({ searchQuery, onSearchChange, onAddItem, availableFilter, o
             <option value="all">All Availability</option>
             <option value="1">Available</option>
             <option value="0">Not Available</option>
+          </select>
+          <select
+            value={branchFilter}
+            onChange={onBranchFilterChange}
+            className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500 min-w-[150px]"
+          >
+            <option value="all">All Branches</option>
+            {allBranches && allBranches.map(branch => (
+              <option key={branch.id} value={branch.id}>
+                {branch.name}
+              </option>
+            ))}
           </select>
         </div>
       </div>
