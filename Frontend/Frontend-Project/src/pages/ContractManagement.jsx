@@ -116,12 +116,19 @@ function ContractManagement() {
     return accessibleBranchIds.includes(contract.branch_id);
   };
 
-  // Fetch all branches for filter dropdown
+  // Fetch branches for filter dropdown (only accessible branches for non-admins)
   useEffect(() => {
-    const fetchAllBranches = async () => {
+    const fetchBranches = async () => {
       try {
         setLoadingBranches(true);
-        const response = await fetch('http://localhost:5000/api/branches');
+        let url = 'http://localhost:5000/api/branches';
+        
+        // If not admin, get only accessible branches
+        if (userType !== 0 && currentUser?.id) {
+          url = `http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`;
+        }
+        
+        const response = await fetch(url);
         
         if (!response.ok) {
           throw new Error('Failed to fetch branches');
@@ -138,8 +145,8 @@ function ContractManagement() {
       }
     };
 
-    fetchAllBranches();
-  }, []);
+    fetchBranches();
+  }, [currentUser, userType]);
 
   // Fetch contracts based on filter
   const fetchContracts = useCallback(async () => {

@@ -85,7 +85,7 @@ router.get('/pending', async (req, res) => {
 // GET /api/contracts/all - Get all contracts with filters
 router.get('/all', async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, branch_id } = req.query;
     
     // Get user info from query or session (for branch filtering)
     // Note: PaymentProcessing should pass showAll=true to bypass branch filtering
@@ -94,7 +94,15 @@ router.get('/all', async (req, res) => {
     const showAll = req.query.showAll === 'true'; // For PaymentProcessing page
     
     let branchIds = null;
-    if (!showAll && userId) {
+    
+    // If specific branch_id is provided, use that (override accessible branches filter)
+    if (branch_id) {
+      const branchId = parseInt(branch_id);
+      if (!isNaN(branchId)) {
+        branchIds = [branchId];
+      }
+    } else if (!showAll && userId) {
+      // Otherwise, get accessible branches for filtering
       try {
         branchIds = await getAccessibleBranchIds(userId, userType);
       } catch (err) {
