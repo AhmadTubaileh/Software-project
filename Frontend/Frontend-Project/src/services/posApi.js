@@ -2,10 +2,15 @@
 const API_BASE = 'http://localhost:5000/api/pos';
 
 class PosApi {
-  // Get ALL items with latest prices
-  static async getItems() {
+  // Get ALL items with latest prices (filtered by user's accessible branches)
+  static async getItems(userId = null) {
     try {
-      const response = await fetch(`${API_BASE}/items`);
+      // Add userId as query parameter if provided
+      const url = userId 
+        ? `${API_BASE}/items?userId=${userId}`
+        : `${API_BASE}/items`;
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

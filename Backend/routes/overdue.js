@@ -1,6 +1,36 @@
 const express = require('express');
 const router = express.Router();
 const Overdue = require('../models/Overdue');
+const Employee = require('../models/Employee');
+
+// Helper function to get accessible branch IDs for a user
+async function getAccessibleBranchIds(userId, userType) {
+  return new Promise((resolve, reject) => {
+    // Admins see all branches (return null to skip filtering)
+    if (userType === 0) {
+      resolve(null);
+      return;
+    }
+    
+    // Get accessible branches for non-admin users
+    Employee.getAccessibleBranches(userId, (err, results) => {
+      if (err) {
+        console.error('Error getting accessible branches:', err);
+        reject(err);
+        return;
+      }
+      
+      if (!results || results.length === 0) {
+        // No accessible branches, return empty array (will show no contracts)
+        resolve([]);
+        return;
+      }
+      
+      const branchIds = results.map(b => b.id);
+      resolve(branchIds);
+    });
+  });
+}
 
 // GET /api/overdue/sync - Auto-sync overdue payments on page load
 router.get('/sync', async (req, res) => {
@@ -24,7 +54,11 @@ router.get('/sync', async (req, res) => {
 // GET /api/overdue/summary - Get overdue summary with filters
 router.get('/summary', async (req, res) => {
   try {
-    const { status, contract_id } = req.query;
+    const { status, contract_id, branch_id } = req.query;
+    
+    // Get user info from query (for branch filtering)
+    const userId = req.query.userId || (req.user ? req.user.id : null);
+    const userType = req.query.userType || (req.user ? req.user.user_type : 0);
     
     const filters = {};
     if (status && status !== 'all') {
@@ -33,6 +67,26 @@ router.get('/summary', async (req, res) => {
     if (contract_id) {
       filters.contract_id = contract_id;
     }
+    
+    let branchIds = null;
+    
+    // If specific branch_id is provided, use that (override accessible branches filter)
+    if (branch_id) {
+      const branchId = parseInt(branch_id);
+      if (!isNaN(branchId)) {
+        branchIds = [branchId];
+      }
+    } else if (userId) {
+      // Otherwise, get accessible branches for filtering
+      try {
+        branchIds = await getAccessibleBranchIds(userId, userType);
+      } catch (err) {
+        console.error('Error getting accessible branches:', err);
+        // Continue without branch filtering if error
+      }
+    }
+    
+    filters.branchIds = branchIds;
     
     const overdueSummary = await Overdue.getOverdueSummary(filters);
     
@@ -53,7 +107,31 @@ router.get('/summary', async (req, res) => {
 // GET /api/overdue/contracts - Get contracts with overdue payments
 router.get('/contracts', async (req, res) => {
   try {
-    const contracts = await Overdue.getContractsWithOverdue();
+    const { branch_id } = req.query;
+    
+    // Get user info from query (for branch filtering)
+    const userId = req.query.userId || (req.user ? req.user.id : null);
+    const userType = req.query.userType || (req.user ? req.user.user_type : 0);
+    
+    let branchIds = null;
+    
+    // If specific branch_id is provided, use that (override accessible branches filter)
+    if (branch_id) {
+      const branchId = parseInt(branch_id);
+      if (!isNaN(branchId)) {
+        branchIds = [branchId];
+      }
+    } else if (userId) {
+      // Otherwise, get accessible branches for filtering
+      try {
+        branchIds = await getAccessibleBranchIds(userId, userType);
+      } catch (err) {
+        console.error('Error getting accessible branches:', err);
+        // Continue without branch filtering if error
+      }
+    }
+    
+    const contracts = await Overdue.getContractsWithOverdue(branchIds);
     
     res.json({
       success: true,
@@ -181,10 +259,10 @@ router.put('/:payment_id/status', async (req, res) => {
     });
   }
 });
-// GET /api/overdue/contracts/search - Search contracts by customer name
+// GET /api/overdue/contracts/search - Search contracts by customer name (with branch filtering)
 router.get('/contracts/search', async (req, res) => {
   try {
-    const { customer_name } = req.query;
+    const { customer_name, branch_id } = req.query;
     
     if (!customer_name || customer_name.trim().length < 2) {
       return res.status(400).json({
@@ -193,7 +271,29 @@ router.get('/contracts/search', async (req, res) => {
       });
     }
     
-    const contracts = await Overdue.searchContractsByCustomerName(customer_name.trim());
+    // Get user info from query (for branch filtering)
+    const userId = req.query.userId || (req.user ? req.user.id : null);
+    const userType = req.query.userType || (req.user ? req.user.user_type : 0);
+    
+    let branchIds = null;
+    
+    // If specific branch_id is provided, use that (override accessible branches filter)
+    if (branch_id) {
+      const branchId = parseInt(branch_id);
+      if (!isNaN(branchId)) {
+        branchIds = [branchId];
+      }
+    } else if (userId) {
+      // Otherwise, get accessible branches for filtering
+      try {
+        branchIds = await getAccessibleBranchIds(userId, userType);
+      } catch (err) {
+        console.error('Error getting accessible branches:', err);
+        // Continue without branch filtering if error
+      }
+    }
+    
+    const contracts = await Overdue.searchContractsByCustomerName(customer_name.trim(), branchIds);
     
     res.json({
       success: true,
@@ -251,7 +351,31 @@ router.get('/contract/:contract_id/detailed-payments', async (req, res) => {
 // GET /api/overdue/stats - Get statistics
 router.get('/stats', async (req, res) => {
   try {
-    const stats = await Overdue.getStatistics();
+    const { branch_id } = req.query;
+    
+    // Get user info from query (for branch filtering)
+    const userId = req.query.userId || (req.user ? req.user.id : null);
+    const userType = req.query.userType || (req.user ? req.user.user_type : 0);
+    
+    let branchIds = null;
+    
+    // If specific branch_id is provided, use that (override accessible branches filter)
+    if (branch_id) {
+      const branchId = parseInt(branch_id);
+      if (!isNaN(branchId)) {
+        branchIds = [branchId];
+      }
+    } else if (userId) {
+      // Otherwise, get accessible branches for filtering
+      try {
+        branchIds = await getAccessibleBranchIds(userId, userType);
+      } catch (err) {
+        console.error('Error getting accessible branches:', err);
+        // Continue without branch filtering if error
+      }
+    }
+    
+    const stats = await Overdue.getStatistics(branchIds);
     
     res.json({
       success: true,

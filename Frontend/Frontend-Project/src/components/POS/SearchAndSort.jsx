@@ -1,7 +1,10 @@
 // components/POS/SearchAndSort.jsx
 import React from 'react';
 
-const SearchAndSort = ({ query, setQuery, sortBy, setSortBy }) => {
+const SearchAndSort = ({ query, setQuery, sortBy, setSortBy, selectedBranch, setSelectedBranch, accessibleBranches }) => {
+  // Only show branch filter if user has access to more than one branch
+  const showBranchFilter = accessibleBranches && accessibleBranches.length > 1;
+
   return (
     <div className="mb-6">
       <div className="flex gap-3">
@@ -25,6 +28,30 @@ const SearchAndSort = ({ query, setQuery, sortBy, setSortBy }) => {
             </button>
           )}
         </div>
+        
+        {/* Branch Filter - Only show if user has multiple branches */}
+        {showBranchFilter && (
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <span className="text-gray-500">🏢</span>
+            </div>
+            <select
+              value={selectedBranch || ''}
+              onChange={e => setSelectedBranch(e.target.value ? parseInt(e.target.value) : null)}
+              className="appearance-none pl-10 pr-8 py-3 bg-gradient-to-br from-gray-800 to-gray-900 border-2 border-gray-700 rounded-xl text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-300 cursor-pointer min-w-[180px]"
+            >
+              <option value="" className="bg-gray-800">All Branches</option>
+              {accessibleBranches.map(branch => (
+                <option key={branch.id} value={branch.id} className="bg-gray-800">
+                  {branch.name}
+                </option>
+              ))}
+            </select>
+            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+              <span className="text-gray-500">▼</span>
+            </div>
+          </div>
+        )}
         
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

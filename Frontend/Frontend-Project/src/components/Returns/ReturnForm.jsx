@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const ReturnForm = ({ cashRecord, currentUser, onProcessReturn, onCancel }) => {
+const ReturnForm = ({ cashRecord, currentUser, selectedBranch, onProcessReturn, onCancel }) => {
   const [returnQuantity, setReturnQuantity] = useState(1);
   const [returnType, setReturnType] = useState('resale');
   const [processing, setProcessing] = useState(false);
@@ -23,7 +23,8 @@ const ReturnForm = ({ cashRecord, currentUser, onProcessReturn, onCancel }) => {
       returnQuantity: parseInt(returnQuantity),
       returnType: returnType,
       userId: currentUser.id,
-      originalPrice: cashRecord.price
+      originalPrice: cashRecord.price,
+      branchId: selectedBranch || null // Pass selected branch or null
     };
 
     try {

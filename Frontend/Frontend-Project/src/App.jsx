@@ -20,6 +20,7 @@ import OverduePayments from './pages/OverduePayments.jsx';
 import Returns from './pages/Returns.jsx';
 import WorkerInventory from './pages/WorkerInventory.jsx';
 import Branches from './pages/Branches.jsx'; // Make sure this import matches
+import ContractBranches from './pages/ContractBranches.jsx';
 
 function App() {
   return (
@@ -43,6 +44,7 @@ function App() {
         <Route path="/returns" element={<Returns />} />
         <Route path="/worker-inventory" element={<WorkerInventory />} />
         <Route path="/branches" element={<Branches />} /> {/* CHANGED from /branch-management to /branches */}
+        <Route path="/contract-branches" element={<ContractBranches />} />
       </Routes>
     </Router>
   );

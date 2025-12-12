@@ -58,11 +58,34 @@ function Returns() {
   const [selectedCashRecord, setSelectedCashRecord] = useState(null);
   const [loading, setLoading] = useState(false);
   const [workers, setWorkers] = useState([]);
+  const [selectedBranch, setSelectedBranch] = useState(null); // null = all accessible branches
+  const [accessibleBranches, setAccessibleBranches] = useState([]);
 
-  // Fetch workers on component mount
+  // Fetch workers and accessible branches on component mount
   useEffect(() => {
     fetchWorkers();
-  }, []);
+    if (currentUser?.id) {
+      fetchAccessibleBranches();
+    }
+  }, [currentUser?.id]);
+
+  const fetchAccessibleBranches = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch accessible branches');
+      }
+      const branches = await response.json();
+      setAccessibleBranches(branches);
+      // If user has only one branch, auto-select it
+      if (branches.length === 1) {
+        setSelectedBranch(branches[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching accessible branches:', error);
+      setAccessibleBranches([]);
+    }
+  };
 
   const fetchWorkers = async () => {
     try {
@@ -80,7 +103,9 @@ function Returns() {
   const handleSearchBySaleId = async (saleId) => {
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:5000/api/pos/search-sales?searchType=saleId&saleId=${saleId}`);
+      // Add branchId to query if selected
+      const branchParam = selectedBranch ? `&branchId=${selectedBranch}` : '';
+      const response = await fetch(`http://localhost:5000/api/pos/search-sales?searchType=saleId&saleId=${saleId}${branchParam}`);
       const data = await response.json();
       
       if (data.success) {
@@ -102,8 +127,10 @@ function Returns() {
   const handleSearchByWorkerTime = async (workerId, startDate, endDate) => {
     setLoading(true);
     try {
+      // Add branchId to query if selected
+      const branchParam = selectedBranch ? `&branchId=${selectedBranch}` : '';
       const response = await fetch(
-        `http://localhost:5000/api/pos/search-sales?searchType=workerTime&userId=${workerId}&startDate=${startDate}&endDate=${endDate}`
+        `http://localhost:5000/api/pos/search-sales?searchType=workerTime&userId=${workerId}&startDate=${startDate}&endDate=${endDate}${branchParam}`
       );
       const data = await response.json();
       
@@ -213,6 +240,30 @@ function Returns() {
             <p className="text-gray-500 text-sm mt-1">
               Logged in as: {currentUser?.username} ({getRoleName(userType)})
             </p>
+            
+            {/* Branch Filter - Only show if user has multiple branches */}
+            {accessibleBranches && accessibleBranches.length > 1 && (
+              <div className="mt-4 mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Filter by Branch:
+                </label>
+                <select
+                  value={selectedBranch || ''}
+                  onChange={e => {
+                    setSelectedBranch(e.target.value ? parseInt(e.target.value) : null);
+                    resetSearch(); // Clear search when branch changes
+                  }}
+                  className="px-4 py-2 bg-gradient-to-br from-gray-800 to-gray-900 border-2 border-gray-700 rounded-xl text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-300 cursor-pointer min-w-[200px]"
+                >
+                  <option value="" className="bg-gray-800">All Accessible Branches</option>
+                  {accessibleBranches.map(branch => (
+                    <option key={branch.id} value={branch.id} className="bg-gray-800">
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             
             {/* Navigation Tabs */}
             <div className="flex border-b border-gray-700 mt-6">
@@ -329,6 +380,7 @@ function Returns() {
                   <ReturnForm 
                     cashRecord={selectedCashRecord}
                     currentUser={currentUser}
+                    selectedBranch={selectedBranch}
                     onProcessReturn={handleProcessReturn}
                     onCancel={() => setSelectedCashRecord(null)}
                   />

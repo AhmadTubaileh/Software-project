@@ -2,12 +2,16 @@
 const express = require('express');
 const router = express.Router();
 const POS = require('../models/POS');
+const db = require('../config/database');
 
-// GET /api/pos/items - Get ALL items for POS (including out of stock)
+// GET /api/pos/items - Get ALL items for POS (including out of stock, filtered by accessible branches)
 router.get('/items', (req, res) => {
-  console.log('🛒 POS: Fetching ALL items with latest prices...');
+  // Get userId from query params or request body
+  const userId = req.query.userId || req.body.userId || (req.user ? req.user.id : null);
   
-  POS.getAvailableItems((err, results) => {
+  console.log('🛒 POS: Fetching items with latest prices...', { userId });
+  
+  POS.getAvailableItems(userId, (err, results) => {
     if (err) {
       console.error('❌ Error fetching POS items:', err);
       return res.status(500).json({ 
@@ -56,79 +60,6 @@ router.get('/items', (req, res) => {
 });
 
 // POST /api/pos/checkout - Process sale
-router.post('/checkout', (req, res) => {
-  const { cart, userId } = req.body;
-  
-  console.log('💰 POS Checkout Request:', { 
-    userId, 
-    cartItems: cart?.length,
-    totalUnits: cart?.reduce((sum, item) => sum + item.qty, 0) || 0
-  });
-  
-  // Validate input
-  if (!cart || !Array.isArray(cart) || cart.length === 0) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'Cart is empty' 
-    });
-  }
-
-  if (!userId) {
-    return res.status(400).json({ 
-      success: false, 
-      message: 'User ID is required' 
-    });
-  }
-
-  // Step 1: Check if all items have sufficient quantity
-  POS.checkQuantities(cart, (err, insufficientItems) => {
-    if (err) {
-      console.error('❌ Error checking quantities:', err);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Error checking inventory',
-        error: err.message 
-      });
-    }
-
-    if (insufficientItems.length > 0) {
-      console.log('❌ Insufficient quantities:', insufficientItems);
-      return res.status(400).json({
-        success: false,
-        message: 'Insufficient quantity for some items',
-        insufficientItems
-      });
-    }
-
-    console.log('✅ All items have sufficient quantity, processing sale...');
-
-    // Step 2: Process sale transaction
-    POS.processSaleTransaction({ cart, userId }, (err, result) => {
-      if (err) {
-        console.error('❌ Error processing sale:', err);
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Error processing sale',
-          error: err.message 
-        });
-      }
-
-      console.log(`✅ Sale ${result.saleId} completed successfully!`);
-      console.log(`📦 Items: ${result.totalItems}, Units: ${result.totalUnits}`);
-      
-      res.json({
-        success: true,
-        message: 'Sale processed successfully',
-        saleId: result.saleId,
-        totalItems: result.totalItems,
-        totalUnits: result.totalUnits,
-        timestamp: result.timestamp
-      });
-    });
-  });
-});
-
-// routes/pos.js - Add debugging to checkout route:
 router.post('/checkout', (req, res) => {
   const { cart, userId } = req.body;
   
@@ -215,13 +146,58 @@ router.post('/checkout', (req, res) => {
 
 // GET /api/pos/search-sales - Search sales by criteria
 router.get('/search-sales', (req, res) => {
-  const { searchType, saleId, userId, startDate, endDate } = req.query;
+  const { searchType, saleId, userId, startDate, endDate, branchId } = req.query;
   
-  console.log('🔍 Searching sales:', { searchType, saleId, userId, startDate, endDate });
+  console.log('🔍 Searching sales:', { searchType, saleId, userId, startDate, endDate, branchId });
+  
+  // Get user's accessible branches if branchId not specified
+  const getBranchIds = (callback) => {
+    if (branchId) {
+      // If specific branch selected, use only that branch
+      return callback(null, [parseInt(branchId)]);
+    }
+    
+    // Get accessible branches for the current user (from userId or req.user)
+    const currentUserId = userId || (req.user ? req.user.id : null);
+    if (!currentUserId) {
+      return callback(null, null); // No filter if no user
+    }
+    
+    const branchQuery = `
+      SELECT DISTINCT branch_id 
+      FROM user_branches 
+      WHERE user_id = ?
+    `;
+    
+    const db = require('../config/database');
+    db.query(branchQuery, [currentUserId], (err, branchResults) => {
+      if (err) {
+        console.error('Error fetching accessible branches:', err);
+        return callback(err);
+      }
+      
+      if (!branchResults || branchResults.length === 0) {
+        return callback(null, null); // No filter if no branches
+      }
+      
+      const branchIds = branchResults.map(b => b.branch_id);
+      callback(null, branchIds);
+    });
+  };
   
   if (searchType === 'saleId' && saleId) {
-    // Search by sale ID - get ALL records (cash and retrieve) for that sale_id
-    POS.searchSalesBySaleId(saleId, (err, results) => {
+    // Get branch IDs for filtering
+    getBranchIds((err, branchIds) => {
+      if (err) {
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Error getting branch access',
+          error: err.message 
+        });
+      }
+      
+      // Search by sale ID - get ALL records (cash and retrieve) for that sale_id
+      POS.searchSalesBySaleId(saleId, branchIds, (err, results) => {
       if (err) {
         console.error('❌ Error searching sales by ID:', err);
         return res.status(500).json({ 
@@ -288,10 +264,21 @@ router.get('/search-sales', (req, res) => {
         totalItems: Object.keys(groupedResults).length
       });
     });
+    });
     
   } else if (searchType === 'workerTime' && userId && startDate && endDate) {
-    // Search by worker and time period - get only cash records first
-    POS.searchSalesByWorkerTime(userId, startDate, endDate, (err, results) => {
+    // Get branch IDs for filtering
+    getBranchIds((err, branchIds) => {
+      if (err) {
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Error getting branch access',
+          error: err.message 
+        });
+      }
+      
+      // Search by worker and time period - get only cash records first
+      POS.searchSalesByWorkerTime(userId, startDate, endDate, branchIds, (err, results) => {
       if (err) {
         console.error('❌ Error searching sales by worker/time:', err);
         return res.status(500).json({ 
@@ -310,6 +297,7 @@ router.get('/search-sales', (req, res) => {
         results: results,
         totalSales: results.length
       });
+    });
     });
     
   } else {
@@ -400,10 +388,10 @@ router.get('/sale-details/:saleId', (req, res) => {
 
 // POST /api/pos/process-return - Process item return
 router.post('/process-return', (req, res) => {
-  const { saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice } = req.body;
+  const { saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice, branchId } = req.body;
   
   console.log('🔄 Processing return:', {
-    saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice
+    saleId, itemId, cashRecordId, returnQuantity, returnType, userId, originalPrice, branchId
   });
   
   // Validate input
@@ -429,7 +417,8 @@ router.post('/process-return', (req, res) => {
     returnQuantity,
     returnType,
     userId,
-    originalPrice
+    originalPrice,
+    branchId: branchId || null // Pass branchId if provided
   }, (err, result) => {
     if (err) {
       console.error('❌ Error processing return:', err);

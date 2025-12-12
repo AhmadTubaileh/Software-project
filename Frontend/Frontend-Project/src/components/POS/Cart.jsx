@@ -123,20 +123,12 @@ const Cart = ({ cart, processing, onRemoveFromCart, onUpdateQuantity, onProcessC
           </button>
 
           {cart.length > 0 && (
-            <div className="flex gap-3">
-              <button
-                onClick={onClearCart}
-                className="flex-1 py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-xl font-semibold transition-all duration-300 shadow-md hover:shadow-lg"
-              >
-                🗑️ Clear Cart
-              </button>
-              <button
-                onClick={() => window.print()}
-                className="flex-1 py-3 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 rounded-xl font-semibold transition-all duration-300 shadow-md hover:shadow-lg"
-              >
-                🖨️ Print Receipt
-              </button>
-            </div>
+            <button
+              onClick={onClearCart}
+              className="w-full py-3 bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 rounded-xl font-semibold transition-all duration-300 shadow-md hover:shadow-lg"
+            >
+              🗑️ Clear Cart
+            </button>
           )}
         </div>
       </div>

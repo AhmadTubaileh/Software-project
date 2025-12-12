@@ -8,6 +8,7 @@ import Header from '../components/POS/Header.jsx';
 import SearchAndSort from '../components/POS/SearchAndSort.jsx';
 import ProductGrid from '../components/POS/ProductGrid.jsx';
 import Cart from '../components/POS/Cart.jsx';
+import Receipt from '../components/POS/Receipt.jsx';
 
 function POS() {
   const navigate = useNavigate();
@@ -19,6 +20,10 @@ function POS() {
   const [processing, setProcessing] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [priceEdit, setPriceEdit] = useState('');
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [receiptData, setReceiptData] = useState(null);
+  const [selectedBranch, setSelectedBranch] = useState(null); // null = all branches
+  const [accessibleBranches, setAccessibleBranches] = useState([]);
   const { currentUser } = useLocalSession();
 
   // ========== ACCESS CONTROL START ==========
@@ -85,15 +90,43 @@ function POS() {
   }
   // ========== ACCESS CONTROL END ==========
 
-  // Fetch all items with latest prices
+  // Fetch accessible branches
   useEffect(() => {
-    fetchItems();
-  }, []);
+    if (currentUser?.id) {
+      fetchAccessibleBranches();
+    }
+  }, [currentUser?.id]);
+
+  // Fetch all items with latest prices (filtered by accessible branches)
+  useEffect(() => {
+    if (currentUser?.id) {
+      fetchItems();
+    }
+  }, [currentUser?.id]);
+
+  const fetchAccessibleBranches = async () => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch accessible branches');
+      }
+      const branches = await response.json();
+      setAccessibleBranches(branches);
+      // If user has only one branch, auto-select it
+      if (branches.length === 1) {
+        setSelectedBranch(branches[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching accessible branches:', error);
+      setAccessibleBranches([]);
+    }
+  };
 
   const fetchItems = async () => {
     try {
       setLoading(true);
-      const itemsData = await PosApi.getItems();
+      // Pass userId to filter items by accessible branches
+      const itemsData = await PosApi.getItems(currentUser?.id);
       setItems(itemsData);
     } catch (error) {
       console.error('Error fetching items:', error);
@@ -106,14 +139,15 @@ function POS() {
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
-    let filtered = items.filter(item => 
-      item.name.toLowerCase().includes(query.toLowerCase()) ||
-      (item.description && item.description.toLowerCase().includes(query.toLowerCase()))
-    );
+    // First filter by branch if selected
+    let filtered = items;
+    if (selectedBranch) {
+      filtered = filtered.filter(item => item.branch_id === selectedBranch);
+    }
 
     // Handle sale filter
     if (query === 'sale' || query === '__sale__' || query === '🔥') {
-      filtered = items.filter(item => {
+      filtered = filtered.filter(item => {
         const priceCash = parseFloat(item.price_cash) || 0;
         const onSalePrice = item.on_sale_price ? parseFloat(item.on_sale_price) : null;
         return onSalePrice !== null && onSalePrice > 0 && onSalePrice < priceCash;
@@ -121,7 +155,7 @@ function POS() {
     } 
     // Regular search
     else if (query) {
-      filtered = items.filter(item => 
+      filtered = filtered.filter(item => 
         item.name.toLowerCase().includes(query.toLowerCase()) ||
         (item.description && item.description.toLowerCase().includes(query.toLowerCase()))
       );
@@ -142,6 +176,10 @@ function POS() {
           return (a.display_price || a.price_cash || 0) - (b.display_price || b.price_cash || 0);
         case 'price-desc':
           return (b.display_price || b.price_cash || 0) - (a.display_price || a.price_cash || 0);
+        case 'name-asc':
+          return a.name.localeCompare(b.name);
+        case 'name-desc':
+          return b.name.localeCompare(a.name);
         case 'relevance':
         default:
           return a.name.localeCompare(b.name);
@@ -149,7 +187,7 @@ function POS() {
     });
 
     return filtered;
-  }, [items, query, sortBy]);
+  }, [items, query, sortBy, selectedBranch]);
 
   // In POS.jsx - Fix the getDisplayPrice function
   const getDisplayPrice = (product) => {
@@ -316,10 +354,27 @@ function POS() {
 
     setProcessing(true);
     try {
+      // Store cart data for receipt before clearing
+      const cartForReceipt = [...cart];
+      const totalForReceipt = total;
+      
       // Send checkout data to POS API
       const result = await PosApi.checkout(cart, currentUser.id);
       
       toast.success(`Sale #${result.saleId} processed successfully!`);
+      
+      // Prepare receipt data
+      setReceiptData({
+        saleId: result.saleId,
+        cart: cartForReceipt,
+        total: totalForReceipt,
+        currentUser: currentUser,
+        timestamp: result.timestamp || new Date().toISOString()
+      });
+      
+      // Show receipt
+      setShowReceipt(true);
+      
       setCart([]);
       // Refresh items to get updated quantities
       await fetchItems();
@@ -367,6 +422,21 @@ function POS() {
     <div className="flex min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
 
+      {/* Receipt Modal */}
+      {showReceipt && receiptData && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-h-[90vh] overflow-y-auto">
+            <Receipt 
+              saleData={receiptData}
+              onClose={() => {
+                setShowReceipt(false);
+                setReceiptData(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Sidebar for Admin/Employee */}
       {showSidebar && <AdminSidebar />}
 
@@ -392,6 +462,9 @@ function POS() {
                 setQuery={setQuery}
                 sortBy={sortBy}
                 setSortBy={setSortBy}
+                selectedBranch={selectedBranch}
+                setSelectedBranch={setSelectedBranch}
+                accessibleBranches={accessibleBranches}
               />
 
               <ProductGrid

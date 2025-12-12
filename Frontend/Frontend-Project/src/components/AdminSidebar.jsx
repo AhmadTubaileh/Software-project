@@ -66,6 +66,11 @@ function AdminSidebar() {
       return userType === 0; // Only admin can see Branches
     }
     
+    // Special case: Contract Branches is Admin, Senior Manager, Manager only
+    if (itemName === 'Contract Branches') {
+      return userType === 0 || userType === 1 || userType === 2;
+    }
+    
     // Admin, Senior Manager, Manager can see everything (except Branches which is admin-only)
     if (userType === 0) {
       return true; // Admin can see everything including Branches
@@ -178,6 +183,7 @@ function AdminSidebar() {
       items: [
         { name: 'Manage Contracts', path: '/contract-management', icon: '⚡' },
         { name: 'Overdue Payments', path: '/overdue-payments', icon: '⏰' },
+        { name: 'Contract Branches', path: '/contract-branches', icon: '🏢' },
       ].filter(item => canSeeItem(item.name, 'Installment Management'))
     },
     {
@@ -421,8 +427,12 @@ function AdminSidebar() {
             </button>
 
             {/* Section Items - Animated */}
-            <div className={`space-y-1 transition-all duration-300 overflow-hidden ${
-              expandedSections[section.name] ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+            <div className={`space-y-1 transition-all duration-300 ${
+              expandedSections[section.name]
+                ? (section.name === 'Managerial'
+                    ? 'max-h-[600px] opacity-100 overflow-y-auto'
+                    : 'max-h-96 opacity-100 overflow-hidden')
+                : 'max-h-0 opacity-0 overflow-hidden'
             }`}>
               {/* Static menu items */}
               {section.items.map((item) => (

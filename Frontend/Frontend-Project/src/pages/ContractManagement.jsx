@@ -24,6 +24,9 @@ function ContractManagement() {
   const [sponsors, setSponsors] = useState([]);
   const [viewingImage, setViewingImage] = useState(null);
   const [statusFilter, setStatusFilter] = useState('pending');
+  const [branchFilter, setBranchFilter] = useState('all'); // 'all' or specific branch_id
+  const [allBranches, setAllBranches] = useState([]);
+  const [loadingBranches, setLoadingBranches] = useState(true);
   const { currentUser } = useLocalSession();
   const navigate = useNavigate();
 
@@ -67,6 +70,83 @@ function ContractManagement() {
 
   // Keep the original isAdmin logic (checking currentUser.role)
   const isAdmin = currentUser.role === 'admin';
+  
+  // Check if user can approve/reject contracts (Admin, Senior Manager, or Manager)
+  const canApproveReject = userType === 0 || userType === 1 || userType === 2;
+  
+  // Get accessible branch IDs for the current user
+  const [accessibleBranchIds, setAccessibleBranchIds] = useState([]);
+  
+  // Fetch accessible branches for the current user
+  useEffect(() => {
+    const fetchAccessibleBranches = async () => {
+      if (!currentUser?.id) {
+        setAccessibleBranchIds([]);
+        return;
+      }
+      
+      try {
+        const response = await fetch(`http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`);
+        if (response.ok) {
+          const branches = await response.json();
+          const branchIds = branches.map(b => b.id);
+          setAccessibleBranchIds(branchIds);
+        }
+      } catch (error) {
+        console.error('Error fetching accessible branches:', error);
+        setAccessibleBranchIds([]);
+      }
+    };
+    
+    fetchAccessibleBranches();
+  }, [currentUser]);
+  
+  // Helper function to check if user can approve/reject a specific contract
+  const canApproveRejectContract = (contract) => {
+    if (!canApproveReject) {
+      return false;
+    }
+    
+    // Admin can approve/reject contracts from any branch
+    if (userType === 0) {
+      return true;
+    }
+    
+    // Senior Manager and Manager can only approve/reject contracts from their accessible branches
+    return accessibleBranchIds.includes(contract.branch_id);
+  };
+
+  // Fetch branches for filter dropdown (only accessible branches for non-admins)
+  useEffect(() => {
+    const fetchBranches = async () => {
+      try {
+        setLoadingBranches(true);
+        let url = 'http://localhost:5000/api/branches';
+        
+        // If not admin, get only accessible branches
+        if (userType !== 0 && currentUser?.id) {
+          url = `http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`;
+        }
+        
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch branches');
+        }
+        
+        const branches = await response.json();
+        setAllBranches(branches || []);
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+        toast.error('Failed to load branches');
+        setAllBranches([]);
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+
+    fetchBranches();
+  }, [currentUser, userType]);
 
   // Fetch contracts based on filter
   const fetchContracts = useCallback(async () => {
@@ -74,11 +154,32 @@ function ContractManagement() {
       setLoading(true);
       let url = 'http://localhost:5000/api/contracts/all';
       
+      const params = new URLSearchParams();
+      
       // Add status filter if not 'all'
       if (statusFilter !== 'all') {
-        url += `?status=${statusFilter}`;
+        params.append('status', statusFilter);
       }
       
+      // Add branch filter if specific branch is selected
+      if (branchFilter !== 'all') {
+        params.append('branch_id', branchFilter);
+        console.log(`Filtering by specific branch: ${branchFilter}`);
+      } else {
+        // When "All Branches" is selected, send user info to filter by accessible branches
+        // This ensures users see contracts from all their accessible branches
+        if (currentUser?.id) {
+          params.append('userId', currentUser.id);
+          params.append('userType', currentUser.user_type || 0);
+          console.log(`Filtering by accessible branches for user ${currentUser.id} (type: ${currentUser.user_type || 0})`);
+        }
+      }
+      
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+      
+      console.log(`Fetching contracts from: ${url}`);
       const response = await fetch(url);
       
       if (!response.ok) {
@@ -86,6 +187,7 @@ function ContractManagement() {
       }
       
       const data = await response.json();
+      console.log(`Received ${data.contracts?.length || 0} contracts`);
       setContracts(data.contracts || []);
       setFilteredContracts(data.contracts || []);
     } catch (error) {
@@ -96,7 +198,7 @@ function ContractManagement() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, branchFilter, currentUser]);
 
   // Fetch contract details and sponsors
   const fetchContractDetails = async (contractId) => {
@@ -147,11 +249,12 @@ function ContractManagement() {
     fetchContracts();
   }, [fetchContracts]);
 
-  // Handle approve contract (ADMIN ONLY)
+  // Handle approve contract (Admin, Senior Manager, Manager - with branch access check)
   const handleApprove = async () => {
     if (!selectedContract) return;
-    if (!isAdmin) {
-      toast.error('Only admin can approve contracts');
+    
+    if (!canApproveRejectContract(selectedContract)) {
+      toast.error('You do not have permission to approve contracts from this branch');
       return;
     }
 
@@ -163,7 +266,8 @@ function ContractManagement() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          approver_id: currentUser.id
+          approver_id: currentUser.id,
+          user_type: currentUser.user_type || 0
         }),
       });
 
@@ -185,14 +289,15 @@ function ContractManagement() {
     }
   };
 
-  // Handle reject contract (ADMIN ONLY)
+  // Handle reject contract (Admin, Senior Manager, Manager - with branch access check)
   const handleReject = async () => {
     if (!selectedContract || !rejectionReason.trim()) {
       toast.error('Please provide a rejection reason');
       return;
     }
-    if (!isAdmin) {
-      toast.error('Only admin can reject contracts');
+    
+    if (!canApproveRejectContract(selectedContract)) {
+      toast.error('You do not have permission to reject contracts from this branch');
       return;
     }
 
@@ -205,6 +310,7 @@ function ContractManagement() {
         },
         body: JSON.stringify({
           approver_id: currentUser.id,
+          user_type: currentUser.user_type || 0,
           reason: rejectionReason
         }),
       });
@@ -373,38 +479,75 @@ function ContractManagement() {
             <p className="text-gray-400 mt-2">
               {isAdmin ? 'Review and manage installment contract applications' : 'View installment contract applications'}
             </p>
-            {!isAdmin && (
+            {!canApproveReject && (
               <div className="mt-4 bg-blue-900/20 border border-blue-500 p-3 rounded-lg inline-block">
                 <p className="text-blue-300 text-sm">
-                  <span className="font-bold">Note:</span> You can view all contracts. Only admins can approve/reject contracts.
+                  <span className="font-bold">Note:</span> You can view contracts. Only Admins, Senior Managers, and Managers can approve/reject contracts.
+                </p>
+              </div>
+            )}
+            {canApproveReject && userType !== 0 && (
+              <div className="mt-4 bg-yellow-900/20 border border-yellow-500 p-3 rounded-lg inline-block">
+                <p className="text-yellow-300 text-sm">
+                  <span className="font-bold">Note:</span> You can approve/reject contracts from your accessible branches only.
                 </p>
               </div>
             )}
           </div>
 
-          {/* Status Filter - ADDED 'DELETED' */}
-          <div className="mb-6">
-            <div className="flex flex-wrap gap-2">
-              {[
-                { value: 'pending', label: 'Pending Review', color: 'bg-yellow-600 hover:bg-yellow-700' },
-                { value: 'active', label: 'Active', color: 'bg-green-600 hover:bg-green-700' },
-                { value: 'rejected', label: 'Rejected', color: 'bg-red-600 hover:bg-red-700' },
-                { value: 'completed', label: 'Completed', color: 'bg-blue-600 hover:bg-blue-700' },
-                { value: 'deleted', label: 'Deleted', color: 'bg-gray-600 hover:bg-gray-700' },
-                { value: 'all', label: 'All Contracts', color: 'bg-purple-600 hover:bg-purple-700' }
-              ].map((filter) => (
-                <button
-                  key={filter.value}
-                  onClick={() => handleFilterChange(filter.value)}
-                  className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                    statusFilter === filter.value 
-                      ? filter.color.replace('hover:', '') + ' ring-2 ring-white ring-opacity-50' 
-                      : 'bg-gray-700 hover:bg-gray-600'
-                  }`}
+          {/* Filters Section */}
+          <div className="mb-6 space-y-4">
+            {/* Status Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Status Filter</label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: 'pending', label: 'Pending Review', color: 'bg-yellow-600 hover:bg-yellow-700' },
+                  { value: 'active', label: 'Active', color: 'bg-green-600 hover:bg-green-700' },
+                  { value: 'rejected', label: 'Rejected', color: 'bg-red-600 hover:bg-red-700' },
+                  { value: 'completed', label: 'Completed', color: 'bg-blue-600 hover:bg-blue-700' },
+                  { value: 'deleted', label: 'Deleted', color: 'bg-gray-600 hover:bg-gray-700' },
+                  { value: 'all', label: 'All Contracts', color: 'bg-purple-600 hover:bg-purple-700' }
+                ].map((filter) => (
+                  <button
+                    key={filter.value}
+                    onClick={() => handleFilterChange(filter.value)}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                      statusFilter === filter.value 
+                        ? filter.color.replace('hover:', '') + ' ring-2 ring-white ring-opacity-50' 
+                        : 'bg-gray-700 hover:bg-gray-600'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Branch Filter */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">Branch Filter</label>
+              {loadingBranches ? (
+                <div className="text-gray-400 text-sm">Loading branches...</div>
+              ) : (
+                <select
+                  value={branchFilter}
+                  onChange={(e) => setBranchFilter(e.target.value)}
+                  className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[200px]"
                 >
-                  {filter.label}
-                </button>
-              ))}
+                  <option value="all">All Branches</option>
+                  {allBranches.map((branch) => (
+                    <option key={branch.id} value={branch.id}>
+                      {branch.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              {branchFilter !== 'all' && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Showing contracts from: {allBranches.find(b => b.id === parseInt(branchFilter))?.name || 'Unknown'}
+                </p>
+              )}
             </div>
           </div>
 
@@ -417,16 +560,16 @@ function ContractManagement() {
             loading={loading}
             onViewDetails={handleViewDetails}
             onApprove={(contract) => {
-              if (!isAdmin) {
-                toast.error('Only admin can approve contracts');
+              if (!canApproveRejectContract(contract)) {
+                toast.error('You do not have permission to approve contracts from this branch');
                 return;
               }
               setSelectedContract(contract);
               setShowApproveModal(true);
             }}
             onReject={(contract) => {
-              if (!isAdmin) {
-                toast.error('Only admin can reject contracts');
+              if (!canApproveRejectContract(contract)) {
+                toast.error('You do not have permission to reject contracts from this branch');
                 return;
               }
               setSelectedContract(contract);
@@ -434,7 +577,8 @@ function ContractManagement() {
             }}
             onEditReapply={handleEditAndReapply}
             showActions={statusFilter === 'pending'}
-            isAdmin={isAdmin}
+            canApproveReject={canApproveReject}
+            canApproveRejectContract={canApproveRejectContract}
           />
         </div>
       </main>
@@ -461,8 +605,8 @@ function ContractManagement() {
         />
       )}
 
-      {/* Approve Confirmation Modal (ADMIN ONLY) */}
-      {showApproveModal && selectedContract && isAdmin && (
+      {/* Approve Confirmation Modal (Admin/Senior Manager/Manager) */}
+      {showApproveModal && selectedContract && canApproveRejectContract(selectedContract) && (
         <ApproveModal
           contract={selectedContract}
           processing={processing}
@@ -471,8 +615,8 @@ function ContractManagement() {
         />
       )}
 
-      {/* Reject Confirmation Modal (ADMIN ONLY) */}
-      {showRejectModal && selectedContract && isAdmin && (
+      {/* Reject Confirmation Modal (Admin/Senior Manager/Manager) */}
+      {showRejectModal && selectedContract && canApproveRejectContract(selectedContract) && (
         <RejectModal
           contract={selectedContract}
           processing={processing}

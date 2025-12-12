@@ -16,11 +16,14 @@ static searchContracts(searchValue, searchType = 'name') {
           cc.phone as customer_phone,
           cc.id_card_number as customer_id_card,
           i.name as item_name,
-          u.username as worker_name
+          u.username as worker_name,
+          b.id as branch_id,
+          b.name as branch_name
         FROM installment_contracts ic
         LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
         LEFT JOIN items i ON ic.item_id = i.id
         LEFT JOIN users u ON ic.user_id = u.id
+        LEFT JOIN branches b ON ic.branch_id = b.id
         WHERE cc.id_card_number = ? 
           AND ic.status = 'active'
         ORDER BY ic.created_at DESC
@@ -35,11 +38,14 @@ static searchContracts(searchValue, searchType = 'name') {
           cc.phone as customer_phone,
           cc.id_card_number as customer_id_card,
           i.name as item_name,
-          u.username as worker_name
+          u.username as worker_name,
+          b.id as branch_id,
+          b.name as branch_name
         FROM installment_contracts ic
         LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
         LEFT JOIN items i ON ic.item_id = i.id
         LEFT JOIN users u ON ic.user_id = u.id
+        LEFT JOIN branches b ON ic.branch_id = b.id
         WHERE cc.full_name LIKE ? 
           AND ic.status = 'active'
         ORDER BY ic.created_at DESC
@@ -198,15 +204,20 @@ static getPaymentById(paymentId) {
   // Create sales record
   static createSalesRecord(salesData) {
     return new Promise((resolve, reject) => {
-      const { user_id, customer_id, item_id, price, contract_id } = salesData;
+      const { user_id, customer_id, item_id, price, contract_id, branch_id } = salesData;
+      
+      if (!branch_id) {
+        reject(new Error('branch_id is required for sales record'));
+        return;
+      }
       
       const query = `
         INSERT INTO sales 
-        (user_id, customer_id, item_id, sale_type, price, sale_id) 
-        VALUES (?, ?, ?, 'installment', ?, ?)
+        (branch_id, user_id, customer_id, item_id, sale_type, price, sale_id) 
+        VALUES (?, ?, ?, ?, 'installment', ?, ?)
       `;
       
-      db.query(query, [user_id, customer_id, item_id, price, contract_id], (err, result) => {
+      db.query(query, [branch_id, user_id, customer_id, item_id, price, contract_id], (err, result) => {
         if (err) {
           reject(err);
           return;
@@ -217,15 +228,15 @@ static getPaymentById(paymentId) {
   }
 
   // Create transaction record
-  static createTransaction(paymentId, saleId, amountPaid, workerId) {
+  static createTransaction(paymentId, saleId, amountPaid, workerId, branchId) {
     return new Promise((resolve, reject) => {
       const query = `
         INSERT INTO installment_transactions 
-        (payment_id, sale_id, amount_paid, worker_id) 
-        VALUES (?, ?, ?, ?)
+        (branch_id, payment_id, sale_id, amount_paid, worker_id) 
+        VALUES (?, ?, ?, ?, ?)
       `;
       
-      db.query(query, [paymentId, saleId, amountPaid, workerId], (err, result) => {
+      db.query(query, [branchId, paymentId, saleId, amountPaid, workerId], (err, result) => {
         if (err) {
           reject(err);
           return;
@@ -236,15 +247,17 @@ static getPaymentById(paymentId) {
   }
 
   // Create credit transaction for excess payments
-  static createCreditTransaction(saleId, creditAmount, workerId, contractId) {
+  static createCreditTransaction(saleId, creditAmount, workerId, contractId, branchId) {
     return new Promise((resolve, reject) => {
+      // Note: Based on table structure, installment_transactions doesn't have transaction_type, credit_amount, or contract_id columns
+      // This method may need to be refactored, but for now we'll include branch_id
       const query = `
         INSERT INTO installment_transactions 
-        (sale_id, amount_paid, worker_id, transaction_type, credit_amount, contract_id) 
-        VALUES (?, 0, ?, 'credit', ?, ?)
+        (branch_id, sale_id, amount_paid, worker_id) 
+        VALUES (?, ?, 0, ?)
       `;
       
-      db.query(query, [saleId, workerId, creditAmount, contractId], (err, result) => {
+      db.query(query, [branchId, saleId, workerId], (err, result) => {
         if (err) {
           reject(err);
           return;
@@ -255,15 +268,20 @@ static getPaymentById(paymentId) {
   }
 
   // Create inventory log (only for down payment)
-  static createInventoryLog(itemId, workerId, changeType, quantityChanged) {
+  static createInventoryLog(itemId, workerId, changeType, quantityChanged, branchId) {
     return new Promise((resolve, reject) => {
+      if (!branchId) {
+        reject(new Error('branch_id is required for inventory log'));
+        return;
+      }
+      
       const query = `
         INSERT INTO inventory_logs 
-        (item_id, worker_id, change_type, quantity_changed) 
-        VALUES (?, ?, ?, ?)
+        (branch_id, item_id, worker_id, change_type, quantity_changed) 
+        VALUES (?, ?, ?, ?, ?)
       `;
       
-      db.query(query, [itemId, workerId, changeType, quantityChanged], (err, result) => {
+      db.query(query, [branchId, itemId, workerId, changeType, quantityChanged], (err, result) => {
         if (err) {
           reject(err);
           return;

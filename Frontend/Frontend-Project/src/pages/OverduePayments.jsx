@@ -78,6 +78,9 @@ function OverduePayments() {
   const [expandedContract, setExpandedContract] = useState(null);
   const [contractDetails, setContractDetails] = useState({});
   const [contractOverdueData, setContractOverdueData] = useState({});
+  const [branchFilter, setBranchFilter] = useState('all'); // 'all' or specific branch_id
+  const [allBranches, setAllBranches] = useState([]);
+  const [loadingBranches, setLoadingBranches] = useState(true);
   
   // Debug logging
   useEffect(() => {
@@ -87,6 +90,35 @@ function OverduePayments() {
 
   // Remove the old access control that was checking user_type range
   // We already checked user_type at the beginning
+
+  // Fetch all branches for filter dropdown
+  useEffect(() => {
+    const fetchAllBranches = async () => {
+      try {
+        setLoadingBranches(true);
+        let url = 'http://localhost:5000/api/branches';
+        
+        // If not admin, get only accessible branches
+        if (userType !== 0 && currentUser?.id) {
+          url = `http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`;
+        }
+        
+        const response = await fetch(url);
+        if (response.ok) {
+          const branches = await response.json();
+          setAllBranches(branches || []);
+        }
+      } catch (error) {
+        console.error('Error fetching branches:', error);
+        toast.error('Failed to load branches');
+        setAllBranches([]);
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+
+    fetchAllBranches();
+  }, [currentUser, userType]);
 
   // Auto-sync on page load
   useEffect(() => {
@@ -99,8 +131,17 @@ function OverduePayments() {
   useEffect(() => {
     if (!syncLoading && activeView === 'payments') {
       fetchOverduePayments();
+      fetchStats();
     }
-  }, [statusFilter, syncLoading, activeView]);
+  }, [statusFilter, branchFilter, syncLoading, activeView]);
+
+  // Fetch data when branch filter changes (for contracts view)
+  useEffect(() => {
+    if (activeView === 'contracts') {
+      fetchContracts();
+      fetchStats();
+    }
+  }, [branchFilter, activeView]);
 
   // Auto-sync overdue payments
   const syncOverduePayments = async () => {
@@ -139,7 +180,21 @@ function OverduePayments() {
   const fetchOverduePayments = async () => {
     try {
       setLoading(true);
-      let url = `http://localhost:5000/api/overdue/summary?status=${statusFilter}`;
+      const params = new URLSearchParams();
+      params.append('status', statusFilter);
+      
+      // Add branch filter if specific branch is selected
+      if (branchFilter !== 'all') {
+        params.append('branch_id', branchFilter);
+      } else {
+        // Add user info for branch filtering (only when no specific branch is selected)
+        if (currentUser?.id) {
+          params.append('userId', currentUser.id);
+          params.append('userType', currentUser.user_type || 0);
+        }
+      }
+      
+      const url = `http://localhost:5000/api/overdue/summary?${params.toString()}`;
       
       const response = await fetch(url);
       
@@ -162,10 +217,26 @@ function OverduePayments() {
   const fetchContracts = async (search = '') => {
     try {
       setContractsLoading(true);
+      const params = new URLSearchParams();
+      
+      // Add branch filter if specific branch is selected
+      if (branchFilter !== 'all') {
+        params.append('branch_id', branchFilter);
+      } else {
+        // Add user info for branch filtering (only when no specific branch is selected)
+        if (currentUser?.id) {
+          params.append('userId', currentUser.id);
+          params.append('userType', currentUser.user_type || 0);
+        }
+      }
+      
       let url = 'http://localhost:5000/api/overdue/contracts';
       
       if (search && search.trim().length >= 2) {
-        url = `http://localhost:5000/api/overdue/contracts/search?customer_name=${encodeURIComponent(search)}`;
+        params.append('customer_name', search);
+        url = `http://localhost:5000/api/overdue/contracts/search?${params.toString()}`;
+      } else if (params.toString()) {
+        url += `?${params.toString()}`;
       }
       
       const response = await fetch(url);
@@ -272,7 +343,25 @@ function OverduePayments() {
   // Fetch statistics
   const fetchStats = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/overdue/stats');
+      const params = new URLSearchParams();
+      
+      // Add branch filter if specific branch is selected
+      if (branchFilter !== 'all') {
+        params.append('branch_id', branchFilter);
+      } else {
+        // Add user info for branch filtering (only when no specific branch is selected)
+        if (currentUser?.id) {
+          params.append('userId', currentUser.id);
+          params.append('userType', currentUser.user_type || 0);
+        }
+      }
+      
+      let url = 'http://localhost:5000/api/overdue/stats';
+      if (params.toString()) {
+        url += `?${params.toString()}`;
+      }
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error('Failed to fetch statistics');
@@ -481,28 +570,58 @@ function OverduePayments() {
           {/* Payments View */}
           {activeView === 'payments' && (
             <>
-              {/* Status Filter */}
-              <div className="mb-6">
-                <div className="flex flex-wrap gap-2">
-                  {[
-                    { value: 'pending', label: 'Pending (Need Call)', color: 'bg-yellow-600 hover:bg-yellow-700' },
-                    { value: 'waiting', label: 'Waiting', color: 'bg-blue-600 hover:bg-blue-700' },
-                    { value: 'not_responding', label: 'Not Responding', color: 'bg-red-600 hover:bg-red-700' },
-                    { value: 'resolved', label: 'Resolved', color: 'bg-green-600 hover:bg-green-700' },
-                    { value: 'all', label: 'All Overdue', color: 'bg-purple-600 hover:bg-purple-700' }
-                  ].map((filter) => (
-                    <button
-                      key={filter.value}
-                      onClick={() => handleFilterChange(filter.value)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
-                        statusFilter === filter.value 
-                          ? filter.color.replace('hover:', '') + ' ring-2 ring-white ring-opacity-50' 
-                          : 'bg-gray-700 hover:bg-gray-600'
-                      }`}
+              {/* Filters Section */}
+              <div className="mb-6 space-y-4">
+                {/* Status Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Status Filter</label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { value: 'pending', label: 'Pending (Need Call)', color: 'bg-yellow-600 hover:bg-yellow-700' },
+                      { value: 'waiting', label: 'Waiting', color: 'bg-blue-600 hover:bg-blue-700' },
+                      { value: 'not_responding', label: 'Not Responding', color: 'bg-red-600 hover:bg-red-700' },
+                      { value: 'resolved', label: 'Resolved', color: 'bg-green-600 hover:bg-green-700' },
+                      { value: 'all', label: 'All Overdue', color: 'bg-purple-600 hover:bg-purple-700' }
+                    ].map((filter) => (
+                      <button
+                        key={filter.value}
+                        onClick={() => handleFilterChange(filter.value)}
+                        className={`px-4 py-2 rounded-lg font-medium transition-colors duration-200 ${
+                          statusFilter === filter.value 
+                            ? filter.color.replace('hover:', '') + ' ring-2 ring-white ring-opacity-50' 
+                            : 'bg-gray-700 hover:bg-gray-600'
+                        }`}
+                      >
+                        {filter.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Branch Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Branch Filter</label>
+                  {loadingBranches ? (
+                    <div className="text-gray-400 text-sm">Loading branches...</div>
+                  ) : (
+                    <select
+                      value={branchFilter}
+                      onChange={(e) => setBranchFilter(e.target.value)}
+                      className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[200px]"
                     >
-                      {filter.label}
-                    </button>
-                  ))}
+                      <option value="all">All Branches</option>
+                      {allBranches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {branchFilter !== 'all' && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Showing overdue payments from: {allBranches.find(b => b.id === parseInt(branchFilter))?.name || 'Unknown'}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -526,24 +645,52 @@ function OverduePayments() {
 
           {/* Contracts View */}
           {activeView === 'contracts' && (
-            <div className="mb-8">
-              <ContractsWithOverdueTable
-                contracts={contracts}
-                loading={contractsLoading}
-                searchTerm={searchTerm}
-                onSearch={handleSearchContracts}
-                onClearSearch={handleClearSearch}
-                expandedContract={expandedContract}
-                contractDetails={contractDetails}
-                contractAllPayments={contractAllPayments}
-                contractOverdueData={contractOverdueData}
-                onExpandContract={handleExpandContract}
-                onAddFollowup={handleAddFollowup}
-                onViewHistory={handleViewHistory}
-                onUpdateStatus={handleUpdateStatus}
-                formatCurrency={formatCurrency}
-              />
-            </div>
+            <>
+              {/* Branch Filter for Contracts View */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-300 mb-2">Branch Filter</label>
+                {loadingBranches ? (
+                  <div className="text-gray-400 text-sm">Loading branches...</div>
+                ) : (
+                  <select
+                    value={branchFilter}
+                    onChange={(e) => setBranchFilter(e.target.value)}
+                    className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[200px]"
+                  >
+                    <option value="all">All Branches</option>
+                    {allBranches.map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {branchFilter !== 'all' && (
+                  <p className="text-xs text-gray-400 mt-1">
+                    Showing contracts from: {allBranches.find(b => b.id === parseInt(branchFilter))?.name || 'Unknown'}
+                  </p>
+                )}
+              </div>
+
+              <div className="mb-8">
+                <ContractsWithOverdueTable
+                  contracts={contracts}
+                  loading={contractsLoading}
+                  searchTerm={searchTerm}
+                  onSearch={handleSearchContracts}
+                  onClearSearch={handleClearSearch}
+                  expandedContract={expandedContract}
+                  contractDetails={contractDetails}
+                  contractAllPayments={contractAllPayments}
+                  contractOverdueData={contractOverdueData}
+                  onExpandContract={handleExpandContract}
+                  onAddFollowup={handleAddFollowup}
+                  onViewHistory={handleViewHistory}
+                  onUpdateStatus={handleUpdateStatus}
+                  formatCurrency={formatCurrency}
+                />
+              </div>
+            </>
           )}
         </div>
       </main>
