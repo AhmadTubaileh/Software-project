@@ -52,8 +52,10 @@ function AdminDutyHours() {
   // Original component code continues here...
   const [sessions, setSessions] = useState([]);
   const [workers, setWorkers] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [filter, setFilter] = useState({
     userId: '',
+    branchId: '',
     startDate: '2025-11-01',  // FIXED: Set to include your data
     endDate: '2025-11-30'     // FIXED: Set to include your data
   });
@@ -88,24 +90,55 @@ function AdminDutyHours() {
     }
   };
 
+  const fetchAccessibleBranches = useCallback(async () => {
+    try {
+      if (!currentUser?.id) {
+        setBranches([]);
+        return;
+      }
+      
+      const url = `http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`;
+      const data = await apiCall(url);
+      console.log('Accessible branches fetched:', data);
+      setBranches(data);
+    } catch (error) {
+      console.error('Error fetching accessible branches:', error);
+      toast.error('Failed to load branches');
+      setBranches([]);
+    }
+  }, [currentUser]);
+
   const fetchWorkers = useCallback(async () => {
     try {
-      const data = await apiCall('http://localhost:5000/api/duty-hours/admin/workers');
+      // Pass current user ID and branch ID to filter by accessible branches
+      let url = currentUser?.id 
+        ? `http://localhost:5000/api/duty-hours/admin/workers?current_user_id=${currentUser.id}`
+        : 'http://localhost:5000/api/duty-hours/admin/workers';
+      
+      // Add branch filter if selected
+      if (filter.branchId) {
+        url += `&branch_id=${filter.branchId}`;
+      }
+      
+      const data = await apiCall(url);
       console.log('Workers fetched:', data);
       setWorkers(data);
     } catch (error) {
       console.error('Error fetching workers:', error);
       toast.error(error.message);
     }
-  }, []);
+  }, [currentUser, filter.branchId]);
 
   const fetchDutyHours = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { userId, startDate, endDate } = filter;
+      const { userId, branchId, startDate, endDate } = filter;
       let url = 'http://localhost:5000/api/duty-hours/admin/all?';
       if (userId) url += `user_id=${userId}&`;
-      if (startDate && endDate) url += `start_date=${startDate}&end_date=${endDate}`;
+      if (branchId) url += `branch_id=${branchId}&`;
+      if (startDate && endDate) url += `start_date=${startDate}&end_date=${endDate}&`;
+      // Pass current user ID to filter by accessible branches
+      if (currentUser?.id) url += `current_user_id=${currentUser.id}`;
 
       console.log('Fetching from URL:', url);
       
@@ -120,7 +153,11 @@ function AdminDutyHours() {
     } finally {
       setIsLoading(false);
     }
-  }, [filter]);
+  }, [filter, currentUser]);
+
+  useEffect(() => {
+    fetchAccessibleBranches();
+  }, [fetchAccessibleBranches]);
 
   useEffect(() => {
     fetchWorkers();
@@ -129,6 +166,13 @@ function AdminDutyHours() {
   useEffect(() => {
     fetchDutyHours();
   }, [fetchDutyHours]);
+
+  // Reset employee filter when branch changes
+  useEffect(() => {
+    if (filter.branchId) {
+      setFilter(prev => ({ ...prev, userId: '' }));
+    }
+  }, [filter.branchId]);
 
   const handleDeleteSession = async (sessionId) => {
     if (!confirm('Are you sure you want to delete this session?')) return;
@@ -251,6 +295,7 @@ function AdminDutyHours() {
             filter={filter}
             setFilter={setFilter}
             workers={workers}
+            branches={branches}
             isLoading={isLoading}
           />
 

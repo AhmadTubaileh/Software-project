@@ -85,13 +85,21 @@ router.get('/pending', async (req, res) => {
 // GET /api/contracts/all - Get all contracts with filters
 router.get('/all', async (req, res) => {
   try {
-    const { status, branch_id } = req.query;
+    const { status, branch_id, showAllBranches } = req.query;
     
-    // Get user info from query or session (for branch filtering)
+    // Get user info from query or session (for validation and branch filtering)
     // Note: PaymentProcessing should pass showAll=true to bypass branch filtering
     const userId = req.query.userId || (req.user ? req.user.id : null);
-    const userType = req.query.userType || (req.user ? req.user.user_type : 0);
+    const userType = parseInt(req.query.userType || (req.user ? req.user.user_type : 0));
     const showAll = req.query.showAll === 'true'; // For PaymentProcessing page
+    
+    // Validate user_type (must be 0-9)
+    if (userType < 0 || userType > 9 || isNaN(userType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid user type. Must be between 0 and 9.'
+      });
+    }
     
     let branchIds = null;
     
@@ -101,6 +109,10 @@ router.get('/all', async (req, res) => {
       if (!isNaN(branchId)) {
         branchIds = [branchId];
       }
+    } else if (showAllBranches === 'true') {
+      // When "All Branches" is selected, show ALL contracts (no branch filtering)
+      // branchIds remains null to show all branches
+      branchIds = null;
     } else if (!showAll && userId) {
       // Otherwise, get accessible branches for filtering
       try {

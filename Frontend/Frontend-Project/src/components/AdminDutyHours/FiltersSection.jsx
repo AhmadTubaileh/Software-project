@@ -1,11 +1,18 @@
 import React from 'react';
 import EmployeeDropdown from './EmployeeDropdown.jsx';
+import BranchDropdown from './BranchDropdown.jsx';
 import DateInput from './DateInput.jsx';
 
-const FiltersSection = ({ filter, setFilter, workers, isLoading }) => {
+const FiltersSection = ({ filter, setFilter, workers, branches, isLoading }) => {
   return (
     <div className="bg-gray-800/50 rounded-2xl p-6 border border-gray-700/50 mb-8">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+        <BranchDropdown
+          filter={filter}
+          setFilter={setFilter}
+          branches={branches}
+        />
+
         <EmployeeDropdown
           filter={filter}
           setFilter={setFilter}
