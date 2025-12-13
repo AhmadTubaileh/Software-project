@@ -45,10 +45,15 @@ function ProjectDetails() {
     }
   }, [id, navigate]);
 
-  // Fetch workers
+  // Fetch workers - filtered by project's branch_id
   const fetchWorkers = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/tasks/workers');
+      // Only fetch workers if project is loaded and has branch_id
+      if (!project?.branch_id) {
+        return;
+      }
+      
+      const response = await fetch(`http://localhost:5000/api/tasks/workers?branch_id=${project.branch_id}`);
       const data = await response.json();
       
       if (!response.ok) {
@@ -59,7 +64,7 @@ function ProjectDetails() {
     } catch (error) {
       console.error('Error fetching workers:', error);
     }
-  }, []);
+  }, [project?.branch_id]);
 
   // Fetch project members
   const fetchMembers = useCallback(async () => {
@@ -82,9 +87,15 @@ function ProjectDetails() {
 
   useEffect(() => {
     fetchProject();
-    fetchWorkers();
     fetchMembers();
-  }, [fetchProject, fetchWorkers, fetchMembers]);
+  }, [fetchProject, fetchMembers]);
+
+  // Fetch workers after project is loaded (to get branch_id)
+  useEffect(() => {
+    if (project?.branch_id) {
+      fetchWorkers();
+    }
+  }, [project?.branch_id, fetchWorkers]);
 
   // Check if user can manage tasks (admin, project creator, or team leader)
   const canManageTasks = currentUser && (
@@ -409,10 +420,16 @@ function ProjectDetails() {
           {/* Header */}
           <div className="flex justify-between items-start mb-6">
             <div className="flex-1">
-              <div className="flex items-center gap-3 mb-3">
+              <div className="flex items-center gap-3 mb-3 flex-wrap">
                 <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusStyles[project.status]}`}>
                   {project.status.toUpperCase()}
                 </span>
+                {project.branch_name && (
+                  <span className="px-3 py-1 rounded-full text-xs font-medium border bg-purple-500/20 text-purple-300 border-purple-500/30 flex items-center gap-1">
+                    <span>🏢</span>
+                    {project.branch_name}
+                  </span>
+                )}
                 <span className="text-gray-400 text-sm">
                   Created by {project.created_by_name}
                 </span>
@@ -524,6 +541,22 @@ function ProjectDetails() {
                         {project.description || 'No description provided.'}
                       </p>
                     </div>
+                    
+                    {/* Branch Information */}
+                    {project.branch_name && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-400 mb-2">Branch</h4>
+                        <div className="flex items-center gap-3 p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+                          <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-lg">
+                            🏢
+                          </div>
+                          <div>
+                            <span className="font-medium text-white">{project.branch_name}</span>
+                            <p className="text-gray-400 text-xs">Project Branch</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     
                     {/* Team Leaders Section */}
                     <div>
@@ -654,6 +687,7 @@ function ProjectDetails() {
         <AddMemberModal
           projectId={id}
           workers={workers.filter(worker => 
+            worker.primary_branch_id === project?.branch_id &&
             !members.some(member => member.user_id === worker.id)
           )}
           currentUser={currentUser}

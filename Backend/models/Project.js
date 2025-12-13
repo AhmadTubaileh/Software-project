@@ -53,10 +53,12 @@ class Project {
       SELECT 
         p.*,
         creator.username as created_by_name,
-        leader.username as team_leader_name
+        leader.username as team_leader_name,
+        b.name as branch_name
       FROM projects p
       LEFT JOIN users creator ON p.created_by = creator.id
       LEFT JOIN users leader ON p.team_leader_id = leader.id
+      LEFT JOIN branches b ON p.branch_id = b.id
       WHERE p.id = ?
     `;
     db.query(query, [id], callback);
