@@ -472,24 +472,39 @@ class Item {
   }
 
 
-  // Get items for inventory management (simple view)
-static getInventoryItems(callback) {
-  const query = `
+  // Get items for inventory management (simple view) - with optional branch filtering
+static getInventoryItems(branchId, callback) {
+  // If callback is provided as first argument (backward compatibility)
+  if (typeof branchId === 'function') {
+    callback = branchId;
+    branchId = null;
+  }
+  
+  let query = `
     SELECT 
       i.*,
       ip.price_cash
     FROM items i
     LEFT JOIN item_prices ip ON i.id = ip.item_id
-    WHERE ip.date = (
+    WHERE (ip.date = (
       SELECT MAX(date) 
       FROM item_prices 
       WHERE item_id = i.id
     )
-    OR ip.date IS NULL
-    ORDER BY i.name ASC
+    OR ip.date IS NULL)
   `;
   
-  db.query(query, (err, results) => {
+  const params = [];
+  
+  // Add branch filter if provided
+  if (branchId) {
+    query += ` AND i.branch_id = ?`;
+    params.push(branchId);
+  }
+  
+  query += ` ORDER BY i.name ASC`;
+  
+  db.query(query, params, (err, results) => {
     if (err) {
       console.error('Error in getInventoryItems:', err);
       return callback(err, null);
