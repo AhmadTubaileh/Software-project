@@ -27,6 +27,7 @@ function ContractManagement() {
   const [branchFilter, setBranchFilter] = useState('all'); // 'all' or specific branch_id
   const [allBranches, setAllBranches] = useState([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
+  const [branchFilterInitialized, setBranchFilterInitialized] = useState(false);
   const { currentUser } = useLocalSession();
   const navigate = useNavigate();
 
@@ -116,19 +117,12 @@ function ContractManagement() {
     return accessibleBranchIds.includes(contract.branch_id);
   };
 
-  // Fetch branches for filter dropdown (only accessible branches for non-admins)
+  // Fetch all branches from branches table (not filtered by accessibility)
   useEffect(() => {
     const fetchBranches = async () => {
       try {
         setLoadingBranches(true);
-        let url = 'http://localhost:5000/api/branches';
-        
-        // If not admin, get only accessible branches
-        if (userType !== 0 && currentUser?.id) {
-          url = `http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`;
-        }
-        
-        const response = await fetch(url);
+        const response = await fetch('http://localhost:5000/api/branches');
         
         if (!response.ok) {
           throw new Error('Failed to fetch branches');
@@ -136,6 +130,23 @@ function ContractManagement() {
         
         const branches = await response.json();
         setAllBranches(branches || []);
+        
+        // Set branch filter to user's primary branch if available and not already initialized
+        if (!branchFilterInitialized && currentUser?.primary_branch_id) {
+          // Check if primary branch exists in branches table
+          const primaryBranchExists = branches.some(b => b.id === currentUser.primary_branch_id);
+          if (primaryBranchExists) {
+            setBranchFilter(currentUser.primary_branch_id.toString());
+          } else {
+            // If primary branch doesn't exist, default to 'all'
+            setBranchFilter('all');
+          }
+          setBranchFilterInitialized(true);
+        } else if (!branchFilterInitialized) {
+          // If no primary branch, default to 'all'
+          setBranchFilter('all');
+          setBranchFilterInitialized(true);
+        }
       } catch (error) {
         console.error('Error fetching branches:', error);
         toast.error('Failed to load branches');
@@ -146,7 +157,7 @@ function ContractManagement() {
     };
 
     fetchBranches();
-  }, [currentUser, userType]);
+  }, [currentUser, branchFilterInitialized]);
 
   // Fetch contracts based on filter
   const fetchContracts = useCallback(async () => {
@@ -166,12 +177,13 @@ function ContractManagement() {
         params.append('branch_id', branchFilter);
         console.log(`Filtering by specific branch: ${branchFilter}`);
       } else {
-        // When "All Branches" is selected, send user info to filter by accessible branches
-        // This ensures users see contracts from all their accessible branches
+        // When "All Branches" is selected, show ALL contracts from ALL branches
+        // Still send user info for validation (user_type must be 0-9)
         if (currentUser?.id) {
           params.append('userId', currentUser.id);
           params.append('userType', currentUser.user_type || 0);
-          console.log(`Filtering by accessible branches for user ${currentUser.id} (type: ${currentUser.user_type || 0})`);
+          params.append('showAllBranches', 'true'); // Flag to indicate show all branches
+          console.log(`Showing all branches for user ${currentUser.id} (type: ${currentUser.user_type || 0})`);
         }
       }
       
@@ -535,17 +547,30 @@ function ContractManagement() {
                   onChange={(e) => setBranchFilter(e.target.value)}
                   className="px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent min-w-[200px]"
                 >
-                  <option value="all">All Branches</option>
-                  {allBranches.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
+                  {/* Show primary branch first if available, then "All Branches", then other branches */}
+                  {currentUser?.primary_branch_id && allBranches.some(b => b.id === currentUser.primary_branch_id) && (
+                    <option value={currentUser.primary_branch_id}>
+                      {allBranches.find(b => b.id === currentUser.primary_branch_id)?.name || 'Primary Branch'} (Default)
                     </option>
-                  ))}
+                  )}
+                  <option value="all">All Branches</option>
+                  {allBranches
+                    .filter(branch => branch.id !== currentUser?.primary_branch_id) // Exclude primary branch (already shown first)
+                    .map((branch) => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
                 </select>
               )}
               {branchFilter !== 'all' && (
                 <p className="text-xs text-gray-400 mt-1">
                   Showing contracts from: {allBranches.find(b => b.id === parseInt(branchFilter))?.name || 'Unknown'}
+                </p>
+              )}
+              {branchFilter === 'all' && (
+                <p className="text-xs text-gray-400 mt-1">
+                  Showing contracts from all branches
                 </p>
               )}
             </div>
