@@ -558,23 +558,37 @@ router.get('/worker/:workerId/conflicts', (req, res) => {
   });
 });
 
-// Get archived tasks (completed and deleted)
+// Get archived tasks (completed and deleted) - with optional branch filtering
 router.get('/archive', (req, res) => {
-  const query = `
+  const branchId = req.query.branch_id ? parseInt(req.query.branch_id) : null;
+  
+  let query = `
     SELECT 
       t.*,
       p.title as project_title,
+      p.branch_id as project_branch_id,
+      b.name as branch_name,
       assigner.username as assigned_by_name,
       assignee.username as assigned_to_name
     FROM tasks t
     LEFT JOIN projects p ON t.project_id = p.id
+    LEFT JOIN branches b ON p.branch_id = b.id
     LEFT JOIN users assigner ON t.assigned_by = assigner.id
     LEFT JOIN users assignee ON t.assigned_to = assignee.id
-    WHERE t.status = 'completed' OR t.is_deleted = 1
-    ORDER BY COALESCE(t.approved_at, t.deleted_at, t.created_at) DESC
+    WHERE (t.status = 'completed' OR t.is_deleted = 1)
   `;
-
-  db.query(query, (err, results) => {
+  
+  const params = [];
+  
+  // Add branch filter if provided
+  if (branchId) {
+    query += ` AND p.branch_id = ?`;
+    params.push(branchId);
+  }
+  
+  query += ` ORDER BY COALESCE(t.approved_at, t.deleted_at, t.created_at) DESC`;
+  
+  db.query(query, params, (err, results) => {
     if (err) {
       console.error('Error fetching archived tasks:', err);
       return res.status(500).json({ error: 'Failed to fetch archived tasks' });

@@ -8,6 +8,9 @@ function TaskArchive() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [expandedTasks, setExpandedTasks] = useState({});
+  const [accessibleBranches, setAccessibleBranches] = useState([]);
+  const [selectedBranchId, setSelectedBranchId] = useState(null);
+  const [loadingBranches, setLoadingBranches] = useState(true);
   const { currentUser } = useLocalSession();
 
   // ========== ACCESS CONTROL START ==========
@@ -49,15 +52,66 @@ function TaskArchive() {
   }
   // ========== ACCESS CONTROL END ==========
 
+  // Load accessible branches on mount
   useEffect(() => {
+    const loadBranches = async () => {
+      if (!currentUser?.id) {
+        setLoadingBranches(false);
+        return;
+      }
+      
+      try {
+        setLoadingBranches(true);
+        const response = await fetch(`http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch accessible branches');
+        }
+        
+        const branches = await response.json();
+        setAccessibleBranches(branches);
+        
+        // Set default branch: primary branch if available, otherwise first accessible branch
+        if (currentUser.primary_branch_id) {
+          const primaryBranch = branches.find(b => b.id === currentUser.primary_branch_id);
+          if (primaryBranch) {
+            setSelectedBranchId(currentUser.primary_branch_id);
+          } else if (branches.length > 0) {
+            setSelectedBranchId(branches[0].id);
+          }
+        } else if (branches.length > 0) {
+          setSelectedBranchId(branches[0].id);
+        }
+      } catch (error) {
+        console.error('Error loading accessible branches:', error);
+        toast.error('Failed to load branches');
+        setAccessibleBranches([]);
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+
     if (currentUser && allowedRoles.includes(userType)) {
+      loadBranches();
+    }
+  }, [currentUser, userType]);
+
+  // Fetch archived tasks when branch selection changes
+  useEffect(() => {
+    if (!loadingBranches && (selectedBranchId !== null || accessibleBranches.length === 0)) {
       fetchArchivedTasks();
     }
-  }, [currentUser]);
+  }, [selectedBranchId, loadingBranches, accessibleBranches.length]);
 
   const fetchArchivedTasks = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/tasks/archive');
+      setLoading(true);
+      let url = 'http://localhost:5000/api/tasks/archive';
+      if (selectedBranchId) {
+        url += `?branch_id=${selectedBranchId}`;
+      }
+      
+      const response = await fetch(url);
       const data = await response.json();
       
       if (response.ok) {
@@ -159,13 +213,36 @@ function TaskArchive() {
         <div className="p-6">
           {/* Header */}
           <div className="mb-8">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-2">
-              Task Archive & History
-            </h1>
-            <p className="text-gray-400">View completed and deleted tasks across all projects</p>
-            <p className="text-gray-500 text-sm mt-1">
-              Logged in as: {currentUser?.username} ({getRoleName(userType)})
-            </p>
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-2">
+                  Task Archive & History
+                </h1>
+                <p className="text-gray-400">View completed and deleted tasks across all projects</p>
+                <p className="text-gray-500 text-sm mt-1">
+                  Logged in as: {currentUser?.username} ({getRoleName(userType)})
+                </p>
+              </div>
+              {/* Branch Filter - Show only if user has multiple branches */}
+              {accessibleBranches.length > 1 && (
+                <div className="relative">
+                  <select
+                    value={selectedBranchId || ''}
+                    onChange={(e) => setSelectedBranchId(e.target.value ? parseInt(e.target.value) : null)}
+                    className="px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 appearance-none pr-10 min-w-[200px]"
+                  >
+                    {accessibleBranches.map(branch => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3 top-3.5 text-gray-400 pointer-events-none">
+                    🏢
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Filters */}
@@ -246,6 +323,12 @@ function TaskArchive() {
                         {task.project_title && (
                           <span className="px-2 py-1 rounded text-xs bg-gray-500/20 text-gray-300">
                             {task.project_title}
+                          </span>
+                        )}
+                        {task.branch_name && (
+                          <span className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                            <span>🏢</span>
+                            {task.branch_name}
                           </span>
                         )}
                       </div>

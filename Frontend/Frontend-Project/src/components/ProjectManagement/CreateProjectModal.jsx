@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import WorkerDropdown from '../TaskManagement/WorkerDropdown.jsx';
 
-const CreateProjectModal = ({ workers, currentUser, selectedBranchId, selectedBranchName, onSubmit, onClose }) => {
+const CreateProjectModal = ({ workers, currentUser, selectedBranchId, selectedBranchName, accessibleBranches, showBranchSelector, onSubmit, onClose }) => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    team_leader_id: ''
+    team_leader_id: '',
+    branch_id: selectedBranchId || ''
   });
   const [loading, setLoading] = useState(false);
 
@@ -14,6 +15,12 @@ const CreateProjectModal = ({ workers, currentUser, selectedBranchId, selectedBr
     
     if (!formData.title.trim()) {
       alert('Please enter a project title');
+      return;
+    }
+
+    // If branch selector is shown, branch_id is required
+    if (showBranchSelector && !formData.branch_id) {
+      alert('Please select a branch for the project');
       return;
     }
 
@@ -38,7 +45,7 @@ const CreateProjectModal = ({ workers, currentUser, selectedBranchId, selectedBr
         <div className="flex justify-between items-center mb-6">
           <div>
             <h2 className="text-xl font-bold">Create New Project</h2>
-            {selectedBranchId && selectedBranchName && (
+            {!showBranchSelector && selectedBranchId && selectedBranchName && (
               <p className="text-sm text-gray-400 mt-1 flex items-center gap-2">
                 <span>🏢</span>
                 <span>Branch: <strong className="text-white">{selectedBranchName}</strong></span>
@@ -54,6 +61,31 @@ const CreateProjectModal = ({ workers, currentUser, selectedBranchId, selectedBr
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Branch Selection - Only show when "All Branches" is selected */}
+          {showBranchSelector && (
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Select Branch *
+              </label>
+              <select
+                value={formData.branch_id}
+                onChange={(e) => handleChange('branch_id', e.target.value)}
+                className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
+                required
+              >
+                <option value="">Choose a branch...</option>
+                {accessibleBranches.map(branch => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                Select the branch where this project will be created
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
               Project Title *

@@ -104,17 +104,8 @@ function ProjectManagement() {
         const branches = await response.json();
         setAccessibleBranches(branches);
         
-        // Set default branch: primary branch if available, otherwise first accessible branch
-        if (currentUser.primary_branch_id) {
-          const primaryBranch = branches.find(b => b.id === currentUser.primary_branch_id);
-          if (primaryBranch) {
-            setSelectedBranchId(currentUser.primary_branch_id);
-          } else if (branches.length > 0) {
-            setSelectedBranchId(branches[0].id);
-          }
-        } else if (branches.length > 0) {
-          setSelectedBranchId(branches[0].id);
-        }
+        // Set default to "all" (null) - user can see all projects but create in primary branch
+        setSelectedBranchId(null);
       } catch (error) {
         console.error('Error loading accessible branches:', error);
         toast.error('Failed to load branches');
@@ -131,7 +122,7 @@ function ProjectManagement() {
   const fetchProjects = useCallback(async () => {
     try {
       let url = 'http://localhost:5000/api/projects';
-      if (selectedBranchId) {
+      if (selectedBranchId !== null) {
         url += `?branch_id=${selectedBranchId}`;
       }
       
@@ -169,26 +160,54 @@ function ProjectManagement() {
   }, []);
 
   // Fetch workers (filtered by branch if branch is selected)
+  // When "All Branches" is selected, fetch workers from all accessible branches
   const fetchWorkers = useCallback(async () => {
     try {
-      let url = 'http://localhost:5000/api/tasks/workers';
-      if (selectedBranchId) {
-        url += `?branch_id=${selectedBranchId}`;
+      // If "All Branches" is selected, fetch workers from all accessible branches
+      if (selectedBranchId === null && accessibleBranches.length > 0) {
+        // Fetch workers from each accessible branch and combine them
+        const branchIds = accessibleBranches.map(b => b.id);
+        const allWorkers = [];
+        
+        for (const branchId of branchIds) {
+          try {
+            const response = await fetch(`http://localhost:5000/api/tasks/workers?branch_id=${branchId}`);
+            if (response.ok) {
+              const data = await response.json();
+              allWorkers.push(...data);
+            }
+          } catch (error) {
+            console.error(`Error fetching workers for branch ${branchId}:`, error);
+          }
+        }
+        
+        // Remove duplicates based on worker id
+        const uniqueWorkers = allWorkers.filter((worker, index, self) =>
+          index === self.findIndex(w => w.id === worker.id)
+        );
+        
+        setWorkers(uniqueWorkers);
+      } else if (selectedBranchId !== null) {
+        // Specific branch selected, fetch workers from that branch only
+        const url = `http://localhost:5000/api/tasks/workers?branch_id=${selectedBranchId}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch workers');
+        }
+        
+        setWorkers(data);
+      } else {
+        // No branches available, set empty array
+        setWorkers([]);
       }
-      
-      const response = await fetch(url);
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch workers');
-      }
-      
-      setWorkers(data);
     } catch (error) {
       console.error('Error fetching workers:', error);
       toast.error('Failed to load workers');
+      setWorkers([]);
     }
-  }, [selectedBranchId]);
+  }, [selectedBranchId, accessibleBranches]);
 
   // Fetch members for each project
   const fetchProjectMembers = useCallback(async () => {
@@ -224,10 +243,10 @@ function ProjectManagement() {
 
   // Refresh data when branch selection changes
   useEffect(() => {
-    if (!loadingBranches && (selectedBranchId !== null || accessibleBranches.length === 0)) {
+    if (!loadingBranches) {
       refreshAllData();
     }
-  }, [selectedBranchId, loadingBranches, accessibleBranches.length, refreshAllData]);
+  }, [selectedBranchId, loadingBranches, refreshAllData]);
 
   useEffect(() => {
     if (projects.length > 0) {
@@ -237,8 +256,12 @@ function ProjectManagement() {
 
   // Create new project
   const handleCreateProject = async (projectData) => {
-    if (!selectedBranchId) {
-      toast.error('Please select a branch first');
+    // If "All Branches" is selected, use branch_id from formData (user selected in modal)
+    // Otherwise, use selectedBranchId
+    const branchIdForProject = projectData.branch_id || selectedBranchId;
+    
+    if (!branchIdForProject) {
+      toast.error('Please select a branch for the project');
       return;
     }
 
@@ -251,7 +274,7 @@ function ProjectManagement() {
         body: JSON.stringify({
           ...projectData,
           created_by: currentUser.id,
-          branch_id: selectedBranchId
+          branch_id: parseInt(branchIdForProject)
         }),
       });
 
@@ -756,14 +779,18 @@ function ProjectManagement() {
               </p>
             </div>
             <div className="flex gap-3 items-center">
-              {/* Branch Filter - Show only if user has multiple branches */}
-              {accessibleBranches.length > 1 && (
+              {/* Branch Filter - Show if user has accessible branches */}
+              {accessibleBranches.length > 0 && (
                 <div className="relative">
                   <select
-                    value={selectedBranchId || ''}
-                    onChange={(e) => setSelectedBranchId(e.target.value ? parseInt(e.target.value) : null)}
+                    value={selectedBranchId !== null ? selectedBranchId : 'all'}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSelectedBranchId(value === 'all' ? null : parseInt(value));
+                    }}
                     className="px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 appearance-none pr-10 min-w-[200px]"
                   >
+                    <option value="all">All Branches</option>
                     {accessibleBranches.map(branch => (
                       <option key={branch.id} value={branch.id}>
                         {branch.name}
@@ -939,26 +966,29 @@ function ProjectManagement() {
                             const selectedProject = projects.find(p => p.id === parseInt(headerAddMemberData.projectId));
                             if (!selectedProject) return null;
                             // Filter workers by project's branch_id
-                            return workers
+                            const availableWorkers = workers
                               .filter(worker => 
                                 worker.primary_branch_id === selectedProject.branch_id &&
                                 !projectMembers[selectedProject.id]?.some(member => member.user_id === worker.id)
-                              )
-                              .map(worker => (
-                                <option key={worker.id} value={worker.id}>
-                                  {worker.username}
-                                </option>
-                              ));
+                              );
+                            return availableWorkers.map(worker => (
+                              <option key={worker.id} value={worker.id}>
+                                {worker.username}
+                              </option>
+                            ));
                           })()}
                         </select>
                         {(() => {
                           const selectedProject = projects.find(p => p.id === parseInt(headerAddMemberData.projectId));
-                          if (selectedProject && workers.filter(w => w.primary_branch_id === selectedProject.branch_id).length === 0) {
-                            return (
-                              <p className="text-xs text-yellow-400 mt-1">
-                                No available employees in this branch
-                              </p>
-                            );
+                          if (selectedProject) {
+                            const availableWorkers = workers.filter(w => w.primary_branch_id === selectedProject.branch_id);
+                            if (availableWorkers.length === 0) {
+                              return (
+                                <p className="text-xs text-yellow-400 mt-1">
+                                  No available employees in this branch
+                                </p>
+                              );
+                            }
                           }
                           return null;
                         })()}
@@ -1183,8 +1213,14 @@ function ProjectManagement() {
         <CreateProjectModal
           workers={workers}
           currentUser={currentUser}
-          selectedBranchId={selectedBranchId}
-          selectedBranchName={accessibleBranches.find(b => b.id === selectedBranchId)?.name}
+          selectedBranchId={selectedBranchId !== null ? selectedBranchId : null}
+          selectedBranchName={
+            selectedBranchId !== null 
+              ? accessibleBranches.find(b => b.id === selectedBranchId)?.name
+              : null
+          }
+          accessibleBranches={accessibleBranches}
+          showBranchSelector={selectedBranchId === null}
           onSubmit={handleCreateProject}
           onClose={() => setShowCreateModal(false)}
         />
