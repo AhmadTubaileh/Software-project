@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import WorkerDropdown from '../TaskManagement/WorkerDropdown.jsx';
 
-const CreateProjectModal = ({ workers, currentUser, onSubmit, onClose }) => {
+const CreateProjectModal = ({ workers, currentUser, selectedBranchId, selectedBranchName, onSubmit, onClose }) => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
@@ -36,7 +36,15 @@ const CreateProjectModal = ({ workers, currentUser, onSubmit, onClose }) => {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl p-6 w-full max-w-2xl border border-gray-700/50 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Create New Project</h2>
+          <div>
+            <h2 className="text-xl font-bold">Create New Project</h2>
+            {selectedBranchId && selectedBranchName && (
+              <p className="text-sm text-gray-400 mt-1 flex items-center gap-2">
+                <span>🏢</span>
+                <span>Branch: <strong className="text-white">{selectedBranchName}</strong></span>
+              </p>
+            )}
+          </div>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white transition-colors p-2"

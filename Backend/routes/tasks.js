@@ -94,15 +94,35 @@ router.get('/project/:projectId', (req, res) => {
   });
 });
 
-// Get workers list
+// Get workers list (with optional branch filtering)
 router.get('/workers', (req, res) => {
-  Task.getWorkers((err, results) => {
-    if (err) {
-      console.error('Error fetching workers:', err);
-      return res.status(500).json({ error: 'Failed to fetch workers' });
-    }
-    res.json(results);
-  });
+  const branchId = req.query.branch_id ? parseInt(req.query.branch_id) : null;
+  
+  if (branchId) {
+    // Filter workers by primary_branch_id
+    const query = `
+      SELECT id, username, user_type, primary_branch_id 
+      FROM users 
+      WHERE user_type BETWEEN 0 AND 9 AND primary_branch_id = ?
+      ORDER BY username
+    `;
+    db.query(query, [branchId], (err, results) => {
+      if (err) {
+        console.error('Error fetching workers by branch:', err);
+        return res.status(500).json({ error: 'Failed to fetch workers' });
+      }
+      res.json(results);
+    });
+  } else {
+    // Get all workers
+    Task.getWorkers((err, results) => {
+      if (err) {
+        console.error('Error fetching workers:', err);
+        return res.status(500).json({ error: 'Failed to fetch workers' });
+      }
+      res.json(results);
+    });
+  }
 });
 
 // Create new task
