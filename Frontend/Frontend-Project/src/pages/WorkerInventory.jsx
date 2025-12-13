@@ -15,6 +15,9 @@ function WorkerInventory() {
   const [showLogsModal, setShowLogsModal] = useState(false);
   const [selectedItemLogs, setSelectedItemLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [accessibleBranches, setAccessibleBranches] = useState([]);
+  const [selectedBranchId, setSelectedBranchId] = useState(null);
+  const [loadingBranches, setLoadingBranches] = useState(true);
   const { currentUser } = useLocalSession();
 
   // ========== ACCESS CONTROL START ==========
@@ -55,11 +58,61 @@ function WorkerInventory() {
   }
   // ========== ACCESS CONTROL END ==========
 
+  // Load accessible branches on mount
+  useEffect(() => {
+    const loadBranches = async () => {
+      if (!currentUser?.id) {
+        setLoadingBranches(false);
+        return;
+      }
+      
+      try {
+        setLoadingBranches(true);
+        const response = await fetch(`http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch accessible branches');
+        }
+        
+        const branches = await response.json();
+        setAccessibleBranches(branches);
+        
+        // Set default branch: primary branch if available, otherwise first accessible branch
+        if (currentUser.primary_branch_id) {
+          // Verify primary branch is in accessible branches
+          const primaryBranch = branches.find(b => b.id === currentUser.primary_branch_id);
+          if (primaryBranch) {
+            setSelectedBranchId(currentUser.primary_branch_id);
+          } else if (branches.length > 0) {
+            setSelectedBranchId(branches[0].id);
+          }
+        } else if (branches.length > 0) {
+          setSelectedBranchId(branches[0].id);
+        }
+      } catch (error) {
+        console.error('Error loading accessible branches:', error);
+        toast.error('Failed to load branches');
+        setAccessibleBranches([]);
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+
+    loadBranches();
+  }, [currentUser]);
+
   // Fetch items for inventory management
   const fetchItems = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:5000/api/items/inventory');
+      
+      // Build URL with branch filter if branch is selected
+      let url = 'http://localhost:5000/api/items/inventory';
+      if (selectedBranchId) {
+        url += `?branch_id=${selectedBranchId}`;
+      }
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -74,12 +127,14 @@ function WorkerInventory() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBranchId]);
 
-  // Load items on component mount
+  // Load items when branch selection changes
   useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+    if (!loadingBranches && (selectedBranchId !== null || accessibleBranches.length === 0)) {
+      fetchItems();
+    }
+  }, [fetchItems, selectedBranchId, loadingBranches, accessibleBranches.length]);
 
   // Filter items based on search
   const filteredItems = items.filter(item => {
@@ -299,7 +354,7 @@ function WorkerInventory() {
               </div>
             </div>
             
-            {/* Search Bar */}
+            {/* Search Bar and Branch Filter */}
             <div className="flex gap-4 mb-6">
               <div className="flex-1 relative">
                 <input
@@ -313,6 +368,26 @@ function WorkerInventory() {
                   🔍
                 </div>
               </div>
+              
+              {/* Branch Filter - Show only if user has multiple branches */}
+              {accessibleBranches.length > 1 && (
+                <div className="relative">
+                  <select
+                    value={selectedBranchId || ''}
+                    onChange={(e) => setSelectedBranchId(e.target.value ? parseInt(e.target.value) : null)}
+                    className="px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 appearance-none pr-10 min-w-[200px]"
+                  >
+                    {accessibleBranches.map(branch => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3 top-3.5 text-gray-400 pointer-events-none">
+                    🏢
+                  </div>
+                </div>
+              )}
               
               {/* Legend */}
               <div className="hidden lg:flex items-center gap-4 px-4 bg-gray-800 rounded-lg border border-gray-700">

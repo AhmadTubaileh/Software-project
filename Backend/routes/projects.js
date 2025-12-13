@@ -4,15 +4,29 @@ const Project = require('../models/Project');
 const Task = require('../models/Task');
 const db = require('../config/database'); // Add this import
 
-// Get all non-deleted projects
+// Get all non-deleted projects (with optional branch filtering)
 router.get('/', (req, res) => {
-  Project.getAll((err, results) => {
-    if (err) {
-      console.error('Error fetching projects:', err);
-      return res.status(500).json({ error: 'Failed to fetch projects' });
-    }
-    res.json(results);
-  });
+  const branchId = req.query.branch_id ? parseInt(req.query.branch_id) : null;
+  
+  if (branchId) {
+    // Filter by branch_id
+    Project.getByBranch(branchId, (err, results) => {
+      if (err) {
+        console.error('Error fetching projects:', err);
+        return res.status(500).json({ error: 'Failed to fetch projects' });
+      }
+      res.json(results);
+    });
+  } else {
+    // Get all projects
+    Project.getAll((err, results) => {
+      if (err) {
+        console.error('Error fetching projects:', err);
+        return res.status(500).json({ error: 'Failed to fetch projects' });
+      }
+      res.json(results);
+    });
+  }
 });
 
 // Get project by ID
@@ -35,10 +49,14 @@ router.get('/:id', (req, res) => {
 
 // Create new project
 router.post('/', (req, res) => {
-  const { title, description, created_by, team_leader_id, status } = req.body;
+  const { title, description, created_by, team_leader_id, status, branch_id } = req.body;
 
   if (!title || !created_by) {
     return res.status(400).json({ error: 'Title and created_by are required' });
+  }
+
+  if (!branch_id) {
+    return res.status(400).json({ error: 'Branch ID is required' });
   }
 
   const projectData = {
@@ -47,6 +65,7 @@ router.post('/', (req, res) => {
     created_by,
     team_leader_id: team_leader_id || null,
     status: status || 'active',
+    branch_id: parseInt(branch_id),
     is_deleted: 0
   };
 
@@ -193,7 +212,7 @@ router.get('/:id/members', (req, res) => {
   });
 });
 
-// Add member to project
+// Add member to project (with branch validation)
 router.post('/:id/members', (req, res) => {
   const projectId = req.params.id;
   const { user_id, role } = req.body;
@@ -202,28 +221,65 @@ router.post('/:id/members', (req, res) => {
     return res.status(400).json({ error: 'User ID is required' });
   }
 
-  const memberData = {
-    project_id: projectId,
-    user_id,
-    role: role || 'member',
-    joined_at: new Date()
-  };
-
-  Project.addMember(memberData, (err, results) => {
+  // First, get the project to check its branch_id
+  Project.getById(projectId, (err, projectResults) => {
     if (err) {
-      console.error('Error adding project member:', err);
-      
-      // Check if it's a duplicate entry error
-      if (err.code === 'ER_DUP_ENTRY') {
-        return res.status(400).json({ error: 'User is already a member of this project' });
-      }
-      
-      return res.status(500).json({ error: 'Failed to add project member' });
+      console.error('Error fetching project:', err);
+      return res.status(500).json({ error: 'Failed to fetch project' });
     }
 
-    res.status(201).json({
-      message: 'Member added to project successfully',
-      memberId: results.insertId
+    if (projectResults.length === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const project = projectResults[0];
+    const projectBranchId = project.branch_id;
+
+    // Check if the employee's primary_branch_id matches the project's branch_id
+    const checkEmployeeQuery = 'SELECT primary_branch_id FROM users WHERE id = ?';
+    db.query(checkEmployeeQuery, [user_id], (empErr, empResults) => {
+      if (empErr) {
+        console.error('Error checking employee branch:', empErr);
+        return res.status(500).json({ error: 'Failed to validate employee' });
+      }
+
+      if (empResults.length === 0) {
+        return res.status(404).json({ error: 'Employee not found' });
+      }
+
+      const employeePrimaryBranchId = empResults[0].primary_branch_id;
+
+      if (employeePrimaryBranchId !== projectBranchId) {
+        return res.status(400).json({ 
+          error: `Cannot add employee. Employee's primary branch (${employeePrimaryBranchId}) does not match project's branch (${projectBranchId})` 
+        });
+      }
+
+      // Branch matches, proceed with adding member
+      const memberData = {
+        project_id: projectId,
+        user_id,
+        role: role || 'member',
+        joined_at: new Date()
+      };
+
+      Project.addMember(memberData, (addErr, results) => {
+        if (addErr) {
+          console.error('Error adding project member:', addErr);
+          
+          // Check if it's a duplicate entry error
+          if (addErr.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: 'User is already a member of this project' });
+          }
+          
+          return res.status(500).json({ error: 'Failed to add project member' });
+        }
+
+        res.status(201).json({
+          message: 'Member added to project successfully',
+          memberId: results.insertId
+        });
+      });
     });
   });
 });

@@ -8,11 +8,13 @@ class Project {
         p.*,
         creator.username as created_by_name,
         leader.username as team_leader_name,
+        b.name as branch_name,
         COUNT(DISTINCT t.id) as task_count,
         COUNT(DISTINCT pm.user_id) as member_count
       FROM projects p
       LEFT JOIN users creator ON p.created_by = creator.id
       LEFT JOIN users leader ON p.team_leader_id = leader.id
+      LEFT JOIN branches b ON p.branch_id = b.id
       LEFT JOIN project_members pm ON p.id = pm.project_id
       LEFT JOIN tasks t ON p.id = t.project_id AND t.is_deleted = 0
       WHERE p.is_deleted = 0
@@ -22,16 +24,41 @@ class Project {
     db.query(query, callback);
   }
 
+  // Get projects by branch_id
+  static getByBranch(branchId, callback) {
+    const query = `
+      SELECT 
+        p.*,
+        creator.username as created_by_name,
+        leader.username as team_leader_name,
+        b.name as branch_name,
+        COUNT(DISTINCT t.id) as task_count,
+        COUNT(DISTINCT pm.user_id) as member_count
+      FROM projects p
+      LEFT JOIN users creator ON p.created_by = creator.id
+      LEFT JOIN users leader ON p.team_leader_id = leader.id
+      LEFT JOIN branches b ON p.branch_id = b.id
+      LEFT JOIN project_members pm ON p.id = pm.project_id
+      LEFT JOIN tasks t ON p.id = t.project_id AND t.is_deleted = 0
+      WHERE p.is_deleted = 0 AND p.branch_id = ?
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+    `;
+    db.query(query, [branchId], callback);
+  }
+
   // Get project by ID (including deleted ones for admin purposes)
   static getById(id, callback) {
     const query = `
       SELECT 
         p.*,
         creator.username as created_by_name,
-        leader.username as team_leader_name
+        leader.username as team_leader_name,
+        b.name as branch_name
       FROM projects p
       LEFT JOIN users creator ON p.created_by = creator.id
       LEFT JOIN users leader ON p.team_leader_id = leader.id
+      LEFT JOIN branches b ON p.branch_id = b.id
       WHERE p.id = ?
     `;
     db.query(query, [id], callback);

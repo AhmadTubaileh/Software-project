@@ -55,6 +55,9 @@ function ProjectManagement() {
   const [tasks, setTasks] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [projectMembers, setProjectMembers] = useState({});
+  const [accessibleBranches, setAccessibleBranches] = useState([]);
+  const [selectedBranchId, setSelectedBranchId] = useState(null);
+  const [loadingBranches, setLoadingBranches] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
@@ -82,15 +85,48 @@ function ProjectManagement() {
   const [showProjectCardAddMemberDropdown, setShowProjectCardAddMemberDropdown] = useState({});
   const [loading, setLoading] = useState(true);
 
-  // Debug currentUser
+  // Load accessible branches on mount
   useEffect(() => {
-    console.log('Current User:', currentUser);
+    const loadBranches = async () => {
+      if (!currentUser?.id) {
+        setLoadingBranches(false);
+        return;
+      }
+      
+      try {
+        setLoadingBranches(true);
+        const response = await fetch(`http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch accessible branches');
+        }
+        
+        const branches = await response.json();
+        setAccessibleBranches(branches);
+        
+        // Set default to "all" (null) - user can see all projects but create in primary branch
+        setSelectedBranchId(null);
+      } catch (error) {
+        console.error('Error loading accessible branches:', error);
+        toast.error('Failed to load branches');
+        setAccessibleBranches([]);
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+
+    loadBranches();
   }, [currentUser]);
 
-  // Fetch all projects (only non-deleted ones)
+  // Fetch all projects (only non-deleted ones) - filtered by branch
   const fetchProjects = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/projects');
+      let url = 'http://localhost:5000/api/projects';
+      if (selectedBranchId !== null) {
+        url += `?branch_id=${selectedBranchId}`;
+      }
+      
+      const response = await fetch(url);
       const data = await response.json();
       
       if (!response.ok) {
@@ -104,7 +140,7 @@ function ProjectManagement() {
       console.error('Error fetching projects:', error);
       toast.error('Failed to load projects');
     }
-  }, []);
+  }, [selectedBranchId]);
 
   // Fetch all tasks
   const fetchTasks = useCallback(async () => {
@@ -123,22 +159,55 @@ function ProjectManagement() {
     }
   }, []);
 
-  // Fetch workers
+  // Fetch workers (filtered by branch if branch is selected)
+  // When "All Branches" is selected, fetch workers from all accessible branches
   const fetchWorkers = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/tasks/workers');
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch workers');
+      // If "All Branches" is selected, fetch workers from all accessible branches
+      if (selectedBranchId === null && accessibleBranches.length > 0) {
+        // Fetch workers from each accessible branch and combine them
+        const branchIds = accessibleBranches.map(b => b.id);
+        const allWorkers = [];
+        
+        for (const branchId of branchIds) {
+          try {
+            const response = await fetch(`http://localhost:5000/api/tasks/workers?branch_id=${branchId}`);
+            if (response.ok) {
+              const data = await response.json();
+              allWorkers.push(...data);
+            }
+          } catch (error) {
+            console.error(`Error fetching workers for branch ${branchId}:`, error);
+          }
+        }
+        
+        // Remove duplicates based on worker id
+        const uniqueWorkers = allWorkers.filter((worker, index, self) =>
+          index === self.findIndex(w => w.id === worker.id)
+        );
+        
+        setWorkers(uniqueWorkers);
+      } else if (selectedBranchId !== null) {
+        // Specific branch selected, fetch workers from that branch only
+        const url = `http://localhost:5000/api/tasks/workers?branch_id=${selectedBranchId}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch workers');
+        }
+        
+        setWorkers(data);
+      } else {
+        // No branches available, set empty array
+        setWorkers([]);
       }
-      
-      setWorkers(data);
     } catch (error) {
       console.error('Error fetching workers:', error);
       toast.error('Failed to load workers');
+      setWorkers([]);
     }
-  }, []);
+  }, [selectedBranchId, accessibleBranches]);
 
   // Fetch members for each project
   const fetchProjectMembers = useCallback(async () => {
@@ -172,9 +241,12 @@ function ProjectManagement() {
     }
   }, [fetchProjects, fetchTasks, fetchWorkers]);
 
+  // Refresh data when branch selection changes
   useEffect(() => {
-    refreshAllData();
-  }, [refreshAllData]);
+    if (!loadingBranches) {
+      refreshAllData();
+    }
+  }, [selectedBranchId, loadingBranches, refreshAllData]);
 
   useEffect(() => {
     if (projects.length > 0) {
@@ -184,6 +256,15 @@ function ProjectManagement() {
 
   // Create new project
   const handleCreateProject = async (projectData) => {
+    // If "All Branches" is selected, use branch_id from formData (user selected in modal)
+    // Otherwise, use selectedBranchId
+    const branchIdForProject = projectData.branch_id || selectedBranchId;
+    
+    if (!branchIdForProject) {
+      toast.error('Please select a branch for the project');
+      return;
+    }
+
     try {
       const response = await fetch('http://localhost:5000/api/projects', {
         method: 'POST',
@@ -192,7 +273,8 @@ function ProjectManagement() {
         },
         body: JSON.stringify({
           ...projectData,
-          created_by: currentUser.id
+          created_by: currentUser.id,
+          branch_id: parseInt(branchIdForProject)
         }),
       });
 
@@ -623,11 +705,16 @@ function ProjectManagement() {
     });
   }, [refreshAllData]);
 
-  // Get workers for a specific project
+  // Get workers for a specific project (filtered by project's branch_id)
   const getWorkersForProject = (projectId) => {
-    if (!projectId || !projectMembers[projectId]) return [];
+    if (!projectId) return [];
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return [];
+    
+    // Filter workers by project's branch_id and who are already members
     return workers.filter(worker => 
-      projectMembers[projectId].some(member => member.user_id === worker.id)
+      worker.primary_branch_id === project.branch_id &&
+      projectMembers[projectId]?.some(member => member.user_id === worker.id)
     );
   };
 
@@ -691,7 +778,30 @@ function ProjectManagement() {
                 Logged in as: {currentUser?.username} ({getRoleName(userType)})
               </p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center">
+              {/* Branch Filter - Show if user has accessible branches */}
+              {accessibleBranches.length > 0 && (
+                <div className="relative">
+                  <select
+                    value={selectedBranchId !== null ? selectedBranchId : 'all'}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSelectedBranchId(value === 'all' ? null : parseInt(value));
+                    }}
+                    className="px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 appearance-none pr-10 min-w-[200px]"
+                  >
+                    <option value="all">All Branches</option>
+                    {accessibleBranches.map(branch => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3 top-3.5 text-gray-400 pointer-events-none">
+                    🏢
+                  </div>
+                </div>
+              )}
               {/* Header Add Task Button with Enhanced Dropdown */}
               <div className="relative header-add-task-dropdown">
                 <button
@@ -838,7 +948,7 @@ function ProjectManagement() {
                         </select>
                       </div>
 
-                      {/* Worker Selection */}
+                      {/* Worker Selection - Filter by project's branch_id */}
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
                           Team Member *
@@ -852,12 +962,36 @@ function ProjectManagement() {
                           className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors"
                         >
                           <option value="">Choose a team member...</option>
-                          {workers.map(worker => (
-                            <option key={worker.id} value={worker.id}>
-                              {worker.username} ({worker.role})
-                            </option>
-                          ))}
+                          {(() => {
+                            const selectedProject = projects.find(p => p.id === parseInt(headerAddMemberData.projectId));
+                            if (!selectedProject) return null;
+                            // Filter workers by project's branch_id
+                            const availableWorkers = workers
+                              .filter(worker => 
+                                worker.primary_branch_id === selectedProject.branch_id &&
+                                !projectMembers[selectedProject.id]?.some(member => member.user_id === worker.id)
+                              );
+                            return availableWorkers.map(worker => (
+                              <option key={worker.id} value={worker.id}>
+                                {worker.username}
+                              </option>
+                            ));
+                          })()}
                         </select>
+                        {(() => {
+                          const selectedProject = projects.find(p => p.id === parseInt(headerAddMemberData.projectId));
+                          if (selectedProject) {
+                            const availableWorkers = workers.filter(w => w.primary_branch_id === selectedProject.branch_id);
+                            if (availableWorkers.length === 0) {
+                              return (
+                                <p className="text-xs text-yellow-400 mt-1">
+                                  No available employees in this branch
+                                </p>
+                              );
+                            }
+                          }
+                          return null;
+                        })()}
                       </div>
 
                       <div className="flex gap-3 pt-2">
@@ -912,6 +1046,12 @@ function ProjectManagement() {
                         }`}>
                           {project.status.toUpperCase()}
                         </span>
+                        {project.branch_name && (
+                          <span className="px-2 py-1 rounded text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                            <span>🏢</span>
+                            {project.branch_name}
+                          </span>
+                        )}
                       </div>
                       <h3 className="text-xl font-semibold text-white mb-2">{project.title}</h3>
                       <p className="text-gray-400 text-sm mb-4 line-clamp-2">
@@ -965,14 +1105,22 @@ function ProjectManagement() {
                                 className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
                               >
                                 <option value="">Choose a team member...</option>
-                                {workers.filter(worker => 
-                                  !projectMembers[project.id]?.some(member => member.user_id === worker.id)
-                                ).map(worker => (
-                                  <option key={worker.id} value={worker.id}>
-                                    {worker.username} ({worker.role})
-                                  </option>
-                                ))}
+                                {workers
+                                  .filter(worker => 
+                                    worker.primary_branch_id === project.branch_id &&
+                                    !projectMembers[project.id]?.some(member => member.user_id === worker.id)
+                                  )
+                                  .map(worker => (
+                                    <option key={worker.id} value={worker.id}>
+                                      {worker.username}
+                                    </option>
+                                  ))}
                               </select>
+                              {workers.filter(w => w.primary_branch_id === project.branch_id).length === 0 && (
+                                <p className="text-xs text-yellow-400 mt-1">
+                                  No available employees in this branch
+                                </p>
+                              )}
                             </div>
 
                             <div className="flex gap-2">
@@ -1065,6 +1213,14 @@ function ProjectManagement() {
         <CreateProjectModal
           workers={workers}
           currentUser={currentUser}
+          selectedBranchId={selectedBranchId !== null ? selectedBranchId : null}
+          selectedBranchName={
+            selectedBranchId !== null 
+              ? accessibleBranches.find(b => b.id === selectedBranchId)?.name
+              : null
+          }
+          accessibleBranches={accessibleBranches}
+          showBranchSelector={selectedBranchId === null}
           onSubmit={handleCreateProject}
           onClose={() => setShowCreateModal(false)}
         />

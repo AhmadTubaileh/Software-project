@@ -198,31 +198,151 @@ router.get('/', async (req, res) => {
 });
 
 
-// GET /api/items/inventory - Get items for worker inventory management
-router.get('/inventory', (req, res) => {
-  Item.getInventoryItems((err, items) => {
-    if (err) {
-      console.error('Error fetching inventory items:', err);
-      return res.status(500).json({
-        success: false,
-        message: 'Failed to fetch inventory items'
-      });
+// GET /api/items/inventory - Get items for worker inventory management (with branch filtering)
+router.get('/inventory', async (req, res) => {
+  try {
+    // Get branch_id from query parameter
+    const branchId = req.query.branch_id ? parseInt(req.query.branch_id) : null;
+    
+    // Get current user for access control
+    let currentUser;
+    if (req.user) {
+      currentUser = req.user;
+    } else {
+      // For testing - you should remove this in production
+      currentUser = {
+        id: 1,
+        user_type: 0,
+        username: 'admin'
+      };
     }
     
-    // Convert images to base64 if they exist
-    const serializedItems = items.map(item => ({
-      id: item.id,
-      name: item.name,
-      description: item.description,
-      quantity: item.quantity,
-      available: item.available,
-      item_image: item.item_image ? item.item_image.toString('base64') : null,
-      // Include current price for reference (but workers can't edit it)
-      price_cash: item.price_cash || 0
-    }));
+    // If branch_id is provided and user is not admin, verify access
+    if (branchId && currentUser.user_type !== 0) {
+      const hasAccess = await new Promise((resolve) => {
+        const query = `
+          SELECT COUNT(*) as count FROM user_branches 
+          WHERE user_id = ? AND branch_id = ?
+        `;
+        db.query(query, [currentUser.id, branchId], (err, results) => {
+          if (err) {
+            console.error('Error checking branch access:', err);
+            resolve(false);
+          } else {
+            resolve(results[0].count > 0);
+          }
+        });
+      });
+      
+      if (!hasAccess) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have access to this branch'
+        });
+      }
+    }
     
-    res.json(serializedItems);
-  });
+    // If no branch_id provided and user is not admin, get items from all accessible branches
+    if (!branchId && currentUser.user_type !== 0) {
+      // Get accessible branches for current user
+      const accessibleBranches = await new Promise((resolve, reject) => {
+        const query = `
+          SELECT DISTINCT b.id, b.name 
+          FROM branches b
+          INNER JOIN user_branches ub ON b.id = ub.branch_id
+          WHERE ub.user_id = ?
+          ORDER BY b.name
+        `;
+        db.query(query, [currentUser.id], (err, results) => {
+          if (err) {
+            console.error('Database error in getAccessibleBranches:', err);
+            reject(err);
+          } else {
+            resolve(results || []);
+          }
+        });
+      });
+      
+      if (!accessibleBranches || accessibleBranches.length === 0) {
+        return res.json([]);
+      }
+      
+      const branchIds = accessibleBranches.map(b => b.id);
+      
+      // Query items from accessible branches
+      const query = `
+        SELECT 
+          i.*,
+          ip.price_cash
+        FROM items i
+        LEFT JOIN item_prices ip ON i.id = ip.item_id
+        WHERE i.branch_id IN (?)
+          AND (ip.date = (
+            SELECT MAX(date) 
+            FROM item_prices 
+            WHERE item_id = i.id
+          )
+          OR ip.date IS NULL)
+        ORDER BY i.name ASC
+      `;
+      
+      db.query(query, [branchIds], (err, items) => {
+        if (err) {
+          console.error('Error fetching inventory items:', err);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch inventory items'
+          });
+        }
+        
+        // Convert images to base64 if they exist
+        const serializedItems = items.map(item => ({
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          quantity: item.quantity,
+          available: item.available,
+          item_image: item.item_image ? item.item_image.toString('base64') : null,
+          price_cash: item.price_cash || 0,
+          branch_id: item.branch_id
+        }));
+        
+        res.json(serializedItems);
+      });
+    } else {
+      // Admin or specific branch requested
+      Item.getInventoryItems(branchId, (err, items) => {
+        if (err) {
+          console.error('Error fetching inventory items:', err);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to fetch inventory items'
+          });
+        }
+        
+        // Convert images to base64 if they exist
+        const serializedItems = items.map(item => ({
+          id: item.id,
+          name: item.name,
+          description: item.description,
+          quantity: item.quantity,
+          available: item.available,
+          item_image: item.item_image ? item.item_image.toString('base64') : null,
+          price_cash: item.price_cash || 0,
+          branch_id: item.branch_id
+        }));
+        
+        res.json(serializedItems);
+      });
+    }
+  } catch (error) {
+    console.error('Error in GET /inventory:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch inventory items',
+      error: error.message
+    });
+  }
 });
 
 // POST /api/items/:id/adjust-quantity - Adjust item quantity
