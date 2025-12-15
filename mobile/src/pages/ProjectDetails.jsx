@@ -536,7 +536,7 @@ function MobileProjectDetails() {
                         <select
                           value={member.role}
                           onChange={(e) => handleMemberRoleChange(member.user_id, e.target.value)}
-                          className="mobile-input flex-1"
+                          className="mobile-input mobile-select flex-1"
                         >
                           <option value="member">Team Member</option>
                           <option value="team_leader">Team Leader</option>
@@ -682,7 +682,7 @@ function MobileProjectDetails() {
                   <select
                     value={project.status}
                     onChange={(e) => handleStatusChange(e.target.value)}
-                    className="mobile-input"
+                    className="mobile-input mobile-select"
                   >
                     <option value="active">Active</option>
                     <option value="completed">Completed</option>
@@ -742,7 +742,7 @@ function MobileProjectDetails() {
             <select
               value={addTaskData.assigned_to}
               onChange={(e) => setAddTaskData({ ...addTaskData, assigned_to: e.target.value })}
-              className="mobile-input"
+              className="mobile-input mobile-select"
               required
             >
               <option value="">Choose a team member...</option>
@@ -769,7 +769,7 @@ function MobileProjectDetails() {
             <select
               value={addTaskData.priority}
               onChange={(e) => setAddTaskData({ ...addTaskData, priority: e.target.value })}
-              className="mobile-input"
+              className="mobile-input mobile-select"
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -825,7 +825,7 @@ function MobileProjectDetails() {
             <select
               value={addMemberData.user_id}
               onChange={(e) => setAddMemberData({ ...addMemberData, user_id: e.target.value })}
-              className="mobile-input"
+              className="mobile-input mobile-select"
               required
             >
               <option value="">Choose a team member...</option>
@@ -840,7 +840,7 @@ function MobileProjectDetails() {
             <select
               value={addMemberData.role}
               onChange={(e) => setAddMemberData({ ...addMemberData, role: e.target.value })}
-              className="mobile-input"
+              className="mobile-input mobile-select"
             >
               <option value="member">Team Member</option>
               <option value="team_leader">Team Leader</option>

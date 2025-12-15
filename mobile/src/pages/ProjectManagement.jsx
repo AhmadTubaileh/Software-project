@@ -470,13 +470,16 @@ function MobileProjectManagement() {
         {/* Branch Filter - Only for admins */}
         {isAdmin && accessibleBranches.length > 0 && (
           <div className="mt-3">
+            <label className="block text-sm text-gray-300 mb-2 font-medium">
+              Filter by Branch
+            </label>
             <select
               value={selectedBranchId !== null ? selectedBranchId : 'all'}
               onChange={(e) => {
                 const value = e.target.value;
                 setSelectedBranchId(value === 'all' ? null : parseInt(value));
               }}
-              className="mobile-input"
+              className="mobile-input mobile-select"
             >
               <option value="all">All Branches</option>
               {accessibleBranches.map(branch => (
@@ -508,46 +511,34 @@ function MobileProjectManagement() {
         ) : (
           <div className="mobile-task-list">
             {projects.map(project => (
-              <div key={project.id} className="mobile-card" style={{
-                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(31, 41, 55, 0.8) 100%)',
-                border: '1px solid rgba(59, 130, 246, 0.2)'
-              }}>
+              <div key={project.id} className="mobile-card">
                 <div className="mobile-task-header">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <span className={`mobile-task-status mobile-task-status-${project.status}`}>
                         {project.status}
                       </span>
                       {project.branch_name && (
-                        <span className="text-xs px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/40 font-semibold backdrop-blur-sm">
+                        <span className="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
                           🏢 {project.branch_name}
                         </span>
                       )}
                     </div>
-                    <h3 className="mobile-task-title mb-2">{project.title}</h3>
+                    <h3 className="mobile-task-title">{project.title}</h3>
                     {project.description && (
-                      <p className="mobile-task-meta mt-2 line-clamp-2 text-gray-300">
+                      <p className="mobile-task-meta mt-2 line-clamp-2">
                         {project.description}
                       </p>
                     )}
                   </div>
                 </div>
 
-                <div className="mobile-task-meta" style={{ marginTop: '12px', marginBottom: '16px' }}>
-                  <div className="flex flex-wrap gap-3 text-sm">
-                    <span className="flex items-center gap-1.5 text-gray-300 font-medium">
-                      <span className="text-base">👥</span>
-                      <span>{project.member_count || 0} members</span>
-                    </span>
-                    <span className="flex items-center gap-1.5 text-gray-300 font-medium">
-                      <span className="text-base">📋</span>
-                      <span>{project.task_count || 0} tasks</span>
-                    </span>
+                <div className="mobile-task-meta" style={{ marginTop: '8px', marginBottom: '12px' }}>
+                  <div className="flex flex-wrap gap-3 text-xs">
+                    <span>👥 {project.member_count || 0} members</span>
+                    <span>📋 {project.task_count || 0} tasks</span>
                     {project.team_leader_name && (
-                      <span className="flex items-center gap-1.5 text-blue-300 font-semibold">
-                        <span className="text-base">👑</span>
-                        <span>{project.team_leader_name}</span>
-                      </span>
+                      <span>👑 {project.team_leader_name}</span>
                     )}
                   </div>
                 </div>
@@ -709,13 +700,13 @@ function MobileProjectManagement() {
                 value={createProjectData.branch_id}
                 onChange={(e) => {
                   // Reset team leader when branch changes
-                  setCreateProjectData({ 
-                    ...createProjectData, 
+                  setCreateProjectData({
+                    ...createProjectData,
                     branch_id: e.target.value,
-                    team_leader_id: '' 
+                    team_leader_id: ''
                   });
                 }}
-                className="mobile-input"
+                className="mobile-input mobile-select"
                 required
               >
                 <option value="">Choose a branch...</option>
@@ -754,7 +745,7 @@ function MobileProjectManagement() {
             <select
               value={createProjectData.team_leader_id}
               onChange={(e) => setCreateProjectData({ ...createProjectData, team_leader_id: e.target.value })}
-              className="mobile-input"
+              className="mobile-input mobile-select"
             >
               <option value="">No team leader</option>
               {(() => {
@@ -815,7 +806,7 @@ function MobileProjectManagement() {
               <select
                 value={addTaskData.assigned_to}
                 onChange={(e) => setAddTaskData({ ...addTaskData, assigned_to: e.target.value })}
-                className="mobile-input"
+                className="mobile-input mobile-select"
                 required
               >
                 <option value="">Choose a team member...</option>
@@ -842,7 +833,7 @@ function MobileProjectManagement() {
               <select
                 value={addTaskData.priority}
                 onChange={(e) => setAddTaskData({ ...addTaskData, priority: e.target.value })}
-                className="mobile-input"
+                className="mobile-input mobile-select"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -902,7 +893,7 @@ function MobileProjectManagement() {
               <select
                 value={addMemberData.user_id}
                 onChange={(e) => setAddMemberData({ ...addMemberData, user_id: e.target.value })}
-                className="mobile-input"
+                className="mobile-input mobile-select"
                 required
               >
                 <option value="">Choose a team member...</option>
@@ -917,7 +908,7 @@ function MobileProjectManagement() {
               <select
                 value={addMemberData.role}
                 onChange={(e) => setAddMemberData({ ...addMemberData, role: e.target.value })}
-                className="mobile-input"
+                className="mobile-input mobile-select"
               >
                 <option value="member">Team Member</option>
                 <option value="team_leader">Team Leader</option>

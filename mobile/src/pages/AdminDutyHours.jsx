@@ -397,7 +397,7 @@ function MobileAdminDutyHours() {
                 <select
                   value={filter.branchId}
                   onChange={(e) => setFilter({ ...filter, branchId: e.target.value, userId: '' })}
-                  className="mobile-input"
+                  className="mobile-input mobile-select"
                 >
                   <option value="">All Branches</option>
                   {branches.map(branch => (
@@ -412,7 +412,7 @@ function MobileAdminDutyHours() {
               <select
                 value={filter.userId}
                 onChange={(e) => setFilter({ ...filter, userId: e.target.value })}
-                className="mobile-input"
+                className="mobile-input mobile-select"
               >
                 <option value="">All Employees</option>
                 {workers.map(worker => (
@@ -546,7 +546,7 @@ function MobileAdminDutyHours() {
             <select
               value={newSession.user_id}
               onChange={(e) => setNewSession({ ...newSession, user_id: e.target.value })}
-              className="mobile-input"
+              className="mobile-input mobile-select"
               required
             >
               <option value="">Choose an employee...</option>
@@ -572,7 +572,7 @@ function MobileAdminDutyHours() {
             <select
               value={newSession.session_type}
               onChange={(e) => setNewSession({ ...newSession, session_type: e.target.value })}
-              className="mobile-input"
+              className="mobile-input mobile-select"
             >
               <option value="work">Work</option>
               <option value="break">Break</option>
@@ -694,7 +694,7 @@ function MobileAdminDutyHours() {
               <select
                 value={editingSession.session_type}
                 onChange={(e) => setEditingSession({ ...editingSession, session_type: e.target.value })}
-                className="mobile-input"
+                className="mobile-input mobile-select"
               >
                 <option value="work">Work</option>
                 <option value="break">Break</option>

@@ -2,15 +2,29 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useLocalSession } from '../hooks/useLocalSession.js';
 import { apiClient } from '../shared/api/apiClient.js';
 import toast, { Toaster } from 'react-hot-toast';
-import './MobilePage.css';
-import '../styles/theme.css';
-import ContractsTable from '../components/ContractManagement/ContractsTable';
+import { useNavigate } from 'react-router-dom';
+import { Search, Filter, Eye, Check, X, Calendar, User, Phone, DollarSign, FileText, Clock, CheckCircle, ClipboardList } from 'lucide-react';
+
+// Shadcn Components
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Badge } from '../components/ui/badge';
+import { Textarea } from '../components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Progress } from '../components/ui/progress';
+
+// Your components
+import StatsCards from '../components/ContractManagement/StatsCards';
 import ContractDetailsModal from '../components/ContractManagement/ContractDetailsModal';
 import ApproveModal from '../components/ContractManagement/ApproveModal';
 import RejectModal from '../components/ContractManagement/RejectModal';
-import StatsCards from '../components/ContractManagement/StatsCards';
 import ImageModal from '../components/ContractManagement/ImageModal';
-import { useNavigate } from 'react-router-dom';
+
+// Your existing CSS
+import './MobilePage.css';
 
 function ContractManagement() {
   const [contracts, setContracts] = useState([]);
@@ -35,7 +49,7 @@ function ContractManagement() {
   const { currentUser } = useLocalSession();
   const navigate = useNavigate();
 
-  // ========== ACCESS CONTROL START ==========
+  // ========== ACCESS CONTROL ==========
   const userType = currentUser?.user_type ?? 5;
   const allowedRoles = [0, 1, 2, 3, 4];
   
@@ -62,13 +76,11 @@ function ContractManagement() {
       </div>
     );
   }
-  // ========== ACCESS CONTROL END ==========
 
-  const isAdmin = currentUser?.role === 'admin';
   const canApproveReject = userType === 0 || userType === 1 || userType === 2;
   const [accessibleBranchIds, setAccessibleBranchIds] = useState([]);
 
-  // Fetch accessible branches for the current user
+  // Fetch accessible branches
   useEffect(() => {
     const fetchAccessibleBranches = async () => {
       if (!currentUser?.id) {
@@ -89,16 +101,10 @@ function ContractManagement() {
     fetchAccessibleBranches();
   }, [currentUser]);
 
-  // Helper function to check if user can approve/reject a specific contract
+  // Check if user can approve/reject specific contract
   const canApproveRejectContract = (contract) => {
-    if (!canApproveReject) {
-      return false;
-    }
-    
-    if (userType === 0) {
-      return true;
-    }
-    
+    if (!canApproveReject) return false;
+    if (userType === 0) return true;
     return accessibleBranchIds.includes(contract.branch_id);
   };
 
@@ -112,11 +118,7 @@ function ContractManagement() {
         
         if (!branchFilterInitialized && currentUser?.primary_branch_id) {
           const primaryBranchExists = branches.some(b => b.id === currentUser.primary_branch_id);
-          if (primaryBranchExists) {
-            setBranchFilter(currentUser.primary_branch_id.toString());
-          } else {
-            setBranchFilter('all');
-          }
+          setBranchFilter(primaryBranchExists ? currentUser.primary_branch_id.toString() : 'all');
           setBranchFilterInitialized(true);
         } else if (!branchFilterInitialized) {
           setBranchFilter('all');
@@ -134,27 +136,15 @@ function ContractManagement() {
     fetchBranches();
   }, [currentUser, branchFilterInitialized]);
 
-  // Fetch contracts based on filter
+  // Fetch contracts
   const fetchContracts = useCallback(async () => {
     try {
       setLoading(true);
       let url = '/api/contracts/all';
       
       const params = new URLSearchParams();
-      
-      if (statusFilter !== 'all') {
-        params.append('status', statusFilter);
-      }
-      
-      if (branchFilter !== 'all') {
-        params.append('branch_id', branchFilter);
-      } else {
-        if (currentUser?.id) {
-          params.append('userId', currentUser.id);
-          params.append('userType', currentUser.user_type || 0);
-          params.append('showAllBranches', 'true');
-        }
-      }
+      if (statusFilter !== 'all') params.append('status', statusFilter);
+      if (branchFilter !== 'all') params.append('branch_id', branchFilter);
       
       if (params.toString()) {
         url += `?${params.toString()}`;
@@ -162,7 +152,6 @@ function ContractManagement() {
       
       const data = await apiClient.get(url);
       setContracts(data.contracts || []);
-      // Apply search filter
       applyFilters(data.contracts || [], searchQuery);
     } catch (error) {
       console.error('Error fetching contracts:', error);
@@ -174,11 +163,10 @@ function ContractManagement() {
     }
   }, [statusFilter, branchFilter, currentUser]);
 
-  // Apply search and other filters
+  // Apply filters
   const applyFilters = useCallback((contractsList, search = '') => {
     let filtered = contractsList;
     
-    // Apply search filter
     if (search.trim()) {
       const query = search.toLowerCase();
       filtered = filtered.filter(contract => 
@@ -192,12 +180,12 @@ function ContractManagement() {
     setFilteredContracts(filtered);
   }, []);
 
-  // Update filtered contracts when search changes
+  // Update filtered contracts
   useEffect(() => {
     applyFilters(contracts, searchQuery);
   }, [searchQuery, contracts, applyFilters]);
 
-  // Fetch contract details and sponsors
+  // Fetch contract details
   const fetchContractDetails = async (contractId) => {
     try {
       const contractData = await apiClient.get(`/api/contracts/${contractId}`);
@@ -217,28 +205,37 @@ function ContractManagement() {
     }
   };
 
-  // Convert image data to base64
+  // Convert image to base64 or handle file paths
   const convertImageToBase64 = (imageData) => {
-    if (!imageData) {
-      return null;
-    }
-    
+    if (!imageData) return null;
     if (typeof imageData === 'string') {
-      if (imageData.startsWith('data:')) {
+      // If it's already a data URL
+      if (imageData.startsWith('data:')) return imageData;
+      // If it's a file path (starts with / or http)
+      if (imageData.startsWith('/') || imageData.startsWith('http')) {
+        // If it's a relative path, prepend API base URL
+        if (imageData.startsWith('/')) {
+          const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+          return `${API_BASE_URL}${imageData}`;
+        }
         return imageData;
       }
+      // Otherwise assume it's base64 from database
       return `data:image/jpeg;base64,${imageData}`;
     }
-    
+    // If it's a File object
+    if (imageData instanceof File) {
+      return URL.createObjectURL(imageData);
+    }
     return null;
   };
 
-  // Load contracts when component mounts or filter changes
+  // Load contracts
   useEffect(() => {
     fetchContracts();
   }, [fetchContracts]);
 
-  // Handle approve contract
+  // Handle approve
   const handleApprove = async () => {
     if (!selectedContract) return;
     
@@ -266,7 +263,7 @@ function ContractManagement() {
     }
   };
 
-  // Handle reject contract
+  // Handle reject
   const handleReject = async () => {
     if (!selectedContract || !rejectionReason.trim()) {
       toast.error('Please provide a rejection reason');
@@ -299,13 +296,13 @@ function ContractManagement() {
     }
   };
 
-  // Handle view details
+  // View details
   const handleViewDetails = (contract) => {
     setSelectedContract(contract);
     fetchContractDetails(contract.id);
   };
 
-  // Handle close details modal
+  // Close details modal
   const handleCloseDetailsModal = () => {
     setShowDetailsModal(false);
     setContractDetails(null);
@@ -313,16 +310,15 @@ function ContractManagement() {
     setSelectedContract(null);
   };
 
-  // Handle view image
+  // View image
   const handleViewImage = (person, type = 'customer') => {
     if (person.id_card_image) {
-      const imageSrc = getImageSrc(person.id_card_image);
-      
+      const imageSrc = convertImageToBase64(person.id_card_image);
       if (imageSrc) {
         setViewingImage({ 
           customer: person, 
           type,
-          imageSrc: imageSrc 
+          imageSrc 
         });
       } else {
         toast.error('Image format not supported');
@@ -340,9 +336,21 @@ function ContractManagement() {
     return convertImageToBase64(idCardImage);
   };
 
-  // Handle filter change
-  const handleFilterChange = (newFilter) => {
-    setStatusFilter(newFilter);
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
   };
 
   if (!currentUser) {
@@ -358,260 +366,324 @@ function ContractManagement() {
   }
 
   return (
-    <div className="mobile-page" style={{
-      background: 'linear-gradient(180deg, #0e1830 0%, #0f172a 50%, #0e1830 100%)',
-      minHeight: '100vh',
-      paddingBottom: '80px'
-    }}>
+    <div className="mobile-page">
       <Toaster position="top-center" />
       
-      {/* Sticky Header */}
-      <div className="mobile-page-header" style={{
-        background: 'rgba(31, 41, 55, 0.95)',
-        borderBottom: '1px solid rgba(75, 85, 99, 0.3)',
-        backdropFilter: 'blur(20px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 100
-      }}>
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h1 className="mobile-page-title" style={{
-              fontSize: '20px',
-              fontWeight: 'bold',
-              marginBottom: '4px'
-            }}>
-              Contract Management
-            </h1>
-            <p className="text-gray-400" style={{ fontSize: '12px' }}>
-              Review and manage contracts
-            </p>
-          </div>
-          <button 
-            onClick={() => setShowFilters(!showFilters)}
-            className="btn-outline"
-            style={{ 
-              padding: '8px 12px',
-              fontSize: '12px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
-            }}
-          >
-            <span>🔍</span>
-            Filters
-          </button>
-        </div>
-
-        {/* Search Bar */}
-        <div className="relative mb-3">
-          <span style={{
-            position: 'absolute',
-            left: '12px',
-            top: '50%',
-            transform: 'translateY(-50%)',
-            color: '#9ca3af',
-            fontSize: '16px'
-          }}>🔍</span>
-          <input
-            type="text"
-            placeholder="Search contracts, customers, items..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="mobile-input w-full"
-            style={{
-              paddingLeft: '40px',
-              paddingRight: '16px',
-              paddingTop: '10px',
-              paddingBottom: '10px',
-              fontSize: '14px',
-              borderRadius: '8px'
-            }}
-          />
-        </div>
-
-        {/* Collapsible Filters */}
-        {showFilters && (
-          <div style={{
-            marginTop: '12px',
-            padding: '12px',
-            background: 'rgba(55, 65, 81, 0.5)',
-            borderRadius: '8px',
-            border: '1px solid rgba(75, 85, 99, 0.3)'
-          }}>
-            <div style={{ marginBottom: '12px' }}>
-              <label style={{
-                display: 'block',
-                fontSize: '12px',
-                fontWeight: '600',
-                color: '#9ca3af',
-                marginBottom: '6px'
-              }}>Status</label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="mobile-input w-full"
-                style={{
-                  padding: '8px 12px',
-                  fontSize: '14px',
-                  borderRadius: '6px'
-                }}
-              >
-                <option value="all">📋 All Contracts</option>
-                <option value="pending">⏳ Pending Review</option>
-                <option value="active">✅ Active</option>
-                <option value="rejected">❌ Rejected</option>
-                <option value="completed">✓ Completed</option>
-                <option value="deleted">🗑️ Deleted</option>
-              </select>
+      {/* Header */}
+      <div className="mobile-page-header">
+        <div className="px-3 sm:px-4 py-3 sm:py-4">
+          <div className="flex items-start sm:items-center justify-between mb-3 sm:mb-4 gap-2">
+            <div className="flex-1 min-w-0 pr-2">
+              <h1 className="mobile-page-title text-lg sm:text-xl md:text-2xl leading-tight">Contract Management</h1>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1 leading-snug">Review and manage contracts</p>
             </div>
-            <div>
-              <label style={{
-                display: 'block',
-                fontSize: '12px',
-                fontWeight: '600',
-                color: '#9ca3af',
-                marginBottom: '6px'
-              }}>Branch</label>
-              {loadingBranches ? (
-                <div className="text-gray-400 text-xs">Loading branches...</div>
-              ) : (
-                <select
-                  value={branchFilter}
-                  onChange={(e) => setBranchFilter(e.target.value)}
-                  className="mobile-input w-full"
-                  style={{
-                    padding: '8px 12px',
-                    fontSize: '14px',
-                    borderRadius: '6px'
-                  }}
-                >
-                  <option value="all">All Branches</option>
-                  {allBranches.map((branch) => (
-                    <option key={branch.id} value={branch.id}>
-                      {branch.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className="gap-1.5 sm:gap-2 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white text-xs sm:text-sm shrink-0 px-2 sm:px-3"
+            >
+              <Filter className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Filters</span>
+            </Button>
           </div>
-        )}
 
-        {/* Access Control Notes */}
-        {!canApproveReject && (
-          <div style={{
-            marginTop: '12px',
-            padding: '8px 12px',
-            background: 'rgba(59, 130, 246, 0.1)',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
-            borderRadius: '6px'
-          }}>
-            <p style={{ fontSize: '12px', color: '#93c5fd' }}>
-              <span style={{ fontWeight: 'bold' }}>Note:</span> View-only access. Only Admins, Senior Managers, and Managers can approve/reject.
-            </p>
+          {/* Search */}
+          <div className="relative mb-3 sm:mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search contracts, customers, items..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-10 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 text-white placeholder:text-gray-400 focus:border-gray-600"
+            />
           </div>
-        )}
-        {canApproveReject && userType !== 0 && (
-          <div style={{
-            marginTop: '12px',
-            padding: '8px 12px',
-            background: 'rgba(234, 179, 8, 0.1)',
-            border: '1px solid rgba(234, 179, 8, 0.3)',
-            borderRadius: '6px'
-          }}>
-            <p style={{ fontSize: '12px', color: '#fde047' }}>
-              <span style={{ fontWeight: 'bold' }}>Note:</span> You can approve/reject contracts from your accessible branches only.
-            </p>
+
+          {/* Filters */}
+          {showFilters && (
+            <div className="mt-3 sm:mt-4 space-y-3 sm:space-y-4 p-3 sm:p-4 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 rounded-lg">
+              <div>
+                <label className="text-xs font-medium mb-2 block text-white">Status</label>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">📋 All Contracts</SelectItem>
+                    <SelectItem value="pending">⏳ Pending Review</SelectItem>
+                    <SelectItem value="active">✅ Active</SelectItem>
+                    <SelectItem value="rejected">❌ Rejected</SelectItem>
+                    <SelectItem value="completed">✓ Completed</SelectItem>
+                    <SelectItem value="deleted">🗑️ Deleted</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium mb-2 block text-white">Branch</label>
+                {loadingBranches ? (
+                  <p className="text-xs text-muted-foreground">Loading branches...</p>
+                ) : (
+                  <Select value={branchFilter} onValueChange={setBranchFilter}>
+                    <SelectTrigger className="w-full bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white">
+                      <SelectValue placeholder="Select branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Branches</SelectItem>
+                      {allBranches.map((branch) => (
+                        <SelectItem key={branch.id} value={branch.id.toString()}>
+                          {branch.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Access Notes */}
+          <div className="mt-3 sm:mt-4 space-y-2 sm:space-y-3">
+            {!canApproveReject && (
+              <div className="p-2.5 sm:p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <p className="text-xs text-blue-300 leading-relaxed">
+                  <span className="font-bold">Note:</span> View-only access. Only Admins, Senior Managers, and Managers can approve/reject.
+                </p>
+              </div>
+            )}
+            {canApproveReject && userType !== 0 && (
+              <div className="p-2.5 sm:p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                <p className="text-xs text-yellow-300 leading-relaxed">
+                  <span className="font-bold">Note:</span> You can approve/reject contracts from your accessible branches only.
+                </p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      <div className="mobile-page-content">
-
-        {/* Stats Cards - 2x2 Grid */}
+      {/* Content */}
+      <div className="mobile-page-content px-3 sm:px-4 py-3 sm:py-4">
+        {/* Stats Cards */}
         <StatsCards contracts={contracts} />
 
-        {/* Contracts Table */}
-        <ContractsTable
-          contracts={filteredContracts}
-          loading={loading}
-          onViewDetails={handleViewDetails}
-          onApprove={(contract) => {
-            if (!canApproveRejectContract(contract)) {
-              toast.error('You do not have permission to approve contracts from this branch');
-              return;
-            }
-            setSelectedContract(contract);
-            setShowApproveModal(true);
-          }}
-          onReject={(contract) => {
-            if (!canApproveRejectContract(contract)) {
-              toast.error('You do not have permission to reject contracts from this branch');
-              return;
-            }
-            setSelectedContract(contract);
-            setShowRejectModal(true);
-          }}
-          showActions={statusFilter === 'pending'}
-          canApproveReject={canApproveReject}
-          canApproveRejectContract={canApproveRejectContract}
-          getImageSrc={getImageSrc}
-        />
+        {/* Contracts List */}
+        <div className="space-y-3 sm:space-y-4">
+          {loading ? (
+            <Card className="p-8 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto"></div>
+              <p className="mt-3 text-sm text-muted-foreground">Loading contracts...</p>
+            </Card>
+          ) : filteredContracts.length === 0 ? (
+            <Card className="p-8 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+              <ClipboardList className="h-12 w-12 mx-auto text-muted-foreground/50 mb-2" />
+              <p className="text-sm text-muted-foreground">No contracts found</p>
+            </Card>
+          ) : (
+            filteredContracts.map((contract) => (
+              <Card key={contract.id} className="overflow-hidden hover:shadow-lg transition-shadow bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                <CardHeader className="pb-2.5 sm:pb-3 md:pb-4 px-3 sm:px-4 md:px-6 pt-3 sm:pt-4 md:pt-6">
+                  <div className="flex items-start justify-between gap-2 sm:gap-3 md:gap-4">
+                    <div className="flex-1 min-w-0 pr-1 sm:pr-2">
+                      <CardTitle className="text-sm sm:text-base font-semibold truncate mb-1 sm:mb-1.5 md:mb-2 leading-tight">{contract.item_name || 'Unknown Item'}</CardTitle>
+                      <CardDescription className="flex items-center gap-1 sm:gap-1.5 md:gap-2 mt-0.5 sm:mt-1 md:mt-1.5 text-[10px] sm:text-xs">
+                        <span>#{contract.id}</span>
+                        {contract.branch_name && (
+                          <>
+                            <span>•</span>
+                            <span className="truncate max-w-[100px] sm:max-w-[120px]">{contract.branch_name}</span>
+                          </>
+                        )}
+                      </CardDescription>
+                    </div>
+                    <Badge 
+                      variant="outline" 
+                      className={`shrink-0 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 sm:py-1 ${
+                        contract.status === 'pending' ? 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20' :
+                        contract.status === 'active' ? 'bg-green-500/10 text-green-500 border-green-500/20' :
+                        contract.status === 'rejected' ? 'bg-red-500/10 text-red-500 border-red-500/20' :
+                        contract.status === 'completed' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' :
+                        'bg-gray-500/10 text-gray-500 border-gray-500/20'
+                      }`}
+                    >
+                      {contract.status === 'pending' ? '⏳' :
+                       contract.status === 'active' ? '✅' :
+                       contract.status === 'rejected' ? '❌' :
+                       contract.status === 'completed' ? '✓' : '🗑️'} 
+                      <span className="hidden sm:inline ml-1">{contract.status.charAt(0).toUpperCase() + contract.status.slice(1)}</span>
+                    </Badge>
+                  </div>
+                </CardHeader>
+
+                <CardContent className="space-y-3 sm:space-y-4 md:space-y-5 py-3 sm:py-4 md:py-5 px-3 sm:px-4 md:px-6">
+                  {/* Relationship Info */}
+                  {(contract.original_contract_info || contract.replacement_contract_info) && (
+                    <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 pb-1.5 sm:pb-2">
+                      {contract.original_contract_info && (
+                        <Badge variant="secondary" className="text-[10px] sm:text-xs bg-blue-500/20 text-blue-300 px-1.5 sm:px-2 py-0.5">
+                          🔄 Reapplication
+                        </Badge>
+                      )}
+                      {contract.replacement_contract_info && (
+                        <Badge variant="secondary" className="text-[10px] sm:text-xs bg-gray-500/20 text-gray-300 px-1.5 sm:px-2 py-0.5">
+                          🔁 Replacement
+                        </Badge>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Customer Section */}
+                  <div className="space-y-1.5 sm:space-y-2 md:space-y-2.5">
+                    <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 text-[10px] sm:text-xs font-medium text-muted-foreground mb-1 sm:mb-1.5 md:mb-2">
+                      <User className="h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 shrink-0" />
+                      <span>Customer</span>
+                    </div>
+                    <p className="text-xs sm:text-sm font-semibold mb-1 sm:mb-1.5 md:mb-2 leading-tight">{contract.customer_name || 'Unknown Customer'}</p>
+                    <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 text-[10px] sm:text-xs text-muted-foreground flex-wrap">
+                      <div className="flex items-center gap-0.5 sm:gap-1">
+                        <Phone className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0" />
+                        <span className="truncate">{contract.customer_phone || 'N/A'}</span>
+                      </div>
+                      <span className="shrink-0">•</span>
+                      <span className="truncate">Worker: {contract.worker_name || 'Unknown'}</span>
+                    </div>
+                  </div>
+
+                  {/* Financial Section */}
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3 md:gap-4 text-[10px] sm:text-xs pt-1.5 sm:pt-2">
+                    <div className="space-y-0.5 sm:space-y-1 md:space-y-1.5">
+                      <p className="text-muted-foreground mb-1 sm:mb-1.5 md:mb-2 leading-tight">Total Price</p>
+                      <p className="font-semibold text-[10px] sm:text-xs md:text-sm leading-tight">{formatCurrency(contract.total_price || 0)}</p>
+                    </div>
+                    <div className="space-y-0.5 sm:space-y-1 md:space-y-1.5">
+                      <p className="text-muted-foreground mb-1 sm:mb-1.5 md:mb-2 leading-tight">Down Payment</p>
+                      <p className="font-semibold text-[10px] sm:text-xs md:text-sm leading-tight">{formatCurrency(contract.down_payment || 0)}</p>
+                    </div>
+                    <div className="space-y-0.5 sm:space-y-1 md:space-y-1.5">
+                      <p className="text-muted-foreground mb-1 sm:mb-1.5 md:mb-2 leading-tight">Monthly</p>
+                      <p className="font-semibold text-[10px] sm:text-xs md:text-sm leading-tight">{formatCurrency(contract.monthly_payment || 0)}</p>
+                    </div>
+                    <div className="space-y-0.5 sm:space-y-1 md:space-y-1.5">
+                      <p className="text-muted-foreground mb-1 sm:mb-1.5 md:mb-2 leading-tight">Duration</p>
+                      <p className="font-semibold text-[10px] sm:text-xs md:text-sm leading-tight">{contract.months || 0} months</p>
+                    </div>
+                  </div>
+
+                  {/* Payment Progress */}
+                  {contract.total_payments > 0 && (
+                    <div className="space-y-1.5 sm:space-y-2 md:space-y-2.5 pt-1.5 sm:pt-2">
+                      <div className="flex justify-between text-[10px] sm:text-xs mb-1 sm:mb-1.5 md:mb-2">
+                        <span className="text-muted-foreground">Payment Progress</span>
+                        <span className="font-medium">
+                          {contract.paid_payments || 0}/{contract.total_payments}
+                        </span>
+                      </div>
+                      <Progress 
+                        value={((contract.paid_payments || 0) / contract.total_payments) * 100}
+                        className="h-1.5 sm:h-2 md:h-2.5"
+                      />
+                    </div>
+                  )}
+                </CardContent>
+
+                <CardFooter className="flex flex-col gap-2 sm:gap-2.5 md:gap-3 pt-3 sm:pt-4 md:pt-5 pb-3 sm:pb-4 md:pb-5 px-3 sm:px-4 md:px-6 border-t border-gray-700/30">
+                  <Button
+                    onClick={() => handleViewDetails(contract)}
+                    variant="outline"
+                    size="sm"
+                    className="w-full gap-1.5 sm:gap-2 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white text-[11px] sm:text-xs md:text-sm h-8 sm:h-9"
+                  >
+                    <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" />
+                    View Details
+                  </Button>
+                  
+                  {contract.status === 'pending' && canApproveReject && canApproveRejectContract(contract) && (
+                    <div className="grid grid-cols-2 gap-2 sm:gap-2.5 md:gap-3 w-full mt-0.5 sm:mt-1">
+                      <Button
+                        onClick={() => {
+                          if (!canApproveRejectContract(contract)) {
+                            toast.error('You do not have permission to approve contracts from this branch');
+                            return;
+                          }
+                          setSelectedContract(contract);
+                          setShowApproveModal(true);
+                        }}
+                        size="sm"
+                        className="gap-2 bg-green-500 hover:bg-green-600"
+                      >
+                        <Check className="h-4 w-4" />
+                        Approve
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          if (!canApproveRejectContract(contract)) {
+                            toast.error('You do not have permission to reject contracts from this branch');
+                            return;
+                          }
+                          setSelectedContract(contract);
+                          setShowRejectModal(true);
+                        }}
+                        size="sm"
+                        variant="destructive"
+                        className="gap-2"
+                      >
+                        <X className="h-4 w-4" />
+                        Reject
+                      </Button>
+                    </div>
+                  )}
+                </CardFooter>
+              </Card>
+            ))
+          )}
+        </div>
       </div>
 
       {/* Contract Details Modal */}
-      {showDetailsModal && contractDetails && (
-        <ContractDetailsModal
-          contractDetails={contractDetails}
-          sponsors={sponsors}
-          onClose={handleCloseDetailsModal}
-          onViewImage={handleViewImage}
-          getImageSrc={getImageSrc}
-        />
-      )}
+      <ContractDetailsModal
+        isOpen={showDetailsModal}
+        onClose={handleCloseDetailsModal}
+        contractDetails={contractDetails}
+        sponsors={sponsors}
+        onViewImage={handleViewImage}
+        getImageSrc={getImageSrc}
+      />
+
+      {/* Approve Modal */}
+      <ApproveModal
+        isOpen={showApproveModal}
+        onClose={() => setShowApproveModal(false)}
+        contract={selectedContract}
+        processing={processing}
+        onApprove={handleApprove}
+      />
+
+      {/* Reject Modal */}
+      <RejectModal
+        isOpen={showRejectModal}
+        onClose={() => {
+          setShowRejectModal(false);
+          setRejectionReason('');
+        }}
+        contract={selectedContract}
+        processing={processing}
+        rejectionReason={rejectionReason}
+        onRejectionReasonChange={setRejectionReason}
+        onReject={handleReject}
+      />
 
       {/* Image Modal */}
-      {viewingImage && (
-        <ImageModal
-          isOpen={!!viewingImage}
-          imageSrc={viewingImage.imageSrc}
-          customer={viewingImage.customer}
-          onClose={handleCloseImageModal}
-          type={viewingImage.type}
-        />
-      )}
-
-      {/* Approve Confirmation Modal */}
-      {showApproveModal && selectedContract && canApproveRejectContract(selectedContract) && (
-        <ApproveModal
-          contract={selectedContract}
-          processing={processing}
-          onClose={() => setShowApproveModal(false)}
-          onApprove={handleApprove}
-        />
-      )}
-
-      {/* Reject Confirmation Modal */}
-      {showRejectModal && selectedContract && canApproveRejectContract(selectedContract) && (
-        <RejectModal
-          contract={selectedContract}
-          processing={processing}
-          rejectionReason={rejectionReason}
-          onRejectionReasonChange={setRejectionReason}
-          onClose={() => {
-            setShowRejectModal(false);
-            setRejectionReason('');
-          }}
-          onReject={handleReject}
-        />
-      )}
+      <ImageModal
+        isOpen={!!viewingImage}
+        onClose={handleCloseImageModal}
+        imageSrc={viewingImage?.imageSrc}
+        customer={viewingImage?.customer}
+        type={viewingImage?.type}
+      />
     </div>
   );
 }
 
-// Helper function to get role name
 function getRoleName(userType) {
   switch(userType) {
     case 0: return 'Administrator';

@@ -1,8 +1,15 @@
 import React from 'react';
-import MobileModal from '../MobileModal.jsx';
-import '../../styles/theme.css';
+import { Check, DollarSign, Calendar, User, Package } from 'lucide-react';
 
-const ApproveModal = ({ contract, processing, onClose, onApprove }) => {
+// Shadcn Components
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+
+const ApproveModal = ({ isOpen, onClose, contract, processing, onApprove }) => {
+  if (!contract) return null;
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -12,99 +19,116 @@ const ApproveModal = ({ contract, processing, onClose, onApprove }) => {
   };
 
   return (
-    <MobileModal
-      isOpen={true}
-      onClose={onClose}
-      title="Approve Contract"
-      size="medium"
-    >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            background: 'rgba(34, 197, 94, 0.1)',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 12px'
-          }}>
-            <span style={{ fontSize: '24px' }}>✓</span>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-md bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30">
+        <DialogHeader>
+          <div className="mx-auto w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center mb-4">
+            <Check className="h-6 w-6 text-green-500" />
           </div>
-          <h2 style={{ fontSize: '18px', fontWeight: '600', color: '#ffffff', marginBottom: '4px' }}>
-            Approve Contract
-          </h2>
-          <p style={{ fontSize: '14px', color: '#9ca3af' }}>
+          <DialogTitle className="text-center">Approve Contract</DialogTitle>
+          <DialogDescription className="text-center">
             Are you sure you want to approve this contract?
-          </p>
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5">
+          <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <User className="h-5 w-5 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground mb-1.5">Customer</p>
+                  <p className="font-semibold text-base">{contract.customer_name}</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <Package className="h-5 w-5 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="text-sm text-muted-foreground mb-1.5">Item</p>
+                  <p className="font-semibold text-base truncate">{contract.item_name}</p>
+                </div>
+              </div>
+
+              <Separator className="my-4" />
+
+              <div className="grid grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <p className="text-sm text-muted-foreground mb-2">Total Price</p>
+                  <p className="text-lg font-bold text-primary">
+                    {formatCurrency(contract.total_price)}
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <p className="text-sm text-muted-foreground mb-2">Duration</p>
+                  <p className="text-lg font-semibold">{contract.months} months</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 pt-2">
+                <Calendar className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1.5">Created</p>
+                  <p className="font-medium text-base">
+                    {new Date(contract.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-5 bg-blue-500/10 border-blue-500/20">
+            <div className="space-y-3">
+              <p className="text-sm font-medium text-blue-500 mb-3">
+                What happens when you approve:
+              </p>
+              <ul className="space-y-2.5 text-sm text-blue-500/80">
+                <li className="flex items-center gap-3">
+                  <Check className="h-4 w-4" />
+                  Contract will be activated
+                </li>
+                <li className="flex items-center gap-3">
+                  <Check className="h-4 w-4" />
+                  Payment schedule will be created
+                </li>
+                <li className="flex items-center gap-3">
+                  <Check className="h-4 w-4" />
+                  Item quantity remains reserved
+                </li>
+              </ul>
+            </div>
+          </Card>
         </div>
 
-        <div style={{
-          padding: '16px',
-          background: 'rgba(55, 65, 81, 0.5)',
-          borderRadius: '8px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '8px',
-          fontSize: '14px'
-        }}>
-          <div className="flex justify-between">
-            <span style={{ color: '#9ca3af' }}>Customer:</span>
-            <span style={{ fontWeight: '600', color: '#ffffff' }}>{contract.customer_name}</span>
-          </div>
-          <div className="flex justify-between">
-            <span style={{ color: '#9ca3af' }}>Item:</span>
-            <span style={{ fontWeight: '600', color: '#ffffff' }}>{contract.item_name}</span>
-          </div>
-          <div className="flex justify-between">
-            <span style={{ color: '#9ca3af' }}>Total:</span>
-            <span style={{ fontWeight: '600', color: '#ffffff' }}>{formatCurrency(contract.total_price)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span style={{ color: '#9ca3af' }}>Duration:</span>
-            <span style={{ fontWeight: '600', color: '#ffffff' }}>{contract.months} months</span>
-          </div>
-        </div>
-
-        <div style={{
-          padding: '12px',
-          background: 'rgba(59, 130, 246, 0.1)',
-          borderRadius: '8px',
-          border: '1px solid rgba(59, 130, 246, 0.2)'
-        }}>
-          <p style={{ fontSize: '12px', color: '#93c5fd', lineHeight: '1.5' }}>
-            ✓ Contract will be activated<br />
-            ✓ Payment schedule will be created<br />
-            ✓ Item quantity remains reserved
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <button
+        <DialogFooter className="flex gap-2 sm:gap-0">
+          <Button
+            variant="outline"
             onClick={onClose}
             disabled={processing}
-            className="btn-outline flex-1"
+            className="flex-1"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             onClick={onApprove}
             disabled={processing}
-            className="btn-success flex-1"
+            className="flex-1 bg-green-500 hover:bg-green-600"
           >
             {processing ? (
-              <span className="flex items-center justify-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
                 Processing...
-              </span>
+              </>
             ) : (
-              'Approve Contract'
+              <>
+                <Check className="h-4 w-4 mr-2" />
+                Approve Contract
+              </>
             )}
-          </button>
-        </div>
-      </div>
-    </MobileModal>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 

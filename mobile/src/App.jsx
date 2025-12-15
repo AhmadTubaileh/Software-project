@@ -20,11 +20,11 @@ import ProtectedRoute from './components/ProtectedRoute.jsx';
 function ConditionalNav() {
   const location = useLocation();
   const isLoginPage = location.pathname === '/login';
-  
+
   if (isLoginPage) {
     return null;
   }
-  
+
   return <MobileNav />;
 }
 
@@ -34,69 +34,69 @@ function App() {
       <div className="mobile-app">
         <Routes>
           <Route path="/login" element={<MobileLogin />} />
-          <Route 
-            path="/" 
+          <Route
+            path="/"
             element={
               <ProtectedRoute>
                 <Navigate to="/my-tasks" replace />
               </ProtectedRoute>
-            } 
+            }
           />
-          <Route 
-            path="/my-tasks" 
+          <Route
+            path="/my-tasks"
             element={
               <ProtectedRoute>
                 <MobileMyTasks />
               </ProtectedRoute>
-            } 
+            }
           />
-          <Route 
-            path="/time-tracking" 
+          <Route
+            path="/time-tracking"
             element={
               <ProtectedRoute>
                 <MobileTimeTracking />
               </ProtectedRoute>
-            } 
+            }
           />
-          <Route 
-            path="/my-duty-hours" 
+          <Route
+            path="/my-duty-hours"
             element={
               <ProtectedRoute>
                 <MobileMyDutyHours />
               </ProtectedRoute>
-            } 
+            }
           />
-          <Route 
-            path="/project-management" 
+          <Route
+            path="/project-management"
             element={
               <ProtectedRoute>
                 <MobileProjectManagement />
               </ProtectedRoute>
-            } 
+            }
           />
-          <Route 
-            path="/project/:id" 
+          <Route
+            path="/project/:id"
             element={
               <ProtectedRoute>
                 <MobileProjectDetails />
               </ProtectedRoute>
-            } 
+            }
           />
-          <Route 
-            path="/admin-duty-hours" 
+          <Route
+            path="/admin-duty-hours"
             element={
               <ProtectedRoute>
                 <MobileAdminDutyHours />
               </ProtectedRoute>
-            } 
+            }
           />
-          <Route 
-            path="/contract-management" 
+          <Route
+            path="/contract-management"
             element={
               <ProtectedRoute>
                 <MobileContractManagement />
               </ProtectedRoute>
-            } 
+            }
           />
         </Routes>
         <ConditionalNav />
@@ -106,4 +106,3 @@ function App() {
 }
 
 export default App;
-

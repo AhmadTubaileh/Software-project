@@ -520,6 +520,64 @@
   opacity: 0.7;
 }
 
+/* Enhanced select dropdown styles */
+.mobile-select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 40px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.mobile-select::after {
+  content: '';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 6px solid #6b7280;
+  pointer-events: none;
+  transition: border-color 0.3s ease;
+}
+
+.mobile-select:focus::after {
+  border-top-color: #3b82f6;
+}
+
+/* Custom select option styling */
+.mobile-select option {
+  background: #1f2937;
+  color: #ffffff;
+  padding: 12px;
+  border: none;
+  outline: none;
+}
+
+/* For webkit browsers */
+.mobile-select::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mobile-select::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 10px;
+}
+
+.mobile-select::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #4b5563 0%, #6b7280 100%);
+  border-radius: 10px;
+}
+
+.mobile-select::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #6b7280 0%, #9ca3af 100%);
+}
+
 /* Enhanced scrollbar for webkit browsers */
 .mobile-page-content::-webkit-scrollbar {
   width: 6px;
@@ -537,5 +595,53 @@
 
 .mobile-page-content::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(180deg, #6b7280 0%, #9ca3af 100%);
+}
+
+/* Custom scrollbar for sponsors section */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #4b5563 0%, #6b7280 100%);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #6b7280 0%, #9ca3af 100%);
+}
+
+/* Mobile responsive adjustments for 412x883 */
+@media (max-width: 412px) {
+  .mobile-page-header {
+    padding: 12px;
+  }
+  
+  .mobile-page-content {
+    padding: 12px;
+  }
+  
+  .mobile-page-title {
+    font-size: 20px;
+    line-height: 1.2;
+  }
+  
+  /* Ensure proper alignment on small screens */
+  .mobile-page-header > div {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+  
+  /* Better text wrapping */
+  .mobile-page-header h1,
+  .mobile-page-header p {
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
 }
 

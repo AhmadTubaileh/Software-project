@@ -1,5 +1,8 @@
 import React from 'react';
-import '../../styles/theme.css';
+import { DollarSign, FileText, Clock, CheckCircle } from 'lucide-react';
+
+// Shadcn Components
+import { Card, CardContent } from '@/components/ui/card';
 
 const StatsCards = ({ contracts }) => {
   const formatCurrency = (amount) => {
@@ -10,107 +13,86 @@ const StatsCards = ({ contracts }) => {
     }).format(amount);
   };
 
-  const totalActive = contracts.filter(c => c.status !== 'deleted').length;
-  const pendingCount = contracts.filter(c => c.status === 'pending').length;
-  const activeCount = contracts.filter(c => c.status === 'active').length;
-  const rejectedCount = contracts.filter(c => c.status === 'rejected').length;
-  const completedCount = contracts.filter(c => c.status === 'completed').length;
-  
-  const activeValue = contracts
-    .filter(c => c.status === 'active')
-    .reduce((sum, contract) => sum + parseFloat(contract.total_price || 0), 0);
+  const stats = {
+    totalActive: contracts.filter(c => c.status !== 'deleted').length,
+    pending: contracts.filter(c => c.status === 'pending').length,
+    active: contracts.filter(c => c.status === 'active').length,
+    completed: contracts.filter(c => c.status === 'completed').length,
+    activeValue: contracts
+      .filter(c => c.status === 'active')
+      .reduce((sum, contract) => sum + parseFloat(contract.total_price || 0), 0),
+  };
 
   return (
-    <div style={{ marginBottom: '16px' }}>
-      {/* 2x2 Grid */}
-      <div className="grid grid-cols-2 gap-3 mb-3">
+    <div className="mb-4 sm:mb-6">
+      <div className="grid grid-cols-2 gap-2 sm:gap-2.5 md:gap-3 mb-3 sm:mb-4">
         {/* Total Active */}
-        <div 
-          className="contract-card"
-          style={{
-            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%)',
-            borderColor: 'rgba(59, 130, 246, 0.2)'
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>Total Active</p>
-              <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#60a5fa' }}>{totalActive}</p>
+        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
+          <CardContent className="p-2.5 sm:p-3 md:p-4 lg:p-5">
+            <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+              <div className="space-y-0.5 sm:space-y-1 md:space-y-2 min-w-0 flex-1">
+                <p className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-0.5 sm:mb-1 leading-tight">Total Active</p>
+                <p className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-blue-500 truncate leading-none">{stats.totalActive}</p>
+              </div>
+              <FileText className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 lg:h-8 lg:w-8 text-blue-500/50 shrink-0" />
             </div>
-            <span style={{ fontSize: '32px', opacity: 0.5 }}>📋</span>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Pending */}
-        <div 
-          className="contract-card"
-          style={{
-            background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.1) 0%, rgba(217, 119, 6, 0.05) 100%)',
-            borderColor: 'rgba(234, 179, 8, 0.2)'
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>Pending</p>
-              <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#fbbf24' }}>{pendingCount}</p>
+        <Card className="bg-gradient-to-br from-yellow-500/10 to-yellow-600/5 border-yellow-500/20">
+          <CardContent className="p-2.5 sm:p-3 md:p-4 lg:p-5">
+            <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+              <div className="space-y-0.5 sm:space-y-1 md:space-y-2 min-w-0 flex-1">
+                <p className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-0.5 sm:mb-1 leading-tight">Pending</p>
+                <p className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-yellow-500 truncate leading-none">{stats.pending}</p>
+              </div>
+              <Clock className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 lg:h-8 lg:w-8 text-yellow-500/50 shrink-0" />
             </div>
-            <span style={{ fontSize: '32px', opacity: 0.5 }}>⏳</span>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Active */}
-        <div 
-          className="contract-card"
-          style={{
-            background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(22, 163, 74, 0.05) 100%)',
-            borderColor: 'rgba(34, 197, 94, 0.2)'
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>Active</p>
-              <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#4ade80' }}>{activeCount}</p>
+        <Card className="bg-gradient-to-br from-green-500/10 to-green-600/5 border-green-500/20">
+          <CardContent className="p-2.5 sm:p-3 md:p-4 lg:p-5">
+            <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+              <div className="space-y-0.5 sm:space-y-1 md:space-y-2 min-w-0 flex-1">
+                <p className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-0.5 sm:mb-1 leading-tight">Active</p>
+                <p className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-green-500 truncate leading-none">{stats.active}</p>
+              </div>
+              <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 lg:h-8 lg:w-8 text-green-500/50 shrink-0" />
             </div>
-            <span style={{ fontSize: '32px', opacity: 0.5 }}>✅</span>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
         {/* Completed */}
-        <div 
-          className="contract-card"
-          style={{
-            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(124, 58, 237, 0.05) 100%)',
-            borderColor: 'rgba(139, 92, 246, 0.2)'
-          }}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>Completed</p>
-              <p style={{ fontSize: '24px', fontWeight: 'bold', color: '#a78bfa' }}>{completedCount}</p>
+        <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
+          <CardContent className="p-2.5 sm:p-3 md:p-4 lg:p-5">
+            <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+              <div className="space-y-0.5 sm:space-y-1 md:space-y-2 min-w-0 flex-1">
+                <p className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-0.5 sm:mb-1 leading-tight">Completed</p>
+                <p className="text-base sm:text-lg md:text-xl lg:text-2xl font-bold text-blue-500 truncate leading-none">{stats.completed}</p>
+              </div>
+              <CheckCircle className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 lg:h-8 lg:w-8 text-blue-500/50 shrink-0" />
             </div>
-            <span style={{ fontSize: '32px', opacity: 0.5 }}>✓</span>
-          </div>
-        </div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Active Contracts Value - Full Width */}
-      <div 
-        className="contract-card"
-        style={{
-          background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%)',
-          borderColor: 'rgba(16, 185, 129, 0.2)'
-        }}
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <p style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '4px' }}>Active Contracts Value</p>
-            <p style={{ fontSize: '20px', fontWeight: 'bold', color: '#34d399' }}>
-              {formatCurrency(activeValue)}
-            </p>
+      {/* Active Contracts Value */}
+      <Card className="bg-gradient-to-r from-emerald-500/10 to-emerald-600/5 border-emerald-500/20">
+        <CardContent className="p-2.5 sm:p-3 md:p-4 lg:p-5">
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2">
+            <div className="space-y-0.5 sm:space-y-1 md:space-y-2 min-w-0 flex-1">
+              <p className="text-[10px] sm:text-xs font-medium text-muted-foreground mb-0.5 sm:mb-1 leading-tight">Active Contracts Value</p>
+              <p className="text-sm sm:text-base md:text-lg lg:text-xl font-bold text-emerald-500 truncate leading-none">
+                {formatCurrency(stats.activeValue)}
+              </p>
+            </div>
+            <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 lg:h-8 lg:w-8 text-emerald-500/50 shrink-0" />
           </div>
-          <span style={{ fontSize: '32px', opacity: 0.5 }}>💰</span>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 };
