@@ -1,0 +1,306 @@
+.mobile-page {
+  min-height: 100vh;
+  background-color: #0e1830;
+  color: white;
+  padding-bottom: 20px;
+}
+
+.mobile-page-header {
+  padding: 16px;
+  background-color: rgba(31, 41, 55, 0.5);
+  border-bottom: 1px solid rgba(75, 85, 99, 0.5);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+
+.mobile-page-title {
+  font-size: 24px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.mobile-page-content {
+  padding: 16px;
+}
+
+/* Filter Tabs */
+.mobile-filter-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 8px;
+}
+
+.mobile-filter-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-filter-tab {
+  padding: 8px 16px;
+  border: 1px solid #4b5563;
+  border-radius: 20px;
+  background-color: rgba(31, 41, 55, 0.5);
+  color: #9ca3af;
+  font-size: 14px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.2s;
+  touch-action: manipulation;
+}
+
+.mobile-filter-tab:active {
+  transform: scale(0.95);
+}
+
+.mobile-filter-tab.active {
+  background-color: #3b82f6;
+  border-color: #3b82f6;
+  color: white;
+}
+
+/* Task List */
+.mobile-task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.mobile-task-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+  flex: 1;
+  margin-right: 8px;
+}
+
+.mobile-task-status {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.mobile-task-status-pending {
+  background-color: #f59e0b;
+  color: white;
+}
+
+.mobile-task-status-in_progress {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.mobile-task-status-ready_for_review {
+  background-color: #8b5cf6;
+  color: white;
+}
+
+.mobile-task-status-completed {
+  background-color: #10b981;
+  color: white;
+}
+
+.mobile-task-meta {
+  font-size: 14px;
+  color: #9ca3af;
+  margin-bottom: 4px;
+}
+
+.mobile-task-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.priority-high {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.priority-medium {
+  color: #f59e0b;
+  font-weight: 600;
+}
+
+.priority-low {
+  color: #10b981;
+  font-weight: 600;
+}
+
+/* Empty State */
+.mobile-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  text-align: center;
+}
+
+/* Login Page Styles */
+.mobile-login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  background: linear-gradient(135deg, #0e1830 0%, #1a2744 100%);
+}
+
+.mobile-login-container {
+  width: 100%;
+  max-width: 400px;
+  background-color: rgba(31, 41, 55, 0.8);
+  border-radius: 20px;
+  padding: 32px 24px;
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+.mobile-login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.mobile-login-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.mobile-login-title {
+  font-size: 28px;
+  font-weight: bold;
+  margin: 0 0 8px 0;
+  color: white;
+}
+
+.mobile-login-subtitle {
+  font-size: 16px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.mobile-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.mobile-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mobile-form-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #d1d5db;
+}
+
+.mobile-password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.mobile-password-input {
+  padding-right: 48px;
+}
+
+.mobile-password-toggle {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+  transition: color 0.2s;
+}
+
+.mobile-password-toggle:active {
+  color: #3b82f6;
+  transform: scale(0.95);
+}
+
+.mobile-password-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mobile-login-button {
+  margin-top: 8px;
+  width: 100%;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 14px;
+}
+
+.mobile-login-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mobile-login-footer {
+  margin-top: 24px;
+  text-align: center;
+}
+
+.mobile-login-footer-text {
+  font-size: 14px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+/* Additional mobile optimizations */
+.mobile-card.opacity-30 {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* Better touch targets */
+.mobile-button,
+.mobile-filter-tab,
+.mobile-nav-item {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Scrollable content */
+.mobile-page-content {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Better spacing for mobile */
+.mobile-task-list {
+  padding-bottom: 20px;
+}
+
+/* Loading states */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}

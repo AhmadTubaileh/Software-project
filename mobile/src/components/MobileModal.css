@@ -1,0 +1,80 @@
+.mobile-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.mobile-modal-content {
+  background-color: rgba(31, 41, 55, 0.95);
+  border-radius: 16px;
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  width: 100%;
+  max-width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.mobile-modal-small {
+  max-width: 400px;
+}
+
+.mobile-modal-medium {
+  max-width: 500px;
+}
+
+.mobile-modal-large {
+  max-width: 600px;
+}
+
+.mobile-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(75, 85, 99, 0.5);
+}
+
+.mobile-modal-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: white;
+  margin: 0;
+}
+
+.mobile-modal-close {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  transition: color 0.2s;
+  touch-action: manipulation;
+}
+
+.mobile-modal-close:active {
+  color: white;
+  transform: scale(0.95);
+}
+
+.mobile-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* Safe area for notched devices */
+@supports (padding: max(0px)) {
+  .mobile-modal-overlay {
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  }
+}
