@@ -10,6 +10,7 @@ import MobileMyDutyHours from './pages/MyDutyHours.jsx';
 import MobileProjectManagement from './pages/ProjectManagement.jsx';
 import MobileProjectDetails from './pages/ProjectDetails.jsx';
 import MobileAdminDutyHours from './pages/AdminDutyHours.jsx';
+import MobileContractManagement from './pages/ContractManagement.jsx';
 
 // Mobile Components
 import MobileNav from './components/MobileNav.jsx';
@@ -89,6 +90,14 @@ function App() {
               </ProtectedRoute>
             } 
           />
+          <Route 
+            path="/contract-management" 
+            element={
+              <ProtectedRoute>
+                <MobileContractManagement />
+              </ProtectedRoute>
+            } 
+          />
         </Routes>
         <ConditionalNav />
       </div>
@@ -97,3 +106,4 @@ function App() {
 }
 
 export default App;
+

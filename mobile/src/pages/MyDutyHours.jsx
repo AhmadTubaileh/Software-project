@@ -189,19 +189,30 @@ function MobileMyDutyHours() {
           </div>
         </div>
 
-        {/* Summary Cards */}
+        {/* Summary Cards - Enhanced */}
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="mobile-card text-center" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(59, 130, 246, 0.2) 100%)' }}>
-            <div className="text-xl font-bold text-blue-300 mb-1">{totals.work}h</div>
-            <div className="text-xs text-blue-400/80">Work Hours</div>
+          <div className="mobile-card text-center" style={{ 
+            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.1) 100%)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            boxShadow: '0 4px 14px 0 rgba(59, 130, 246, 0.1)'
+          }}>
+            <div className="text-2xl font-bold text-blue-300 mb-1">{totals.work}h</div>
+            <div className="text-xs text-blue-400/90 font-semibold uppercase tracking-wide">Work Hours</div>
           </div>
-          <div className="mobile-card text-center" style={{ background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(139, 92, 246, 0.2) 100%)' }}>
-            <div className="text-xl font-bold text-purple-300 mb-1">{totals.break}h</div>
-            <div className="text-xs text-purple-400/80">Break Hours</div>
+          <div className="mobile-card text-center" style={{ 
+            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(124, 58, 237, 0.1) 100%)',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
+            boxShadow: '0 4px 14px 0 rgba(139, 92, 246, 0.1)'
+          }}>
+            <div className="text-2xl font-bold text-purple-300 mb-1">{totals.break}h</div>
+            <div className="text-xs text-purple-400/90 font-semibold uppercase tracking-wide">Break Hours</div>
           </div>
-          <div className="mobile-card text-center">
-            <div className="text-xl font-bold text-white mb-1">{totals.total}h</div>
-            <div className="text-xs text-gray-400">Total Hours</div>
+          <div className="mobile-card text-center" style={{
+            background: 'linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.9) 100%)',
+            border: '1px solid rgba(75, 85, 99, 0.3)'
+          }}>
+            <div className="text-2xl font-bold text-white mb-1">{totals.total}h</div>
+            <div className="text-xs text-gray-400 font-semibold uppercase tracking-wide">Total Hours</div>
           </div>
         </div>
 
@@ -219,28 +230,38 @@ function MobileMyDutyHours() {
         ) : (
           <div className="mobile-task-list">
             {sortedTableData.map((row, rowIndex) => (
-              <div key={rowIndex} className="mobile-card">
+              <div key={rowIndex} className="mobile-card" style={{
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(31, 41, 55, 0.8) 100%)',
+                border: '1px solid rgba(59, 130, 246, 0.2)'
+              }}>
                 <div className="mobile-task-header">
-                  <div>
-                    <h3 className="mobile-task-title">{row.userName}</h3>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {row.date} ({row.dayName})
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="w-2 h-2 rounded-full bg-blue-400" />
+                      <h3 className="mobile-task-title">{row.userName}</h3>
+                    </div>
+                    <p className="text-sm text-gray-300 font-medium">
+                      {row.date} <span className="text-gray-400">({row.dayName})</span>
                     </p>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold text-blue-300">{row.totalHours}h</div>
+                    <div className="text-2xl font-bold text-blue-300 mb-1">{row.totalHours}h</div>
+                    <div className="text-xs text-gray-400 font-medium">Total</div>
                   </div>
                 </div>
 
-                <div className="mt-3 space-y-2">
+                <div className="mt-4 space-y-2.5">
                   {row.pairs.map((pair, pairIndex) => (
-                    <div key={pairIndex} className="bg-gray-700/30 rounded p-2 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-gray-300">
-                          {formatTimeDisplay(pair.inTime)} - {pair.outTime ? formatTimeDisplay(pair.outTime) : 'Active'}
-                        </span>
+                    <div key={pairIndex} className="bg-gradient-to-r from-blue-500/10 to-blue-500/5 border border-blue-500/20 rounded-lg p-3 backdrop-blur-sm">
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-blue-400" />
+                          <span className="text-sm font-medium text-white">
+                            {formatTimeDisplay(pair.inTime)} - {pair.outTime ? formatTimeDisplay(pair.outTime) : <span className="text-blue-300">Active</span>}
+                          </span>
+                        </div>
                         {pair.inTime && pair.outTime && (
-                          <span className="text-gray-400">
+                          <span className="text-xs font-semibold text-blue-300 bg-blue-500/20 px-2 py-1 rounded">
                             {(() => {
                               const inTimeParts = pair.inTime.split(':').map(Number);
                               const outTimeParts = pair.outTime.split(':').map(Number);

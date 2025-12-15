@@ -483,10 +483,11 @@ function MobileAdminDutyHours() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <div className="text-lg font-bold text-blue-300">{row.totalHours}h</div>
+                    <div className="text-lg font-bold text-blue-300 mb-2">{row.totalHours}h</div>
                     <button
                       onClick={() => handleDayAction(row)}
-                      className="text-xs text-gray-400 mt-1"
+                      className="mobile-button mobile-button-primary"
+                      style={{ padding: '8px 16px', fontSize: '12px' }}
                     >
                       Manage
                     </button>
@@ -801,13 +802,15 @@ function MobileAdminDutyHours() {
                                 out_time: sessionData.out_time,
                                 notes: sessionData.notes || ''
                               })}
-                              className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded"
+                              className="mobile-button mobile-button-primary"
+                              style={{ padding: '8px 16px', fontSize: '12px' }}
                             >
                               Edit
                             </button>
                             <button
                               onClick={() => handleDeleteSession(pair.sessionId)}
-                              className="text-xs bg-red-500/20 text-red-300 px-2 py-1 rounded"
+                              className="mobile-button mobile-button-primary"
+                              style={{ padding: '8px 16px', fontSize: '12px' }}
                             >
                               Delete
                             </button>

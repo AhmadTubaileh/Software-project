@@ -181,26 +181,34 @@ function MobileMyTasks() {
           ))}
         </div>
 
-        {/* Summary Stats */}
+        {/* Summary Stats - Enhanced */}
         {tasks.length > 0 && (
-          <div className="mobile-card" style={{ marginBottom: '16px', background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)' }}>
-            <div className="text-sm text-gray-400 mb-3">Active Tasks Summary</div>
-            <div className="grid grid-cols-4 gap-2">
-              <div className="text-center">
-                <div className="text-lg font-bold text-white">{counts.all}</div>
-                <div className="text-xs text-gray-400">Total</div>
+          <div className="mobile-card" style={{ 
+            marginBottom: '20px', 
+            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%)',
+            border: '1px solid rgba(59, 130, 246, 0.2)',
+            boxShadow: '0 4px 14px 0 rgba(59, 130, 246, 0.1)'
+          }}>
+            <div className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+              <span className="text-lg">📊</span>
+              <span>Active Tasks Summary</span>
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              <div className="text-center p-2 rounded-lg bg-white/5 backdrop-blur-sm">
+                <div className="text-xl font-bold text-white mb-1">{counts.all}</div>
+                <div className="text-xs text-gray-400 font-medium">Total</div>
               </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-yellow-300">{counts.pending}</div>
-                <div className="text-xs text-gray-400">Pending</div>
+              <div className="text-center p-2 rounded-lg bg-yellow-500/10 backdrop-blur-sm border border-yellow-500/20">
+                <div className="text-xl font-bold text-yellow-300 mb-1">{counts.pending}</div>
+                <div className="text-xs text-gray-400 font-medium">Pending</div>
               </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-blue-300">{counts.in_progress}</div>
-                <div className="text-xs text-gray-400">Active</div>
+              <div className="text-center p-2 rounded-lg bg-blue-500/10 backdrop-blur-sm border border-blue-500/20">
+                <div className="text-xl font-bold text-blue-300 mb-1">{counts.in_progress}</div>
+                <div className="text-xs text-gray-400 font-medium">Active</div>
               </div>
-              <div className="text-center">
-                <div className="text-lg font-bold text-purple-300">{counts.ready_for_review}</div>
-                <div className="text-xs text-gray-400">Review</div>
+              <div className="text-center p-2 rounded-lg bg-purple-500/10 backdrop-blur-sm border border-purple-500/20">
+                <div className="text-xl font-bold text-purple-300 mb-1">{counts.ready_for_review}</div>
+                <div className="text-xs text-gray-400 font-medium">Review</div>
               </div>
             </div>
           </div>

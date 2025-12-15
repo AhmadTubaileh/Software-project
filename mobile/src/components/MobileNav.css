@@ -3,16 +3,18 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: rgba(31, 41, 55, 0.95);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(75, 85, 99, 0.5);
+  background: linear-gradient(180deg, rgba(31, 41, 55, 0.98) 0%, rgba(17, 24, 39, 0.98) 100%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-top: 1px solid rgba(75, 85, 99, 0.3);
   display: flex;
   justify-content: space-around;
   align-items: center;
-  padding: 8px 0;
+  padding: 10px 0;
   z-index: 1000;
+  box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1), 0 -2px 4px -1px rgba(0, 0, 0, 0.06);
   /* Safe area for notched devices */
-  padding-bottom: max(8px, env(safe-area-inset-bottom));
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
 }
 
 .mobile-nav-item {
@@ -23,29 +25,61 @@
   padding: 8px 16px;
   text-decoration: none;
   color: #9ca3af;
-  transition: all 0.2s;
-  min-width: 60px;
-  border-radius: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 64px;
+  border-radius: 12px;
   touch-action: manipulation;
+  position: relative;
+}
+
+.mobile-nav-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+  opacity: 0;
+  transition: opacity 0.3s;
 }
 
 .mobile-nav-item:active {
-  transform: scale(0.95);
-  background-color: rgba(59, 130, 246, 0.1);
+  transform: scale(0.92);
+}
+
+.mobile-nav-item:active::before {
+  opacity: 1;
 }
 
 .mobile-nav-item.active {
   color: #3b82f6;
 }
 
+.mobile-nav-item.active::before {
+  opacity: 1;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%);
+}
+
 .mobile-nav-icon {
-  font-size: 24px;
+  font-size: 26px;
   margin-bottom: 4px;
+  transition: transform 0.3s;
+  position: relative;
+  z-index: 1;
+}
+
+.mobile-nav-item.active .mobile-nav-icon {
+  transform: scale(1.1);
 }
 
 .mobile-nav-label {
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  position: relative;
+  z-index: 1;
 }
 
 .mobile-nav-logout {
@@ -54,9 +88,19 @@
   color: #9ca3af;
   cursor: pointer;
   font-family: inherit;
+  padding: 8px 16px;
+  border-radius: 12px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-width: 64px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .mobile-nav-logout:active {
   color: #ef4444;
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: rgba(239, 68, 68, 0.15);
+  transform: scale(0.92);
 }
+

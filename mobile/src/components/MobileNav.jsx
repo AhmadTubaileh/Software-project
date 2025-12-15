@@ -12,12 +12,17 @@ function MobileNav() {
   const userType = currentUser?.user_type ?? 5;
   const allowedRoles = [0, 1, 2];
   const isAdmin = allowedRoles.includes(userType);
+  
+  // Contract management access: Admin, Senior Manager, Manager, Supervisor, Employee (0-4)
+  const canAccessContracts = userType >= 0 && userType <= 4;
 
   const navItems = [
     { path: '/my-tasks', icon: '📋', label: 'Tasks' },
     { path: '/time-tracking', icon: '⏰', label: 'Time' },
     { path: '/my-duty-hours', icon: '📊', label: 'Hours' },
     { path: '/project-management', icon: '📁', label: 'Projects' },
+    // Contract management for authorized users (0-4)
+    ...(canAccessContracts ? [{ path: '/contract-management', icon: '📝', label: 'Contracts' }] : []),
     // Admin-only navigation item
     ...(isAdmin ? [{ path: '/admin-duty-hours', icon: '👔', label: 'Admin' }] : []),
   ];

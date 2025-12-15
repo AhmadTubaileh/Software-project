@@ -182,20 +182,27 @@ function MobileTimeTracking() {
       </div>
       
       <div className="mobile-page-content">
-        {/* Current Status Card */}
-        <div className="mobile-card" style={{ marginBottom: '24px' }}>
+        {/* Current Status Card - Enhanced */}
+        <div className="mobile-card" style={{ 
+          marginBottom: '24px',
+          background: currentSession 
+            ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(37, 99, 235, 0.15) 100%)'
+            : 'linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.9) 100%)',
+          border: currentSession ? '1px solid rgba(59, 130, 246, 0.4)' : '1px solid rgba(75, 85, 99, 0.3)',
+          boxShadow: currentSession ? '0 4px 14px 0 rgba(59, 130, 246, 0.2)' : 'none'
+        }}>
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-white">Current Status</h2>
-              <p className="text-gray-400 text-sm">
+              <h2 className="text-xl font-bold text-white mb-1">Current Status</h2>
+              <p className="text-gray-300 text-sm font-medium">
                 {currentSession ? 'Active work session' : 'No active session'}
               </p>
             </div>
             {currentSession && (
-              <div className="px-3 py-1 rounded-full border bg-blue-500/20 border-blue-500/30 text-blue-300">
+              <div className="px-4 py-2 rounded-full border bg-blue-500/30 border-blue-500/50 text-blue-200 backdrop-blur-sm">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-blue-400" style={{ animation: 'pulse 2s infinite' }} />
-                  <span className="font-medium text-xs">Working</span>
+                  <div className="w-2.5 h-2.5 rounded-full bg-blue-400 animate-pulse" />
+                  <span className="font-semibold text-xs uppercase tracking-wide">Working</span>
                 </div>
               </div>
             )}
@@ -203,69 +210,96 @@ function MobileTimeTracking() {
 
           {currentSession ? (
             <div className="text-center">
-              <div className="text-4xl font-mono font-bold text-white mb-3">
+              <div className="text-5xl font-mono font-bold text-white mb-4 tracking-tight" style={{
+                background: 'linear-gradient(135deg, #ffffff 0%, #e5e7eb 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
+              }}>
                 {calculateCurrentDuration()}
               </div>
-              <p className="text-gray-400 mb-4 text-sm">
-                Started at {currentSession.in_time}
+              <p className="text-gray-300 mb-5 text-sm font-medium">
+                Started at <span className="text-white font-semibold">{currentSession.in_time}</span>
               </p>
               
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <textarea
                   value={clockOutNotes}
                   onChange={(e) => setClockOutNotes(e.target.value)}
                   placeholder="Add notes for this work session (optional)"
                   className="mobile-input"
-                  style={{ minHeight: '80px', resize: 'vertical' }}
+                  style={{ minHeight: '90px', resize: 'vertical' }}
                   rows="3"
                 />
                 <button
                   onClick={handleClockOut}
                   disabled={isLoading}
                   className="mobile-button mobile-button-primary"
-                  style={{ width: '100%', background: 'linear-gradient(135deg, #ef4444 0%, #ec4899 100%)' }}
+                  style={{ 
+                    width: '100%', 
+                    background: 'linear-gradient(135deg, #ef4444 0%, #ec4899 100%)',
+                    boxShadow: '0 4px 14px 0 rgba(239, 68, 68, 0.4)'
+                  }}
                 >
-                  {isLoading ? 'Ending Work...' : 'End Work Session'}
+                  {isLoading ? '⏳ Ending Work...' : '⏹️ End Work Session'}
                 </button>
               </div>
             </div>
           ) : (
             <div className="text-center">
-              <div className="mb-4">
-                <div className="text-5xl mb-3">⏰</div>
-                <p className="text-gray-400">Ready to start your work day?</p>
+              <div className="mb-6">
+                <div className="text-6xl mb-4" style={{ filter: 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3))' }}>⏰</div>
+                <p className="text-gray-300 font-medium text-base">Ready to start your work day?</p>
               </div>
               <button
                 onClick={handleClockIn}
                 disabled={isLoading}
                 className="mobile-button mobile-button-primary"
-                style={{ width: '100%', background: 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)' }}
+                style={{ 
+                  width: '100%', 
+                  background: 'linear-gradient(135deg, #10b981 0%, #14b8a6 100%)',
+                  boxShadow: '0 4px 14px 0 rgba(16, 185, 129, 0.4)'
+                }}
               >
-                {isLoading ? 'Starting Work...' : 'Start Work Session'}
+                {isLoading ? '⏳ Starting Work...' : '▶️ Start Work Session'}
               </button>
             </div>
           )}
         </div>
 
-        {/* Summary Cards */}
+        {/* Summary Cards - Enhanced */}
         <div className="grid grid-cols-3 gap-3 mb-6">
-          <div className="mobile-card text-center" style={{ background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.1) 100%)' }}>
-            <div className="text-2xl font-bold text-blue-300">{todayStats.work}h</div>
-            <div className="text-xs text-blue-400/80 mt-1">Work Hours</div>
+          <div className="mobile-card text-center" style={{ 
+            background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(37, 99, 235, 0.1) 100%)',
+            border: '1px solid rgba(59, 130, 246, 0.3)',
+            boxShadow: '0 4px 14px 0 rgba(59, 130, 246, 0.1)'
+          }}>
+            <div className="text-3xl font-bold text-blue-300 mb-1">{todayStats.work}h</div>
+            <div className="text-xs text-blue-400/90 mt-1 font-semibold uppercase tracking-wide">Work Hours</div>
           </div>
-          <div className="mobile-card text-center" style={{ background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(124, 58, 237, 0.1) 100%)' }}>
-            <div className="text-2xl font-bold text-purple-300">{todayStats.break}h</div>
-            <div className="text-xs text-purple-400/80 mt-1">Break Hours</div>
+          <div className="mobile-card text-center" style={{ 
+            background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(124, 58, 237, 0.1) 100%)',
+            border: '1px solid rgba(139, 92, 246, 0.3)',
+            boxShadow: '0 4px 14px 0 rgba(139, 92, 246, 0.1)'
+          }}>
+            <div className="text-3xl font-bold text-purple-300 mb-1">{todayStats.break}h</div>
+            <div className="text-xs text-purple-400/90 mt-1 font-semibold uppercase tracking-wide">Break Hours</div>
           </div>
-          <div className="mobile-card text-center">
-            <div className="text-2xl font-bold text-white">{todayStats.total}h</div>
-            <div className="text-xs text-gray-400 mt-1">Total Hours</div>
+          <div className="mobile-card text-center" style={{
+            background: 'linear-gradient(135deg, rgba(31, 41, 55, 0.8) 0%, rgba(17, 24, 39, 0.9) 100%)',
+            border: '1px solid rgba(75, 85, 99, 0.3)'
+          }}>
+            <div className="text-3xl font-bold text-white mb-1">{todayStats.total}h</div>
+            <div className="text-xs text-gray-400 mt-1 font-semibold uppercase tracking-wide">Total Hours</div>
           </div>
         </div>
 
-        {/* Timeline */}
+        {/* Timeline - Enhanced */}
         <div className="mobile-card">
-          <h3 className="text-lg font-semibold text-white mb-4">Today's Timeline</h3>
+          <h3 className="text-xl font-bold text-white mb-5 flex items-center gap-2">
+            <span className="text-2xl">📅</span>
+            <span>Today's Timeline</span>
+          </h3>
           
           {todaySessions.length > 0 ? (
             <div className="space-y-3">
@@ -280,20 +314,20 @@ function MobileTimeTracking() {
                 
                 return (
                   <div key={session.id}>
-                    {/* Auto-detected Break */}
+                    {/* Auto-detected Break - Enhanced */}
                     {autoBreak && (
-                      <div className="mb-2 p-3 rounded-lg border border-purple-500/30 bg-purple-500/10">
+                      <div className="mb-3 p-4 rounded-xl border border-purple-500/40 bg-gradient-to-r from-purple-500/15 to-purple-500/10 backdrop-blur-sm">
                         <div className="flex justify-between items-center">
-                          <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 rounded-full bg-purple-400" />
-                            <span className="font-medium text-purple-300 text-sm">Auto Break</span>
+                          <div className="flex items-center gap-3">
+                            <div className="w-3 h-3 rounded-full bg-purple-400 animate-pulse" />
+                            <span className="font-semibold text-purple-200 text-sm uppercase tracking-wide">Auto Break</span>
                           </div>
                           <div className="text-right">
-                            <div className="text-white font-mono text-sm">
+                            <div className="text-white font-mono text-sm font-semibold">
                               {autoBreak.start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} -{' '}
                               {autoBreak.end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                             </div>
-                            <div className="text-xs text-purple-300">
+                            <div className="text-xs text-purple-300 font-medium mt-1">
                               {autoBreak.duration}h
                             </div>
                           </div>
@@ -301,35 +335,36 @@ function MobileTimeTracking() {
                       </div>
                     )}
 
-                    {/* Work Session */}
-                    <div className={`p-3 rounded-lg border ${
+                    {/* Work Session - Enhanced */}
+                    <div className={`p-4 rounded-xl border backdrop-blur-sm ${
                       session.session_type === 'work' 
-                        ? 'bg-blue-500/20 border-blue-500/30' 
-                        : 'bg-purple-500/20 border-purple-500/30'
+                        ? 'bg-gradient-to-r from-blue-500/20 to-blue-500/10 border-blue-500/40' 
+                        : 'bg-gradient-to-r from-purple-500/20 to-purple-500/10 border-purple-500/40'
                     }`}>
                       <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-2 h-2 rounded-full ${
+                        <div className="flex items-center gap-3">
+                          <div className={`w-3 h-3 rounded-full ${
                             session.session_type === 'work' ? 'bg-blue-400' : 'bg-purple-400'
-                          }`} />
-                          <span className="font-medium capitalize text-sm">
+                          } ${!session.out_time ? 'animate-pulse' : ''}`} />
+                          <span className="font-semibold capitalize text-sm text-white">
                             {session.session_type}
                           </span>
                         </div>
                         <div className="text-right">
-                          <div className="text-white font-mono text-sm">
-                            {session.in_time} - {session.out_time || 'Active'}
+                          <div className="text-white font-mono text-sm font-semibold">
+                            {session.in_time} - {session.out_time || <span className="text-blue-300">Active</span>}
                           </div>
                           {session.duration && (
-                            <div className="text-xs text-gray-300">
+                            <div className="text-xs text-gray-300 font-medium mt-1">
                               {parseFloat(session.duration).toFixed(1)}h
                             </div>
                           )}
                         </div>
                       </div>
                       {session.notes && (
-                        <div className="mt-2 text-xs text-gray-300">
-                          📝 {session.notes}
+                        <div className="mt-3 pt-3 border-t border-white/10 text-xs text-gray-300 flex items-start gap-2">
+                          <span className="text-base">📝</span>
+                          <span>{session.notes}</span>
                         </div>
                       )}
                     </div>
@@ -345,14 +380,32 @@ function MobileTimeTracking() {
           )}
         </div>
 
-        {/* Info Panel */}
-        <div className="mobile-card mt-4" style={{ background: 'rgba(59, 130, 246, 0.05)' }}>
-          <h4 className="text-sm font-semibold text-white mb-2">ℹ️ How It Works</h4>
-          <ul className="text-xs text-gray-400 space-y-1 list-disc list-inside">
-            <li>Click "Start Work Session" to begin tracking</li>
-            <li>Add notes when clocking out (optional)</li>
-            <li>Breaks are automatically detected between sessions</li>
-            <li>View your timeline and statistics below</li>
+        {/* Info Panel - Enhanced */}
+        <div className="mobile-card mt-4" style={{ 
+          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%)',
+          border: '1px solid rgba(59, 130, 246, 0.2)'
+        }}>
+          <h4 className="text-base font-bold text-white mb-3 flex items-center gap-2">
+            <span className="text-xl">ℹ️</span>
+            <span>How It Works</span>
+          </h4>
+          <ul className="text-sm text-gray-300 space-y-2 list-none">
+            <li className="flex items-start gap-2">
+              <span className="text-blue-400 font-bold mt-0.5">•</span>
+              <span>Click "Start Work Session" to begin tracking</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-blue-400 font-bold mt-0.5">•</span>
+              <span>Add notes when clocking out (optional)</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-blue-400 font-bold mt-0.5">•</span>
+              <span>Breaks are automatically detected between sessions</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-blue-400 font-bold mt-0.5">•</span>
+              <span>View your timeline and statistics above</span>
+            </li>
           </ul>
         </div>
       </div>
@@ -361,3 +414,4 @@ function MobileTimeTracking() {
 }
 
 export default MobileTimeTracking;
+

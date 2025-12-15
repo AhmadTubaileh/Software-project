@@ -508,34 +508,46 @@ function MobileProjectManagement() {
         ) : (
           <div className="mobile-task-list">
             {projects.map(project => (
-              <div key={project.id} className="mobile-card">
+              <div key={project.id} className="mobile-card" style={{
+                background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(31, 41, 55, 0.8) 100%)',
+                border: '1px solid rgba(59, 130, 246, 0.2)'
+              }}>
                 <div className="mobile-task-header">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
                       <span className={`mobile-task-status mobile-task-status-${project.status}`}>
                         {project.status}
                       </span>
                       {project.branch_name && (
-                        <span className="text-xs px-2 py-1 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                        <span className="text-xs px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/40 font-semibold backdrop-blur-sm">
                           🏢 {project.branch_name}
                         </span>
                       )}
                     </div>
-                    <h3 className="mobile-task-title">{project.title}</h3>
+                    <h3 className="mobile-task-title mb-2">{project.title}</h3>
                     {project.description && (
-                      <p className="mobile-task-meta mt-2 line-clamp-2">
+                      <p className="mobile-task-meta mt-2 line-clamp-2 text-gray-300">
                         {project.description}
                       </p>
                     )}
                   </div>
                 </div>
 
-                <div className="mobile-task-meta" style={{ marginTop: '8px', marginBottom: '12px' }}>
-                  <div className="flex flex-wrap gap-3 text-xs">
-                    <span>👥 {project.member_count || 0} members</span>
-                    <span>📋 {project.task_count || 0} tasks</span>
+                <div className="mobile-task-meta" style={{ marginTop: '12px', marginBottom: '16px' }}>
+                  <div className="flex flex-wrap gap-3 text-sm">
+                    <span className="flex items-center gap-1.5 text-gray-300 font-medium">
+                      <span className="text-base">👥</span>
+                      <span>{project.member_count || 0} members</span>
+                    </span>
+                    <span className="flex items-center gap-1.5 text-gray-300 font-medium">
+                      <span className="text-base">📋</span>
+                      <span>{project.task_count || 0} tasks</span>
+                    </span>
                     {project.team_leader_name && (
-                      <span>👑 {project.team_leader_name}</span>
+                      <span className="flex items-center gap-1.5 text-blue-300 font-semibold">
+                        <span className="text-base">👑</span>
+                        <span>{project.team_leader_name}</span>
+                      </span>
                     )}
                   </div>
                 </div>
