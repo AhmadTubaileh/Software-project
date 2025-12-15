@@ -38,10 +38,12 @@ if (!fs.existsSync(tasksUploadsDir)) {
 // ⭐ UPDATED: CORS Configuration
 // Define allowed origins
 const allowedOrigins = [
-  'http://localhost:5173', // Vite default port
+  'http://localhost:5173', // Vite default port (desktop)
+  'http://localhost:5174', // Mobile app port
   'http://localhost:3000', // Create React App default
   'http://localhost:8080', // Alternative port
-  'http://127.0.0.1:5173', // Localhost alternative
+  'http://127.0.0.1:5173', // Localhost alternative (desktop)
+  'http://127.0.0.1:5174', // Localhost alternative (mobile)
   'http://127.0.0.1:3000',
   // Add production URLs here when deploying
   // 'https://yourdomain.com',

@@ -69,7 +69,11 @@ const CreateProjectModal = ({ workers, currentUser, selectedBranchId, selectedBr
               </label>
               <select
                 value={formData.branch_id}
-                onChange={(e) => handleChange('branch_id', e.target.value)}
+                onChange={(e) => {
+                  // Reset team leader when branch changes
+                  handleChange('branch_id', e.target.value);
+                  handleChange('team_leader_id', '');
+                }}
                 className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-blue-500 transition-colors"
                 required
               >
@@ -120,12 +124,20 @@ const CreateProjectModal = ({ workers, currentUser, selectedBranchId, selectedBr
             <WorkerDropdown
               value={formData.team_leader_id}
               onChange={(e) => handleChange('team_leader_id', e.target.value)}
-              workers={workers}
+              workers={(() => {
+                // Filter workers by the selected branch
+                const branchIdToFilter = formData.branch_id || selectedBranchId;
+                return branchIdToFilter
+                  ? workers.filter(worker => worker.primary_branch_id === parseInt(branchIdToFilter))
+                  : workers;
+              })()}
               label="Select Team Leader"
               includeNoneOption={true}
             />
             <p className="text-xs text-gray-400 mt-1">
-              Assign a team leader to manage project tasks and approvals
+              {formData.branch_id 
+                ? 'Showing workers from selected branch only' 
+                : 'Assign a team leader to manage project tasks and approvals'}
             </p>
           </div>
 
