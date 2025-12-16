@@ -242,34 +242,53 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
                     </div>
                   </Card>
 
-                  {contractDetails.customer_id_card_image && (
-                    <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-semibold">ID Card Image</h4>
-                        <div className="aspect-video rounded-lg overflow-hidden bg-muted">
-                          <img
-                            src={getImageSrc(contractDetails.customer_id_card_image)}
-                            alt="Customer ID Card"
-                            className="w-full h-full object-cover"
-                          />
+                  {contractDetails.customer_id_card_image && (() => {
+                    const imageSrc = getImageSrc(contractDetails.customer_id_card_image);
+                    return imageSrc ? (
+                      <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-semibold">ID Card Image</h4>
+                          <div className="aspect-video rounded-lg overflow-hidden bg-muted">
+                            <img
+                              src={imageSrc}
+                              alt="Customer ID Card"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                console.error('Failed to load customer image:', {
+                                  src: imageSrc?.substring(0, 100),
+                                  srcType: typeof imageSrc,
+                                  rawData: contractDetails.customer_id_card_image?.substring(0, 100),
+                                  rawDataType: typeof contractDetails.customer_id_card_image,
+                                  rawDataLength: contractDetails.customer_id_card_image?.length
+                                });
+                                e.target.style.display = 'none';
+                                const errorDiv = document.createElement('div');
+                                errorDiv.className = 'w-full h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm p-4 bg-gray-800';
+                                errorDiv.textContent = 'Failed to load image';
+                                if (e.target.parentElement) {
+                                  e.target.parentElement.appendChild(errorDiv);
+                                }
+                              }}
+                            />
+                          </div>
+                          <Button
+                            onClick={() => onViewImage({
+                              full_name: contractDetails.customer_name,
+                              phone: contractDetails.customer_phone,
+                              id_card_number: contractDetails.customer_id_card_number,
+                              email: contractDetails.customer_email,
+                              address: contractDetails.customer_address,
+                              id_card_image: contractDetails.customer_id_card_image
+                            }, 'customer')}
+                            variant="outline"
+                            className="w-full"
+                          >
+                            View Full Size
+                          </Button>
                         </div>
-                        <Button
-                          onClick={() => onViewImage({
-                            full_name: contractDetails.customer_name,
-                            phone: contractDetails.customer_phone,
-                            id_card_number: contractDetails.customer_id_card_number,
-                            email: contractDetails.customer_email,
-                            address: contractDetails.customer_address,
-                            id_card_image: contractDetails.customer_id_card_image
-                          }, 'customer')}
-                          variant="outline"
-                          className="w-full"
-                        >
-                          View Full Size
-                        </Button>
-                      </div>
-                    </Card>
-                  )}
+                      </Card>
+                    ) : null;
+                  })()}
                 </div>
               </div>
             </TabsContent>
@@ -316,35 +335,47 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
                           )}
                         </div>
 
-                        {sponsor.id_card_image && (
-                          <div className="space-y-3 sm:space-y-4 pt-2">
-                            <Separator className="my-3 sm:my-4" />
-                            <div className="space-y-2.5 sm:space-y-3">
-                              <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">ID Card Image</p>
-                              <div className="aspect-video rounded-lg overflow-hidden bg-muted border border-gray-700/30">
-                                <img
-                                  src={getImageSrc(sponsor.id_card_image)}
-                                  alt={`Sponsor ${sponsor.full_name} ID Card`}
-                                  className="w-full h-full object-contain"
-                                  onError={(e) => {
-                                    console.error('Failed to load sponsor image:', sponsor.id_card_image);
-                                    const errorDiv = document.createElement('div');
-                                    errorDiv.className = 'w-full h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm p-4';
-                                    errorDiv.textContent = 'Failed to load image';
-                                    e.target.parentElement.replaceChild(errorDiv, e.target);
-                                  }}
-                                />
+                        {sponsor.id_card_image && (() => {
+                          const imageSrc = getImageSrc(sponsor.id_card_image);
+                          return imageSrc ? (
+                            <div className="space-y-3 sm:space-y-4 pt-2">
+                              <Separator className="my-3 sm:my-4" />
+                              <div className="space-y-2.5 sm:space-y-3">
+                                <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">ID Card Image</p>
+                                <div className="aspect-video rounded-lg overflow-hidden bg-muted border border-gray-700/30">
+                                  <img
+                                    src={imageSrc}
+                                    alt={`Sponsor ${sponsor.full_name} ID Card`}
+                                    className="w-full h-full object-contain"
+                                    onError={(e) => {
+                                      console.error('Failed to load sponsor image:', {
+                                        src: imageSrc?.substring(0, 100),
+                                        srcType: typeof imageSrc,
+                                        rawData: sponsor.id_card_image?.substring(0, 100),
+                                        rawDataType: typeof sponsor.id_card_image,
+                                        rawDataLength: sponsor.id_card_image?.length
+                                      });
+                                      e.target.style.display = 'none';
+                                      const errorDiv = document.createElement('div');
+                                      errorDiv.className = 'w-full h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm p-4 bg-gray-800';
+                                      errorDiv.textContent = 'Failed to load image';
+                                      if (e.target.parentElement) {
+                                        e.target.parentElement.appendChild(errorDiv);
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                <Button
+                                  onClick={() => onViewImage(sponsor, 'sponsor')}
+                                  variant="outline"
+                                  className="w-full bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white text-xs sm:text-sm"
+                                >
+                                  View Full Size
+                                </Button>
                               </div>
-                              <Button
-                                onClick={() => onViewImage(sponsor, 'sponsor')}
-                                variant="outline"
-                                className="w-full bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white text-xs sm:text-sm"
-                              >
-                                View Full Size
-                              </Button>
                             </div>
-                          </div>
-                        )}
+                          ) : null;
+                        })()}
                       </div>
                     </Card>
                   ))}

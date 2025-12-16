@@ -205,30 +205,50 @@ function ContractManagement() {
     }
   };
 
-  // Convert image to base64 or handle file paths
+  // Convert image data to base64 - matches frontend working version exactly
   const convertImageToBase64 = (imageData) => {
-    if (!imageData) return null;
+    if (!imageData) {
+      return null;
+    }
+    
     if (typeof imageData === 'string') {
-      // If it's already a data URL
-      if (imageData.startsWith('data:')) return imageData;
-      // If it's a file path (starts with / or http)
-      if (imageData.startsWith('/') || imageData.startsWith('http')) {
-        // If it's a relative path, prepend API base URL
-        if (imageData.startsWith('/')) {
-          const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-          return `${API_BASE_URL}${imageData}`;
-        }
+      // If it's already a data URL, return as is
+      if (imageData.startsWith('data:')) {
         return imageData;
       }
-      // Otherwise assume it's base64 from database
+      // Otherwise assume it's base64 from database and prepend data URL prefix
       return `data:image/jpeg;base64,${imageData}`;
     }
-    // If it's a File object
-    if (imageData instanceof File) {
-      return URL.createObjectURL(imageData);
-    }
+    
     return null;
   };
+
+  // ALTERNATIVE SOLUTION: If images still don't work, uncomment this and use it instead
+  // This version handles edge cases like whitespace and validates base64 format
+  /*
+  const convertImageToBase64 = (imageData) => {
+    if (!imageData) return null;
+    
+    if (typeof imageData === 'string') {
+      if (imageData.startsWith('data:')) {
+        return imageData;
+      }
+      
+      // Clean the base64 string: remove whitespace, newlines, and existing prefixes
+      let cleaned = imageData.trim().replace(/\s/g, '').replace(/^data:image\/[^;]+;base64,/, '');
+      
+      // Basic validation - check if it looks like base64
+      if (!/^[A-Za-z0-9+/=]+$/.test(cleaned)) {
+        console.error('Invalid base64 format');
+        return null;
+      }
+      
+      return `data:image/jpeg;base64,${cleaned}`;
+    }
+    
+    return null;
+  };
+  */
 
   // Load contracts
   useEffect(() => {
