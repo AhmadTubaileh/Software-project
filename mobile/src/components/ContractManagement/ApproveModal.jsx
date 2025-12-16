@@ -21,12 +21,12 @@ const ApproveModal = ({ isOpen, onClose, contract, processing, onApprove }) => {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30">
-        <DialogHeader>
+        <DialogHeader className="pb-4">
           <div className="mx-auto w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center mb-4">
             <Check className="h-6 w-6 text-green-500" />
           </div>
-          <DialogTitle className="text-center">Approve Contract</DialogTitle>
-          <DialogDescription className="text-center">
+          <DialogTitle className="text-center text-white text-lg sm:text-xl">Approve Contract</DialogTitle>
+          <DialogDescription className="text-center text-gray-400 text-sm">
             Are you sure you want to approve this contract?
           </DialogDescription>
         </DialogHeader>
@@ -38,7 +38,7 @@ const ApproveModal = ({ isOpen, onClose, contract, processing, onApprove }) => {
                 <User className="h-5 w-5 text-muted-foreground" />
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground mb-1.5">Customer</p>
-                  <p className="font-semibold text-base">{contract.customer_name}</p>
+                  <p className="font-semibold text-base text-white">{contract.customer_name}</p>
                 </div>
               </div>
               
@@ -46,22 +46,22 @@ const ApproveModal = ({ isOpen, onClose, contract, processing, onApprove }) => {
                 <Package className="h-5 w-5 text-muted-foreground" />
                 <div className="flex-1">
                   <p className="text-sm text-muted-foreground mb-1.5">Item</p>
-                  <p className="font-semibold text-base truncate">{contract.item_name}</p>
+                  <p className="font-semibold text-base truncate text-white">{contract.item_name}</p>
                 </div>
               </div>
 
-              <Separator className="my-4" />
+              <Separator className="my-4 bg-gray-700/30" />
 
               <div className="grid grid-cols-2 gap-5">
                 <div className="space-y-1.5">
                   <p className="text-sm text-muted-foreground mb-2">Total Price</p>
-                  <p className="text-lg font-bold text-primary">
+                  <p className="text-lg font-bold text-green-500">
                     {formatCurrency(contract.total_price)}
                   </p>
                 </div>
                 <div className="space-y-1.5">
                   <p className="text-sm text-muted-foreground mb-2">Duration</p>
-                  <p className="text-lg font-semibold">{contract.months} months</p>
+                  <p className="text-lg font-semibold text-white">{contract.months} months</p>
                 </div>
               </div>
 
@@ -69,7 +69,7 @@ const ApproveModal = ({ isOpen, onClose, contract, processing, onApprove }) => {
                 <Calendar className="h-5 w-5 text-muted-foreground" />
                 <div>
                   <p className="text-sm text-muted-foreground mb-1.5">Created</p>
-                  <p className="font-medium text-base">
+                  <p className="font-medium text-base text-white">
                     {new Date(contract.created_at).toLocaleDateString()}
                   </p>
                 </div>
@@ -100,19 +100,19 @@ const ApproveModal = ({ isOpen, onClose, contract, processing, onApprove }) => {
           </Card>
         </div>
 
-        <DialogFooter className="flex gap-2 sm:gap-0">
+        <DialogFooter className="flex gap-2 sm:gap-3">
           <Button
             variant="outline"
             onClick={onClose}
             disabled={processing}
-            className="flex-1"
+            className="flex-1 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cancel
           </Button>
           <Button
             onClick={onApprove}
             disabled={processing}
-            className="flex-1 bg-green-500 hover:bg-green-600"
+            className="flex-1 bg-green-500 hover:bg-green-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {processing ? (
               <>

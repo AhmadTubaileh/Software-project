@@ -264,11 +264,20 @@ const ContractApplication = () => {
       // Create FormData for batch submission
       const submitData = new FormData();
       
-      // Append customer data
-      submitData.append('customer_data', JSON.stringify(formData.customer));
-      
-      // Append sponsors data
-      submitData.append('sponsors_data', JSON.stringify(formData.sponsors));
+      // Create clean data objects without image data (images are sent as separate files)
+      const customerDataClean = { ...formData.customer };
+      delete customerDataClean.id_card_image;
+
+      const sponsorsDataClean = formData.sponsors.map(sponsor => {
+        const { id_card_image, ...sponsorWithoutImage } = sponsor;
+        return sponsorWithoutImage;
+      });
+
+      // Append customer data (without image)
+      submitData.append('customer_data', JSON.stringify(customerDataClean));
+
+      // Append sponsors data (without images)
+      submitData.append('sponsors_data', JSON.stringify(sponsorsDataClean));
       
       // Append all contract items with quantity - INCLUDING ORIGINAL CONTRACT ID
       const contractsData = [];
@@ -305,15 +314,73 @@ const ContractApplication = () => {
       
       submitData.append('contracts_data', JSON.stringify(contractsData));
 
-      // Append customer ID card image if exists
-      if (formData.customer.id_card_image && formData.customer.id_card_image instanceof File) {
-        submitData.append('customer_id_card_image', formData.customer.id_card_image);
+      // Append customer ID card image if exists (handle both uploaded files and database base64)
+      if (formData.customer.id_card_image) {
+        if (formData.customer.id_card_image instanceof File) {
+          // New uploaded file
+          submitData.append('customer_id_card_image', formData.customer.id_card_image);
+        } else if (typeof formData.customer.id_card_image === 'string') {
+          // Base64 string from database - convert to Blob and append
+          try {
+            if (formData.customer.id_card_image.startsWith('data:')) {
+              // Extract base64 data from data URL
+              const base64Data = formData.customer.id_card_image.split(',')[1];
+              const binaryString = atob(base64Data);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const blob = new Blob([bytes], { type: 'image/jpeg' });
+              submitData.append('customer_id_card_image', blob, 'customer_image.jpg');
+            } else {
+              // Assume it's raw base64
+              const binaryString = atob(formData.customer.id_card_image);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const blob = new Blob([bytes], { type: 'image/jpeg' });
+              submitData.append('customer_id_card_image', blob, 'customer_image.jpg');
+            }
+          } catch (error) {
+            console.warn('Failed to convert customer base64 image:', error);
+          }
+        }
       }
 
-      // Append sponsor ID card images
+      // Append sponsor ID card images (both uploaded files and database base64 strings)
       formData.sponsors.forEach((sponsor, index) => {
-        if (sponsor.id_card_image && sponsor.id_card_image instanceof File) {
-          submitData.append(`sponsor_${index}_id_card_image`, sponsor.id_card_image);
+        if (sponsor.id_card_image) {
+          if (sponsor.id_card_image instanceof File) {
+            // New uploaded file
+            submitData.append(`sponsor_${index}_id_card_image`, sponsor.id_card_image);
+          } else if (typeof sponsor.id_card_image === 'string') {
+            // Base64 string from database - convert to Blob and append
+            try {
+              if (sponsor.id_card_image.startsWith('data:')) {
+                // Extract base64 data from data URL
+                const base64Data = sponsor.id_card_image.split(',')[1];
+                const binaryString = atob(base64Data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: 'image/jpeg' });
+                submitData.append(`sponsor_${index}_id_card_image`, blob, `sponsor_${index}_image.jpg`);
+              } else {
+                // Assume it's raw base64
+                const binaryString = atob(sponsor.id_card_image);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: 'image/jpeg' });
+                submitData.append(`sponsor_${index}_id_card_image`, blob, `sponsor_${index}_image.jpg`);
+              }
+            } catch (error) {
+              console.warn(`Failed to convert sponsor ${index} base64 image:`, error);
+            }
+          }
         }
       });
 

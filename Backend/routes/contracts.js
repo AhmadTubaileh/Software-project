@@ -307,23 +307,38 @@ router.post('/apply', upload.fields([
       item_id: contract_data.item_id
     });
 
-    // Handle file uploads
+    // Handle customer file uploads and existing images
     if (req.files && req.files['customer_id_card_image']) {
-      console.log('Customer image uploaded');
+      console.log('Customer image uploaded as file');
       customer_data.id_card_image = req.files['customer_id_card_image'][0].buffer;
+    } else if (customer_data.id_card_image) {
+      console.log('Customer image already in data (from database)');
+      // Keep existing image data - it will be processed by the Contract.apply method
+    } else {
+      console.log('Customer has no image');
+      customer_data.id_card_image = null;
     }
 
-    // Handle sponsor file uploads
-    if (req.files) {
-      console.log('Processing sponsor images');
-      sponsors_data.forEach((sponsor, index) => {
-        const fileField = `sponsor_${index}_id_card_image`;
-        if (req.files[fileField]) {
-          console.log(`Sponsor ${index} image uploaded`);
-          sponsor.id_card_image = req.files[fileField][0].buffer;
-        }
-      });
-    }
+    // Handle sponsor file uploads and existing images
+    console.log('Processing sponsor images');
+    sponsors_data.forEach((sponsor, index) => {
+      const fileField = `sponsor_${index}_id_card_image`;
+
+      // First, check for uploaded files
+      if (req.files && req.files[fileField]) {
+        console.log(`Sponsor ${index} image uploaded as file`);
+        sponsor.id_card_image = req.files[fileField][0].buffer;
+      }
+      // If no uploaded file but sponsor already has image data (from database verification)
+      else if (sponsor.id_card_image) {
+        console.log(`Sponsor ${index} image already in data (from database)`);
+        // Keep existing image data - it will be processed by insertSponsorSafely
+      }
+      else {
+        console.log(`Sponsor ${index} has no image`);
+        sponsor.id_card_image = null;
+      }
+    });
 
     // Apply for contract
     const result = await Contract.apply({
@@ -381,23 +396,38 @@ router.post('/apply-multiple', upload.fields([
       });
     }
 
-    // Handle file uploads
+    // Handle customer file uploads and existing images
     if (req.files && req.files['customer_id_card_image']) {
-      console.log('Customer image uploaded');
+      console.log('Customer image uploaded as file');
       customer_data.id_card_image = req.files['customer_id_card_image'][0].buffer;
+    } else if (customer_data.id_card_image) {
+      console.log('Customer image already in data (from database)');
+      // Keep existing image data - it will be processed by the Contract.apply method
+    } else {
+      console.log('Customer has no image');
+      customer_data.id_card_image = null;
     }
 
-    // Handle sponsor file uploads
-    if (req.files) {
-      console.log('Processing sponsor images');
-      sponsors_data.forEach((sponsor, index) => {
-        const fileField = `sponsor_${index}_id_card_image`;
-        if (req.files[fileField]) {
-          console.log(`Sponsor ${index} image uploaded`);
-          sponsor.id_card_image = req.files[fileField][0].buffer;
-        }
-      });
-    }
+    // Handle sponsor file uploads and existing images
+    console.log('Processing sponsor images');
+    sponsors_data.forEach((sponsor, index) => {
+      const fileField = `sponsor_${index}_id_card_image`;
+
+      // First, check for uploaded files
+      if (req.files && req.files[fileField]) {
+        console.log(`Sponsor ${index} image uploaded as file`);
+        sponsor.id_card_image = req.files[fileField][0].buffer;
+      }
+      // If no uploaded file but sponsor already has image data (from database verification)
+      else if (sponsor.id_card_image) {
+        console.log(`Sponsor ${index} image already in data (from database)`);
+        // Keep existing image data - it will be processed by insertSponsorSafely
+      }
+      else {
+        console.log(`Sponsor ${index} has no image`);
+        sponsor.id_card_image = null;
+      }
+    });
 
     // Prepare contracts for batch processing
     const contractsToProcess = contracts_data.map(contract_data => ({

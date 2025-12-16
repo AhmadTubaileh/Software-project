@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, ZoomIn, ZoomOut, RotateCcw, Download } from 'lucide-react';
 
 // Shadcn Components
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
@@ -101,53 +101,67 @@ const ImageModal = ({ isOpen, onClose, imageSrc, customer, type = 'customer' }) 
     document.body.removeChild(link);
   };
 
+  const handleDialogChange = (open) => {
+    if (!open) {
+      onClose();
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden bg-black">
+    <Dialog open={isOpen} onOpenChange={handleDialogChange}>
+      <DialogContent 
+        showCloseButton={false}
+        className="max-w-4xl max-h-[90vh] p-0 overflow-hidden bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30 z-[300]"
+      >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 bg-black/90 border-b border-gray-800">
+          <div className="flex items-center justify-between p-4 sm:p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-b border-gray-700/30">
             <div>
-              <h3 className="font-semibold text-white">{getPersonName()}</h3>
-              <p className="text-sm text-gray-400 capitalize">
+              <DialogTitle className="font-semibold text-white text-base sm:text-lg mb-0">
+                {getPersonName()}
+              </DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm text-gray-400 capitalize mt-1">
                 {type === 'customer' ? 'Customer ID Card' : 'Sponsor ID Card'}
-              </p>
+              </DialogDescription>
             </div>
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={downloadImage}
-                className="text-white hover:bg-gray-800"
+                className="text-white hover:bg-gray-700/50 border-gray-700/30"
               >
                 <Download className="h-4 w-4" />
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onClose}
-                className="text-white hover:bg-gray-800"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
+                className="text-white hover:bg-gray-700/50 border-gray-700/30"
               >
                 <X className="h-4 w-4" />
               </Button>
             </div>
           </div>
 
-          <Separator className="bg-gray-800" />
+          <Separator className="bg-gray-700/30" />
 
           {/* Controls */}
-          <div className="flex items-center justify-center gap-4 p-4 bg-black/90 border-b border-gray-800">
+          <div className="flex items-center justify-center gap-2 sm:gap-4 p-3 sm:p-4 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-b border-gray-700/30 flex-wrap">
             <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={zoomOut}
                 disabled={zoom <= 1}
-                className="text-white border-gray-700 hover:bg-gray-800"
+                className="bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ZoomOut className="h-4 w-4" />
               </Button>
-              <span className="text-sm text-gray-300 min-w-[60px] text-center">
+              <span className="text-xs sm:text-sm text-gray-300 min-w-[50px] sm:min-w-[60px] text-center font-medium">
                 {Math.round(zoom * 100)}%
               </span>
               <Button
@@ -155,31 +169,31 @@ const ImageModal = ({ isOpen, onClose, imageSrc, customer, type = 'customer' }) 
                 size="sm"
                 onClick={zoomIn}
                 disabled={zoom >= 3}
-                className="text-white border-gray-700 hover:bg-gray-800"
+                className="bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <ZoomIn className="h-4 w-4" />
               </Button>
             </div>
 
-            <Separator orientation="vertical" className="h-6 bg-gray-700" />
+            <Separator orientation="vertical" className="h-6 bg-gray-700/30" />
 
             <Button
               variant="outline"
               size="sm"
               onClick={resetView}
-              className="text-white border-gray-700 hover:bg-gray-800"
+              className="bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white text-xs sm:text-sm"
             >
-              <RotateCcw className="h-4 w-4" />
-              Reset
+              <RotateCcw className="h-4 w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Reset</span>
             </Button>
 
-            <Separator orientation="vertical" className="h-6 bg-gray-700" />
+            <Separator orientation="vertical" className="h-6 bg-gray-700/30" />
 
             <Button
               variant="outline"
               size="sm"
               onClick={rotate}
-              className="text-white border-gray-700 hover:bg-gray-800"
+              className="bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white text-xs sm:text-sm"
             >
               Rotate
             </Button>
@@ -187,7 +201,7 @@ const ImageModal = ({ isOpen, onClose, imageSrc, customer, type = 'customer' }) 
 
           {/* Image Container */}
           <div 
-            className="flex-1 overflow-auto flex items-center justify-center p-4"
+            className="flex-1 overflow-auto flex items-center justify-center p-4 bg-gradient-to-br from-gray-900/50 to-gray-800/50"
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -211,16 +225,16 @@ const ImageModal = ({ isOpen, onClose, imageSrc, customer, type = 'customer' }) 
               <img
                 src={imageSrc}
                 alt="ID Card"
-                className="max-w-full max-h-[70vh] object-contain rounded-lg"
+                className="max-w-full max-h-[70vh] object-contain rounded-lg shadow-2xl"
                 draggable="false"
               />
             </div>
           </div>
 
           {/* Footer */}
-          <div className="p-4 bg-black/90 border-t border-gray-800">
+          <div className="p-3 sm:p-4 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-t border-gray-700/30">
             <div className="text-center">
-              <p className="text-sm text-gray-400">
+              <p className="text-xs sm:text-sm text-gray-400">
                 {zoom > 1 ? 'Drag to pan image • ' : ''}
                 Use controls to zoom and rotate
               </p>

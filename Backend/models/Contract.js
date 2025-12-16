@@ -10,33 +10,81 @@ class Contract {
         
         // Compress image if exists
         let compressedImage = null;
+        let imageBuffer = null; // Declare outside try block for catch block access
+        
         if (sponsor.id_card_image) {
           try {
-            // If it's a base64 string, convert to buffer
-            if (typeof sponsor.id_card_image === 'string') {
+            // Handle different image formats
+            
+            if (Buffer.isBuffer(sponsor.id_card_image)) {
+              // Already a Buffer (from multer file upload)
+              console.log(`📸 Sponsor ${index + 1}: Image is Buffer (${Math.round(sponsor.id_card_image.length / 1024)}KB)`);
+              imageBuffer = sponsor.id_card_image;
+            } else if (typeof sponsor.id_card_image === 'string') {
+              // Base64 string - convert to Buffer
+              console.log(`📸 Sponsor ${index + 1}: Image is string, converting to Buffer...`);
               if (sponsor.id_card_image.startsWith('data:')) {
                 // Extract base64 from data URL
                 const base64Data = sponsor.id_card_image.split(',')[1];
-                sponsor.id_card_image = Buffer.from(base64Data, 'base64');
+                imageBuffer = Buffer.from(base64Data, 'base64');
               } else {
                 // Assume it's already base64
-                sponsor.id_card_image = Buffer.from(sponsor.id_card_image, 'base64');
+                imageBuffer = Buffer.from(sponsor.id_card_image, 'base64');
               }
+              console.log(`📸 Sponsor ${index + 1}: Converted to Buffer (${Math.round(imageBuffer.length / 1024)}KB)`);
+            } else {
+              console.log(`⚠️ Sponsor ${index + 1}: Unknown image type: ${typeof sponsor.id_card_image}`);
+              imageBuffer = null;
             }
             
-            // Compress the image
-            compressedImage = await compressImageBuffer(sponsor.id_card_image);
-            
-            if (compressedImage && compressedImage.length > 0) {
-              console.log(`✅ Sponsor ${index + 1}: Compressed image to ${Math.round(compressedImage.length / 1024)}KB`);
+            // Compress the image if we have a valid buffer
+            if (imageBuffer && imageBuffer.length > 0) {
+              console.log(`🔄 Sponsor ${index + 1}: Compressing image...`);
+              try {
+                // Add timeout to prevent hanging (10 seconds max)
+                const compressionPromise = compressImageBuffer(imageBuffer);
+                const timeoutPromise = new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Compression timeout after 10 seconds')), 10000)
+                );
+                compressedImage = await Promise.race([compressionPromise, timeoutPromise]);
+              } catch (compressionError) {
+                console.error(`⚠️ Sponsor ${index + 1}: Compression error:`, compressionError.message);
+                compressedImage = imageBuffer; // Use original on error
+              }
+              
+              if (compressedImage && compressedImage.length > 0) {
+                console.log(`✅ Sponsor ${index + 1}: Compressed image to ${Math.round(compressedImage.length / 1024)}KB`);
+              } else {
+                console.log(`⚠️ Sponsor ${index + 1}: Compression returned null/empty, using original`);
+                compressedImage = imageBuffer; // Use original if compression fails
+              }
             } else {
-              console.log(`⚠️ Sponsor ${index + 1}: No valid image after compression`);
+              console.log(`⚠️ Sponsor ${index + 1}: No valid image buffer to compress`);
               compressedImage = null;
             }
           } catch (imageError) {
-            console.error(`❌ Sponsor ${index + 1}: Image compression failed:`, imageError.message);
-            compressedImage = null;
+            console.error(`❌ Sponsor ${index + 1}: Image processing failed:`, imageError.message);
+            console.error(`❌ Sponsor ${index + 1}: Error stack:`, imageError.stack);
+            // Try to use original if available
+            if (imageBuffer && imageBuffer.length > 0) {
+              compressedImage = imageBuffer;
+              console.log(`🔄 Sponsor ${index + 1}: Using original Buffer after error`);
+            } else if (Buffer.isBuffer(sponsor.id_card_image)) {
+              compressedImage = sponsor.id_card_image;
+              console.log(`🔄 Sponsor ${index + 1}: Using original sponsor.id_card_image after error`);
+            } else {
+              compressedImage = null;
+            }
           }
+        } else {
+          console.log(`ℹ️ Sponsor ${index + 1}: No image provided`);
+        }
+        
+        // Log final image status before database operation
+        if (compressedImage) {
+          console.log(`💾 Sponsor ${index + 1}: Ready to save image (${Math.round(compressedImage.length / 1024)}KB)`);
+        } else {
+          console.log(`💾 Sponsor ${index + 1}: No image to save`);
         }
         
         // Check if sponsor already exists
@@ -60,6 +108,9 @@ class Contract {
                   id_card_image = COALESCE(?, id_card_image)
               WHERE contract_id = ? AND id_card_number = ?
             `;
+            
+            // Log what we're about to update
+            console.log(`💾 Sponsor ${index + 1}: Updating with image: ${compressedImage ? `YES (${Math.round(compressedImage.length / 1024)}KB)` : 'NO (keeping existing)'}`);
             
             db.query(updateQuery, [
               sponsor.full_name,
@@ -89,6 +140,9 @@ class Contract {
             (contract_id, full_name, phone, id_card_number, relationship, address, id_card_image) 
             VALUES (?, ?, ?, ?, ?, ?, ?)
           `;
+          
+          // Log what we're about to insert
+          console.log(`💾 Sponsor ${index + 1}: Inserting with image: ${compressedImage ? `YES (${Math.round(compressedImage.length / 1024)}KB)` : 'NO'}`);
           
           db.query(insertQuery, [
             contractId,
