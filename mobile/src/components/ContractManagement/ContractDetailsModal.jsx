@@ -43,7 +43,7 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent 
         showCloseButton={false}
-        className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 z-[200] bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30"
+        className="max-w-4xl h-[70vh] max-h-[70vh] overflow-hidden flex flex-col p-0 z-[200] bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30"
       >
         <DialogHeader className="p-4 sm:p-6 border-b border-gray-700/30 bg-gradient-to-br from-gray-800/80 to-gray-900/90 shrink-0">
           <div className="flex items-start justify-between gap-2">
@@ -106,10 +106,11 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 custom-scrollbar min-h-0">
+          <div className="flex-1 overflow-hidden min-h-0 flex flex-col relative">
             {/* Overview Tab */}
-            <TabsContent value="overview" className="mt-0 space-y-6">
-              <div className="space-y-4">
+            <TabsContent value="overview" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
+              <div className="space-y-6">
+                <div className="space-y-4">
                 <h3 className="text-base sm:text-lg font-semibold flex items-center gap-3 mb-4 text-white">
                   <ClipboardList className="h-5 w-5" />
                   Contract Information
@@ -277,11 +278,12 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
                     </div>
                   </div>
                 </Card>
+                </div>
               </div>
             </TabsContent>
 
             {/* Customer Tab */}
-            <TabsContent value="customer" className="mt-0 space-y-6">
+            <TabsContent value="customer" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Card className="p-5 sm:p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
@@ -407,7 +409,7 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
             </TabsContent>
 
             {/* Sponsors Tab */}
-            <TabsContent value="sponsors" className="mt-0">
+            <TabsContent value="sponsors" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
               {sponsors.length === 0 ? (
                 <div className="text-center py-12">
                   <Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
@@ -537,7 +539,7 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
             </TabsContent>
 
             {/* Payments Tab */}
-            <TabsContent value="payments" className="mt-0 space-y-6">
+            <TabsContent value="payments" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
               <div className="space-y-6">
                 <div className="grid grid-cols-3 gap-4">
                   <Card className="p-5 sm:p-6 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
