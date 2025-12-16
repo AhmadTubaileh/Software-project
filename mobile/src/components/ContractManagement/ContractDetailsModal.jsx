@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ClipboardList, User, Users, DollarSign, Phone, Mail, MapPin, Calendar } from 'lucide-react';
+import { X, ClipboardList, User, Users, DollarSign, Phone, Mail, MapPin, Calendar, Package, FileText, Building2, Eye } from 'lucide-react';
 
 // Shadcn Components
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -41,16 +41,19 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 z-[200] bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30">
+      <DialogContent 
+        showCloseButton={false}
+        className="max-w-4xl h-[70vh] max-h-[70vh] overflow-hidden flex flex-col p-0 z-[200] bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30"
+      >
         <DialogHeader className="p-4 sm:p-6 border-b border-gray-700/30 bg-gradient-to-br from-gray-800/80 to-gray-900/90 shrink-0">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <DialogTitle className="text-lg sm:text-xl">Contract #{contractDetails.id}</DialogTitle>
-              <DialogDescription className="text-xs sm:text-sm mt-1">
+              <DialogTitle className="text-lg sm:text-xl text-white">Contract #{contractDetails.id}</DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm mt-1 text-gray-400">
                 {contractDetails.item_name || 'Unknown Item'}
               </DialogDescription>
             </div>
-            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0 shrink-0">
+            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0 shrink-0 text-white hover:bg-gray-700/50">
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -103,179 +106,310 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 custom-scrollbar min-h-0">
+          <div className="flex-1 overflow-hidden min-h-0 flex flex-col relative">
             {/* Overview Tab */}
-            <TabsContent value="overview" className="mt-0 space-y-8">
-              <div className="space-y-5">
-                <h3 className="text-base font-semibold flex items-center gap-3 mb-4">
+            <TabsContent value="overview" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
+              <div className="space-y-6">
+                <div className="space-y-4">
+                <h3 className="text-base sm:text-lg font-semibold flex items-center gap-3 mb-4 text-white">
                   <ClipboardList className="h-5 w-5" />
                   Contract Information
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-2.5">Contract ID</p>
-                    <p className="font-semibold text-base">#{contractDetails.id}</p>
-                  </Card>
-                  <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-2.5">Sale ID</p>
-                    <p className="font-semibold text-base">#{contractDetails.sale_id}</p>
-                  </Card>
-                  <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-2.5">Item Name</p>
-                    <p className="font-semibold text-base">{contractDetails.item_name}</p>
-                  </Card>
-                  <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-2.5">Status</p>
-                    <Badge variant="outline" className={statusColors[contractDetails.status]}>
-                      {contractDetails.status.charAt(0).toUpperCase() + contractDetails.status.slice(1)}
-                    </Badge>
-                  </Card>
-                  <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-2.5">Created By</p>
-                    <p className="font-semibold text-base">{contractDetails.worker_name}</p>
-                  </Card>
-                  <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-2.5">Start Date</p>
-                    <p className="font-semibold text-base">{formatDate(contractDetails.start_date)}</p>
-                  </Card>
-                  <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-2.5">Branch</p>
-                    <p className="font-semibold text-base">{contractDetails.branch_name}</p>
-                  </Card>
-                  <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-2.5">Created At</p>
-                    <p className="font-semibold text-base">{formatDate(contractDetails.created_at)}</p>
-                  </Card>
-                </div>
+                <Card className="p-5 sm:p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                  <div className="space-y-4">
+                    {/* Contract ID & Sale ID */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Contract ID</p>
+                          <p className="text-sm sm:text-base font-semibold text-white">#{contractDetails.id}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Sale ID</p>
+                          <p className="text-sm sm:text-base font-semibold text-white">#{contractDetails.sale_id}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-gray-700/30" />
+
+                    {/* Item */}
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gray-700/30 rounded-lg">
+                        <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs sm:text-sm text-muted-foreground mb-1">Item Name</p>
+                        <p className="text-sm sm:text-base font-semibold text-white truncate">{contractDetails.item_name}</p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-gray-700/30" />
+
+                    {/* Status & Created By */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Status</p>
+                          <Badge variant="outline" className={statusColors[contractDetails.status]}>
+                            {contractDetails.status.charAt(0).toUpperCase() + contractDetails.status.slice(1)}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <User className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Created By</p>
+                          <p className="text-sm sm:text-base font-semibold text-white truncate">{contractDetails.worker_name}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-gray-700/30" />
+
+                    {/* Branch & Dates */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Branch</p>
+                          <p className="text-sm sm:text-base font-semibold text-white truncate">{contractDetails.branch_name}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Start Date</p>
+                          <p className="text-sm sm:text-base font-semibold text-white">{formatDate(contractDetails.start_date)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {contractDetails.created_at && (
+                      <>
+                        <Separator className="bg-gray-700/30" />
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-gray-700/30 rounded-lg">
+                            <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs sm:text-sm text-muted-foreground mb-1">Created At</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{formatDate(contractDetails.created_at)}</p>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </Card>
               </div>
 
-              <Separator className="my-6" />
+              <Separator className="bg-gray-700/30 my-4" />
 
-              <div className="space-y-5">
-                <h3 className="text-base font-semibold flex items-center gap-3 mb-4">
+              <div className="space-y-4">
+                <h3 className="text-base sm:text-lg font-semibold flex items-center gap-3 mb-4 text-white">
                   <DollarSign className="h-5 w-5" />
                   Financial Summary
                 </h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-3">Total Contract Value</p>
-                    <p className="text-2xl font-bold">{formatCurrency(contractDetails.total_price)}</p>
-                  </Card>
-                  <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-3">Down Payment</p>
-                    <p className="text-xl font-semibold text-blue-500">
-                      {formatCurrency(contractDetails.down_payment)}
-                    </p>
-                  </Card>
-                  <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-3">Remaining Amount</p>
-                    <p className="text-xl font-semibold">
-                      {formatCurrency(contractDetails.total_price - contractDetails.down_payment)}
-                    </p>
-                  </Card>
-                  <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-2.5">Monthly Payment</p>
-                    <p className="text-lg font-semibold">
-                      {formatCurrency(contractDetails.monthly_payment)}
-                    </p>
-                  </Card>
-                  <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-2.5">Duration</p>
-                    <p className="text-lg font-semibold">
-                      {contractDetails.months} months
-                    </p>
-                  </Card>
-                  <Card className="p-5 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <p className="text-sm text-muted-foreground mb-2.5">Last Payment Date</p>
-                    <p className="text-lg font-semibold">
-                      {formatDate(contractDetails.last_payment_date)}
-                    </p>
-                  </Card>
+                <Card className="p-5 sm:p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                  <div className="space-y-4">
+                    {/* Main Financial Info */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Total Contract Value</p>
+                        <p className="text-xl sm:text-2xl font-bold text-green-500">{formatCurrency(contractDetails.total_price)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Duration</p>
+                        <p className="text-lg sm:text-xl font-semibold text-white">{contractDetails.months} months</p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-gray-700/30" />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Down Payment</p>
+                        <p className="text-base sm:text-lg font-semibold text-blue-500">
+                          {formatCurrency(contractDetails.down_payment)}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Monthly Payment</p>
+                        <p className="text-base sm:text-lg font-semibold text-white">
+                          {formatCurrency(contractDetails.monthly_payment)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-gray-700/30" />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Remaining Amount</p>
+                        <p className="text-base sm:text-lg font-semibold text-white">
+                          {formatCurrency(contractDetails.total_price - contractDetails.down_payment)}
+                        </p>
+                      </div>
+                      {contractDetails.last_payment_date && (
+                        <div className="space-y-1">
+                          <p className="text-xs sm:text-sm text-muted-foreground">Last Payment Date</p>
+                          <p className="text-base sm:text-lg font-semibold text-white">
+                            {formatDate(contractDetails.last_payment_date)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Card>
                 </div>
               </div>
             </TabsContent>
 
             {/* Customer Tab */}
-            <TabsContent value="customer" className="mt-0 space-y-8">
+            <TabsContent value="customer" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                    <div className="space-y-5">
-                      <div className="space-y-2">
-                        <p className="text-sm text-muted-foreground mb-2">Full Name</p>
-                        <p className="text-lg font-semibold">{contractDetails.customer_name}</p>
+                  <Card className="p-5 sm:p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                    <div className="space-y-4">
+                      {/* Full Name */}
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <User className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Full Name</p>
+                          <p className="text-sm sm:text-base font-semibold text-white">{contractDetails.customer_name}</p>
+                        </div>
                       </div>
-                      <div className="space-y-4 pt-2">
-                        <div className="flex items-center gap-3">
-                          <Phone className="h-5 w-5 text-muted-foreground" />
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground mb-1">Phone</p>
-                            <p className="font-medium text-base">{contractDetails.customer_phone}</p>
-                          </div>
+
+                      <Separator className="bg-gray-700/30" />
+
+                      {/* Phone */}
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
                         </div>
-                        <div className="flex items-center gap-3">
-                          <ClipboardList className="h-5 w-5 text-muted-foreground" />
-                          <div className="space-y-1">
-                            <p className="text-sm text-muted-foreground mb-1">ID Card Number</p>
-                            <p className="font-medium text-base">{contractDetails.customer_id_card_number}</p>
-                          </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Phone</p>
+                          <p className="text-sm sm:text-base font-semibold text-white">{contractDetails.customer_phone}</p>
                         </div>
-                        {contractDetails.customer_email && (
+                      </div>
+
+                      {/* ID Card Number */}
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">ID Card Number</p>
+                          <p className="text-sm sm:text-base font-semibold text-white font-mono">{contractDetails.customer_id_card_number}</p>
+                        </div>
+                      </div>
+
+                      {/* Email */}
+                      {contractDetails.customer_email && (
+                        <>
+                          <Separator className="bg-gray-700/30" />
                           <div className="flex items-center gap-3">
-                            <Mail className="h-5 w-5 text-muted-foreground" />
-                            <div className="space-y-1">
-                              <p className="text-sm text-muted-foreground mb-1">Email</p>
-                              <p className="font-medium text-base">{contractDetails.customer_email}</p>
+                            <div className="p-2 bg-gray-700/30 rounded-lg">
+                              <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Email</p>
+                              <p className="text-sm sm:text-base font-semibold text-white truncate">{contractDetails.customer_email}</p>
                             </div>
                           </div>
-                        )}
-                        {contractDetails.customer_address && (
+                        </>
+                      )}
+
+                      {/* Address */}
+                      {contractDetails.customer_address && (
+                        <>
+                          <Separator className="bg-gray-700/30" />
                           <div className="flex items-center gap-3">
-                            <MapPin className="h-5 w-5 text-muted-foreground" />
-                            <div className="space-y-1">
-                              <p className="text-sm text-muted-foreground mb-1">Address</p>
-                              <p className="font-medium text-base">{contractDetails.customer_address}</p>
+                            <div className="p-2 bg-gray-700/30 rounded-lg">
+                              <MapPin className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Address</p>
+                              <p className="text-sm sm:text-base font-semibold text-white">{contractDetails.customer_address}</p>
                             </div>
                           </div>
-                        )}
-                      </div>
+                        </>
+                      )}
                     </div>
                   </Card>
 
-                  {contractDetails.customer_id_card_image && (
-                    <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                      <div className="space-y-4">
-                        <h4 className="text-sm font-semibold">ID Card Image</h4>
-                        <div className="aspect-video rounded-lg overflow-hidden bg-muted">
-                          <img
-                            src={getImageSrc(contractDetails.customer_id_card_image)}
-                            alt="Customer ID Card"
-                            className="w-full h-full object-cover"
-                          />
+                  {contractDetails.customer_id_card_image && (() => {
+                    const imageSrc = getImageSrc(contractDetails.customer_id_card_image);
+                    return imageSrc ? (
+                      <Card className="p-5 sm:p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-semibold text-white">ID Card Image</h4>
+                          <div className="aspect-video rounded-lg overflow-hidden bg-muted">
+                            <img
+                              src={imageSrc}
+                              alt="Customer ID Card"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                console.error('Failed to load customer image:', {
+                                  src: imageSrc?.substring(0, 100),
+                                  srcType: typeof imageSrc,
+                                  rawData: contractDetails.customer_id_card_image?.substring(0, 100),
+                                  rawDataType: typeof contractDetails.customer_id_card_image,
+                                  rawDataLength: contractDetails.customer_id_card_image?.length
+                                });
+                                e.target.style.display = 'none';
+                                const errorDiv = document.createElement('div');
+                                errorDiv.className = 'w-full h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm p-4 bg-gray-800';
+                                errorDiv.textContent = 'Failed to load image';
+                                if (e.target.parentElement) {
+                                  e.target.parentElement.appendChild(errorDiv);
+                                }
+                              }}
+                            />
+                          </div>
+                          <Button
+                            onClick={() => onViewImage({
+                              full_name: contractDetails.customer_name,
+                              phone: contractDetails.customer_phone,
+                              id_card_number: contractDetails.customer_id_card_number,
+                              email: contractDetails.customer_email,
+                              address: contractDetails.customer_address,
+                              id_card_image: contractDetails.customer_id_card_image
+                            }, 'customer')}
+                            variant="outline"
+                            className="w-full bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white"
+                          >
+                            View Full Size
+                          </Button>
                         </div>
-                        <Button
-                          onClick={() => onViewImage({
-                            full_name: contractDetails.customer_name,
-                            phone: contractDetails.customer_phone,
-                            id_card_number: contractDetails.customer_id_card_number,
-                            email: contractDetails.customer_email,
-                            address: contractDetails.customer_address,
-                            id_card_image: contractDetails.customer_id_card_image
-                          }, 'customer')}
-                          variant="outline"
-                          className="w-full"
-                        >
-                          View Full Size
-                        </Button>
-                      </div>
-                    </Card>
-                  )}
+                      </Card>
+                    ) : null;
+                  })()}
                 </div>
               </div>
             </TabsContent>
 
             {/* Sponsors Tab */}
-            <TabsContent value="sponsors" className="mt-0">
+            <TabsContent value="sponsors" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
               {sponsors.length === 0 ? (
                 <div className="text-center py-12">
                   <Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
@@ -285,66 +419,118 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
                 <div className="max-h-[60vh] overflow-y-auto overflow-x-hidden pr-2 space-y-4 sm:space-y-5 custom-scrollbar">
                   {sponsors.map((sponsor, index) => (
                     <Card key={sponsor.id || index} className="overflow-hidden bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
-                      <div className="p-4 sm:p-5 md:p-6 space-y-4 sm:space-y-5">
-                        <div className="flex items-center justify-between gap-2">
-                          <h4 className="text-sm sm:text-base font-semibold">Sponsor {index + 1}</h4>
+                      <div className="p-4 sm:p-5 md:p-6 space-y-4">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <h4 className="text-sm sm:text-base font-semibold text-white">Sponsor {index + 1}</h4>
                           {sponsor.relationship && (
                             <Badge variant="secondary" className="text-xs shrink-0">{sponsor.relationship}</Badge>
                           )}
                         </div>
                         
-                        <div className="space-y-3 sm:space-y-4">
-                          <div className="space-y-1 sm:space-y-1.5">
-                            <p className="text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2">Full Name</p>
-                            <p className="font-semibold text-sm sm:text-base">{sponsor.full_name}</p>
-                          </div>
-                          <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                            <div className="space-y-1 sm:space-y-1.5">
-                              <p className="text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2">Phone</p>
-                              <p className="font-medium text-sm sm:text-base">{sponsor.phone}</p>
+                        <div className="space-y-3">
+                          {/* Full Name */}
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gray-700/30 rounded-lg">
+                              <User className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
                             </div>
-                            <div className="space-y-1 sm:space-y-1.5">
-                              <p className="text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2">ID Card</p>
-                              <p className="font-medium font-mono text-xs sm:text-sm">{sponsor.id_card_number}</p>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Full Name</p>
+                              <p className="text-sm sm:text-base font-semibold text-white">{sponsor.full_name}</p>
                             </div>
                           </div>
+
+                          <Separator className="bg-gray-700/30" />
+
+                          {/* Phone & ID Card */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-gray-700/30 rounded-lg">
+                                <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Phone</p>
+                                <p className="text-sm sm:text-base font-semibold text-white">{sponsor.phone}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-gray-700/30 rounded-lg">
+                                <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs sm:text-sm text-muted-foreground mb-1">ID Card</p>
+                                <p className="text-xs sm:text-sm font-semibold text-white font-mono">{sponsor.id_card_number}</p>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Address */}
                           {sponsor.address && (
-                            <div className="space-y-1 sm:space-y-1.5">
-                              <p className="text-xs sm:text-sm text-muted-foreground mb-1.5 sm:mb-2">Address</p>
-                              <p className="font-medium text-sm sm:text-base">{sponsor.address}</p>
-                            </div>
+                            <>
+                              <Separator className="bg-gray-700/30" />
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-gray-700/30 rounded-lg">
+                                  <MapPin className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs sm:text-sm text-muted-foreground mb-1">Address</p>
+                                  <p className="text-sm sm:text-base font-semibold text-white">{sponsor.address}</p>
+                                </div>
+                              </div>
+                            </>
                           )}
                         </div>
 
-                        {sponsor.id_card_image && (
-                          <div className="space-y-3 sm:space-y-4 pt-2">
-                            <Separator className="my-3 sm:my-4" />
-                            <div className="space-y-2.5 sm:space-y-3">
-                              <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-1.5 sm:mb-2">ID Card Image</p>
-                              <div className="aspect-video rounded-lg overflow-hidden bg-muted border border-gray-700/30">
-                                <img
-                                  src={getImageSrc(sponsor.id_card_image)}
-                                  alt={`Sponsor ${sponsor.full_name} ID Card`}
-                                  className="w-full h-full object-contain"
-                                  onError={(e) => {
-                                    console.error('Failed to load sponsor image:', sponsor.id_card_image);
-                                    const errorDiv = document.createElement('div');
-                                    errorDiv.className = 'w-full h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm p-4';
-                                    errorDiv.textContent = 'Failed to load image';
-                                    e.target.parentElement.replaceChild(errorDiv, e.target);
-                                  }}
-                                />
+                        {sponsor.id_card_image && (() => {
+                          const imageSrc = getImageSrc(sponsor.id_card_image);
+                          return imageSrc ? (
+                            <div className="space-y-3 sm:space-y-4 pt-2">
+                              <Separator className="bg-gray-700/30 my-3 sm:my-4" />
+                              <div className="space-y-3 sm:space-y-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 bg-gray-700/30 rounded-lg">
+                                    <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-xs sm:text-sm font-semibold text-white mb-1">ID Card Image</p>
+                                    <p className="text-[10px] sm:text-xs text-muted-foreground">Click to view full size</p>
+                                  </div>
+                                </div>
+                                <div className="aspect-video rounded-lg overflow-hidden bg-muted border border-gray-700/30">
+                                  <img
+                                    src={imageSrc}
+                                    alt={`Sponsor ${sponsor.full_name} ID Card`}
+                                    className="w-full h-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                    onClick={() => onViewImage(sponsor, 'sponsor')}
+                                    onError={(e) => {
+                                      console.error('Failed to load sponsor image:', {
+                                        src: imageSrc?.substring(0, 100),
+                                        srcType: typeof imageSrc,
+                                        rawData: sponsor.id_card_image?.substring(0, 100),
+                                        rawDataType: typeof sponsor.id_card_image,
+                                        rawDataLength: sponsor.id_card_image?.length
+                                      });
+                                      e.target.style.display = 'none';
+                                      const errorDiv = document.createElement('div');
+                                      errorDiv.className = 'w-full h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm p-4 bg-gray-800';
+                                      errorDiv.textContent = 'Failed to load image';
+                                      if (e.target.parentElement) {
+                                        e.target.parentElement.appendChild(errorDiv);
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                <Button
+                                  onClick={() => onViewImage(sponsor, 'sponsor')}
+                                  variant="outline"
+                                  className="w-full bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white text-xs sm:text-sm"
+                                >
+                                  <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-2" />
+                                  View Full Size
+                                </Button>
                               </div>
-                              <Button
-                                onClick={() => onViewImage(sponsor, 'sponsor')}
-                                variant="outline"
-                                className="w-full bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white text-xs sm:text-sm"
-                              >
-                                View Full Size
-                              </Button>
                             </div>
-                          </div>
-                        )}
+                          ) : null;
+                        })()}
                       </div>
                     </Card>
                   ))}
@@ -353,36 +539,36 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
             </TabsContent>
 
             {/* Payments Tab */}
-            <TabsContent value="payments" className="mt-0 space-y-6">
+            <TabsContent value="payments" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
               <div className="space-y-6">
                 <div className="grid grid-cols-3 gap-4">
-                  <Card className="p-6 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                  <Card className="p-5 sm:p-6 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
                     <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Down Payment</p>
-                      <p className="text-2xl font-bold text-blue-500">
+                      <p className="text-xs sm:text-sm text-muted-foreground">Down Payment</p>
+                      <p className="text-xl sm:text-2xl font-bold text-blue-500">
                         {formatCurrency(contractDetails.down_payment)}
                       </p>
-                      <p className="text-xs text-muted-foreground">Month 1</p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">Month 1</p>
                     </div>
                   </Card>
-                  <Card className="p-6 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                  <Card className="p-5 sm:p-6 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
                     <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Monthly Payment</p>
-                      <p className="text-2xl font-bold text-green-500">
+                      <p className="text-xs sm:text-sm text-muted-foreground">Monthly Payment</p>
+                      <p className="text-xl sm:text-2xl font-bold text-green-500">
                         {formatCurrency(contractDetails.monthly_payment)}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">
                         ×{Math.max(0, contractDetails.months - 2)} months
                       </p>
                     </div>
                   </Card>
-                  <Card className="p-6 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                  <Card className="p-5 sm:p-6 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
                     <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">Last Payment</p>
-                      <p className="text-2xl font-bold text-purple-500">
+                      <p className="text-xs sm:text-sm text-muted-foreground">Last Payment</p>
+                      <p className="text-xl sm:text-2xl font-bold text-purple-500">
                         {formatCurrency(contractDetails.installment_last_payment)}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">
                         Month {contractDetails.months}
                       </p>
                     </div>
@@ -393,14 +579,14 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-muted-foreground">Total Contract Value</p>
-                      <p className="text-3xl font-bold mt-1">{formatCurrency(contractDetails.total_price)}</p>
+                      <p className="text-3xl font-bold mt-1 text-green-500">{formatCurrency(contractDetails.total_price)}</p>
                     </div>
                     <DollarSign className="h-12 w-12 text-muted-foreground/30" />
                   </div>
                 </Card>
 
                 <div className="space-y-4">
-                  <h4 className="text-sm font-semibold">Payment Breakdown</h4>
+                  <h4 className="text-sm font-semibold text-white">Payment Breakdown</h4>
                   <div className="space-y-3">
                     {contractDetails.months && Array.from({ length: contractDetails.months }).map((_, index) => {
                       const monthNumber = index + 1;
@@ -420,7 +606,7 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
                                 {monthNumber}
                               </div>
                               <div>
-                                <p className="font-medium">Month {monthNumber}</p>
+                                <p className="font-medium text-white">Month {monthNumber}</p>
                                 <p className="text-sm text-muted-foreground">
                                   {monthNumber === 1 ? 'Down Payment' : 
                                    monthNumber === contractDetails.months ? 'Final Payment' : 
@@ -428,7 +614,7 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
                                 </p>
                               </div>
                             </div>
-                            <p className="font-semibold">{formatCurrency(amount)}</p>
+                            <p className="font-semibold text-white">{formatCurrency(amount)}</p>
                           </div>
                         </Card>
                       );
