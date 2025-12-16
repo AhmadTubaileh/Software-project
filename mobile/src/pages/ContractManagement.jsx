@@ -3,7 +3,7 @@ import { useLocalSession } from '../hooks/useLocalSession.js';
 import { apiClient } from '../shared/api/apiClient.js';
 import toast, { Toaster } from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, Eye, Check, X, Calendar, User, Phone, DollarSign, FileText, Clock, CheckCircle, ClipboardList } from 'lucide-react';
+import { Search, Filter, Eye, Check, X, Calendar, User, Phone, DollarSign, FileText, Clock, CheckCircle, ClipboardList, Package } from 'lucide-react';
 
 // Shadcn Components
 import { Button } from '../components/ui/button';
@@ -15,6 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Progress } from '../components/ui/progress';
+import { Separator } from '../components/ui/separator';
 
 // Your components
 import StatsCards from '../components/ContractManagement/StatsCards';
@@ -535,10 +536,10 @@ function ContractManagement() {
                   </div>
                 </CardHeader>
 
-                <CardContent className="space-y-3 sm:space-y-4 md:space-y-5 py-3 sm:py-4 md:py-5 px-3 sm:px-4 md:px-6">
+                <CardContent className="space-y-4 sm:space-y-5 py-3 sm:py-4 md:py-5 px-3 sm:px-4 md:px-6">
                   {/* Relationship Info */}
                   {(contract.original_contract_info || contract.replacement_contract_info) && (
-                    <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 pb-1.5 sm:pb-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 pb-2">
                       {contract.original_contract_info && (
                         <Badge variant="secondary" className="text-[10px] sm:text-xs bg-blue-500/20 text-blue-300 px-1.5 sm:px-2 py-0.5">
                           🔄 Reapplication
@@ -552,41 +553,73 @@ function ContractManagement() {
                     </div>
                   )}
 
-                  {/* Customer Section */}
-                  <div className="space-y-1.5 sm:space-y-2 md:space-y-2.5">
-                    <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 text-[10px] sm:text-xs font-medium text-muted-foreground mb-1 sm:mb-1.5 md:mb-2">
-                      <User className="h-3 w-3 sm:h-3.5 sm:w-3.5 md:h-4 md:w-4 shrink-0" />
-                      <span>Customer</span>
-                    </div>
-                    <p className="text-xs sm:text-sm font-semibold mb-1 sm:mb-1.5 md:mb-2 leading-tight">{contract.customer_name || 'Unknown Customer'}</p>
-                    <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 text-[10px] sm:text-xs text-muted-foreground flex-wrap">
-                      <div className="flex items-center gap-0.5 sm:gap-1">
-                        <Phone className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0" />
-                        <span className="truncate">{contract.customer_phone || 'N/A'}</span>
+                  {/* Contract Info Card - Similar to Approve/Reject Modal */}
+                  <div className="space-y-3 sm:space-y-4">
+                    {/* Customer */}
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className="p-2 bg-gray-700/30 rounded-lg">
+                        <User className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
                       </div>
-                      <span className="shrink-0">•</span>
-                      <span className="truncate">Worker: {contract.worker_name || 'Unknown'}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground mb-1">Customer</p>
+                        <p className="text-xs sm:text-sm font-semibold text-white truncate">{contract.customer_name || 'Unknown Customer'}</p>
+                        {contract.customer_phone && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <Phone className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-[10px] sm:text-xs text-muted-foreground truncate">{contract.customer_phone}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Financial Section */}
-                  <div className="grid grid-cols-2 gap-2 sm:gap-3 md:gap-4 text-[10px] sm:text-xs pt-1.5 sm:pt-2">
-                    <div className="space-y-0.5 sm:space-y-1 md:space-y-1.5">
-                      <p className="text-muted-foreground mb-1 sm:mb-1.5 md:mb-2 leading-tight">Total Price</p>
-                      <p className="font-semibold text-[10px] sm:text-xs md:text-sm leading-tight">{formatCurrency(contract.total_price || 0)}</p>
+                    {/* Item */}
+                    <div className="flex items-center gap-3 sm:gap-4">
+                      <div className="p-2 bg-gray-700/30 rounded-lg">
+                        <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground mb-1">Item</p>
+                        <p className="text-xs sm:text-sm font-semibold text-white truncate">{contract.item_name || 'Unknown Item'}</p>
+                      </div>
                     </div>
-                    <div className="space-y-0.5 sm:space-y-1 md:space-y-1.5">
-                      <p className="text-muted-foreground mb-1 sm:mb-1.5 md:mb-2 leading-tight">Down Payment</p>
-                      <p className="font-semibold text-[10px] sm:text-xs md:text-sm leading-tight">{formatCurrency(contract.down_payment || 0)}</p>
+
+                    {/* Separator */}
+                    <Separator className="bg-gray-700/30 my-2 sm:my-3" />
+
+                    {/* Financial Info Grid */}
+                    <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                      <div className="space-y-1">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Total Price</p>
+                        <p className="text-sm sm:text-base font-bold text-green-500">{formatCurrency(contract.total_price || 0)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Duration</p>
+                        <p className="text-sm sm:text-base font-semibold text-white">{contract.months || 0} months</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Down Payment</p>
+                        <p className="text-xs sm:text-sm font-semibold text-blue-400">{formatCurrency(contract.down_payment || 0)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[10px] sm:text-xs text-muted-foreground">Monthly</p>
+                        <p className="text-xs sm:text-sm font-semibold text-white">{formatCurrency(contract.monthly_payment || 0)}</p>
+                      </div>
                     </div>
-                    <div className="space-y-0.5 sm:space-y-1 md:space-y-1.5">
-                      <p className="text-muted-foreground mb-1 sm:mb-1.5 md:mb-2 leading-tight">Monthly</p>
-                      <p className="font-semibold text-[10px] sm:text-xs md:text-sm leading-tight">{formatCurrency(contract.monthly_payment || 0)}</p>
-                    </div>
-                    <div className="space-y-0.5 sm:space-y-1 md:space-y-1.5">
-                      <p className="text-muted-foreground mb-1 sm:mb-1.5 md:mb-2 leading-tight">Duration</p>
-                      <p className="font-semibold text-[10px] sm:text-xs md:text-sm leading-tight">{contract.months || 0} months</p>
-                    </div>
+
+                    {/* Created Date */}
+                    {contract.created_at && (
+                      <div className="flex items-center gap-3 sm:gap-4 pt-1">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Created</p>
+                          <p className="text-xs sm:text-sm font-medium text-white">
+                            {formatDate(contract.created_at)}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Payment Progress */}
