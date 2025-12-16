@@ -488,6 +488,9 @@ function ContractManagement() {
         {/* Stats Cards */}
         <StatsCards contracts={contracts} />
 
+        {/* Spacer */}
+        <div className="h-6 sm:h-8"></div>
+
         {/* Contracts List */}
         <div className="flex flex-col gap-6 sm:gap-8">
           {loading ? (

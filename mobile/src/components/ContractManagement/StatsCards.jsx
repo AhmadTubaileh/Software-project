@@ -24,7 +24,7 @@ const StatsCards = ({ contracts }) => {
   };
 
   return (
-    <div className="mb-4 sm:mb-6">
+    <div>
       <div className="grid grid-cols-2 gap-2 sm:gap-2.5 md:gap-3 mb-3 sm:mb-4">
         {/* Total Active */}
         <Card className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border-blue-500/20">
