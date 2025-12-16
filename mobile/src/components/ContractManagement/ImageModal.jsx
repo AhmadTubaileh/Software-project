@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { X, ZoomIn, ZoomOut, RotateCcw, Download } from 'lucide-react';
 
 // Shadcn Components
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
@@ -101,17 +101,28 @@ const ImageModal = ({ isOpen, onClose, imageSrc, customer, type = 'customer' }) 
     document.body.removeChild(link);
   };
 
+  const handleDialogChange = (open) => {
+    if (!open) {
+      onClose();
+    }
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30">
+    <Dialog open={isOpen} onOpenChange={handleDialogChange}>
+      <DialogContent 
+        showCloseButton={false}
+        className="max-w-4xl max-h-[90vh] p-0 overflow-hidden bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30 z-[300]"
+      >
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 sm:p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-b border-gray-700/30">
             <div>
-              <h3 className="font-semibold text-white text-base sm:text-lg">{getPersonName()}</h3>
-              <p className="text-xs sm:text-sm text-gray-400 capitalize mt-1">
+              <DialogTitle className="font-semibold text-white text-base sm:text-lg mb-0">
+                {getPersonName()}
+              </DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm text-gray-400 capitalize mt-1">
                 {type === 'customer' ? 'Customer ID Card' : 'Sponsor ID Card'}
-              </p>
+              </DialogDescription>
             </div>
             <div className="flex items-center gap-2">
               <Button
@@ -125,7 +136,10 @@ const ImageModal = ({ isOpen, onClose, imageSrc, customer, type = 'customer' }) 
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onClose}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
                 className="text-white hover:bg-gray-700/50 border-gray-700/30"
               >
                 <X className="h-4 w-4" />

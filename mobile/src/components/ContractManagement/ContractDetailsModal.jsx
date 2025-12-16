@@ -41,7 +41,10 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 z-[200] bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30">
+      <DialogContent 
+        showCloseButton={false}
+        className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0 z-[200] bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30"
+      >
         <DialogHeader className="p-4 sm:p-6 border-b border-gray-700/30 bg-gradient-to-br from-gray-800/80 to-gray-900/90 shrink-0">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
