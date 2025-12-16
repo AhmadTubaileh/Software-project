@@ -489,7 +489,7 @@ function ContractManagement() {
         <StatsCards contracts={contracts} />
 
         {/* Contracts List */}
-        <div className="space-y-3 sm:space-y-4">
+        <div className="flex flex-col gap-6 sm:gap-8">
           {loading ? (
             <Card className="p-8 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary mx-auto"></div>
@@ -502,7 +502,8 @@ function ContractManagement() {
             </Card>
           ) : (
             filteredContracts.map((contract) => (
-              <Card key={contract.id} className="overflow-hidden hover:shadow-lg transition-shadow bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+              <div key={contract.id}>
+                <Card className="overflow-hidden hover:shadow-lg transition-shadow bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
                 <CardHeader className="pb-2.5 sm:pb-3 md:pb-4 px-3 sm:px-4 md:px-6 pt-3 sm:pt-4 md:pt-6">
                   <div className="flex items-start justify-between gap-2 sm:gap-3 md:gap-4">
                     <div className="flex-1 min-w-0 pr-1 sm:pr-2">
@@ -686,7 +687,8 @@ function ContractManagement() {
                     </div>
                   )}
                 </CardFooter>
-              </Card>
+                </Card>
+              </div>
             ))
           )}
         </div>
