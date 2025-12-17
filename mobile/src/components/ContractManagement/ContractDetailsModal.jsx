@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { X, ClipboardList, User, Users, DollarSign, Phone, Mail, MapPin, Calendar, Package, FileText, Building2, Eye } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // Shadcn Components
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -11,6 +14,10 @@ import { Separator } from '@/components/ui/separator';
 
 const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onViewImage, getImageSrc }) => {
   const [activeTab, setActiveTab] = useState('overview');
+  const [verifying, setVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null);
+  const [verifyingSponsors, setVerifyingSponsors] = useState({});
+  const [sponsorVerificationResults, setSponsorVerificationResults] = useState({});
   
   if (!contractDetails) return null;
 
@@ -37,6 +44,120 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
     rejected: 'bg-red-500/10 text-red-500 border-red-500/20',
     completed: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
     deleted: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
+  };
+
+  // Handle customer ID card number verification
+  const handleVerifyIdCard = async () => {
+    if (!contractDetails.customer_id_card_image) {
+      toast.error('No ID card image available for verification');
+      return;
+    }
+
+    if (!contractDetails.customer_id_card_number) {
+      toast.error('No ID card number found for verification');
+      return;
+    }
+
+    setVerifying(true);
+    setVerificationResult(null);
+
+    try {
+      const loadingToast = toast.loading('Verifying ID card number...', { id: 'verify-id' });
+
+      const response = await fetch(`${API_BASE_URL}/api/ocr/verify-id-card/${contractDetails.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      toast.dismiss('verify-id');
+
+      if (!data.success) {
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      setVerificationResult(data);
+
+      if (data.match) {
+        toast.success(`✓ ID numbers match! (${Math.round(data.extractionConfidence * 100)}% confidence)`);
+      } else {
+        toast.error(`✗ ID numbers do not match`, {
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      console.error('Verification error:', error);
+      toast.error(error.message || 'Failed to verify ID card number');
+      setVerificationResult(null);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  // Handle sponsor ID card number verification
+  const handleVerifySponsorIdCard = async (sponsorId, sponsor) => {
+    if (!sponsor.id_card_image) {
+      toast.error('No ID card image available for verification');
+      return;
+    }
+
+    if (!sponsor.id_card_number) {
+      toast.error('No ID card number found for verification');
+      return;
+    }
+
+    setVerifyingSponsors(prev => ({ ...prev, [sponsorId]: true }));
+    setSponsorVerificationResults(prev => {
+      const newResults = { ...prev };
+      delete newResults[sponsorId];
+      return newResults;
+    });
+
+    try {
+      const loadingToast = toast.loading(`Verifying sponsor ${sponsor.full_name}'s ID card number...`, { id: `verify-sponsor-${sponsorId}` });
+
+      const response = await fetch(`${API_BASE_URL}/api/ocr/verify-sponsor-id/${contractDetails.id}/${sponsorId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      toast.dismiss(`verify-sponsor-${sponsorId}`);
+
+      if (!data.success) {
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      setSponsorVerificationResults(prev => ({ ...prev, [sponsorId]: data }));
+
+      if (data.match) {
+        toast.success(`✓ Sponsor ID numbers match! (${Math.round(data.extractionConfidence * 100)}% confidence)`);
+      } else {
+        toast.error(`✗ Sponsor ID numbers do not match`, {
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      console.error('Sponsor verification error:', error);
+      toast.error(error.message || 'Failed to verify sponsor ID card number');
+      setSponsorVerificationResults(prev => {
+        const newResults = { ...prev };
+        delete newResults[sponsorId];
+        return newResults;
+      });
+    } finally {
+      setVerifyingSponsors(prev => {
+        const newResults = { ...prev };
+        delete newResults[sponsorId];
+        return newResults;
+      });
+    }
   };
 
   return (
@@ -313,13 +434,74 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
                       </div>
 
                       {/* ID Card Number */}
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-start gap-3">
                         <div className="p-2 bg-gray-700/30 rounded-lg">
                           <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs sm:text-sm text-muted-foreground mb-1">ID Card Number</p>
-                          <p className="text-sm sm:text-base font-semibold text-white font-mono">{contractDetails.customer_id_card_number}</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm sm:text-base font-semibold text-white font-mono">{contractDetails.customer_id_card_number}</p>
+                            {contractDetails.customer_id_card_image && (
+                              <Button
+                                onClick={handleVerifyIdCard}
+                                disabled={verifying}
+                                size="sm"
+                                className={`h-7 text-xs px-2 ${
+                                  verifying
+                                    ? 'bg-gray-600 cursor-not-allowed'
+                                    : verificationResult?.match
+                                    ? 'bg-green-600 hover:bg-green-700'
+                                    : verificationResult?.match === false
+                                    ? 'bg-red-600 hover:bg-red-700'
+                                    : 'bg-blue-600 hover:bg-blue-700'
+                                }`}
+                                title="Verify ID card number matches the image"
+                              >
+                                {verifying ? (
+                                  '🔄 Verifying...'
+                                ) : verificationResult?.match === true ? (
+                                  '✓ Verified'
+                                ) : verificationResult?.match === false ? (
+                                  '✗ Mismatch'
+                                ) : (
+                                  '🔍 Verify ID'
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                          {/* Verification Result Display */}
+                          {verificationResult && (
+                            <div className={`mt-2 p-2 rounded-lg text-xs ${
+                              verificationResult.match
+                                ? 'bg-green-900/30 border border-green-500'
+                                : 'bg-red-900/30 border border-red-500'
+                            }`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm">
+                                  {verificationResult.match ? '✓' : '✗'}
+                                </span>
+                                <span className={`font-semibold ${
+                                  verificationResult.match ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                  {verificationResult.reason}
+                                </span>
+                                <span className="text-xs text-gray-400 ml-auto">
+                                  {Math.round(verificationResult.extractionConfidence * 100)}%
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 mt-1 pt-1 border-t border-gray-600/50">
+                                <div>
+                                  <span className="text-gray-400">Stored:</span>
+                                  <p className="font-mono font-semibold text-xs">{verificationResult.storedIdNumber}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400">Extracted:</span>
+                                  <p className="font-mono font-semibold text-xs">{verificationResult.extractedIdNumber}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -452,13 +634,74 @@ const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onVi
                                 <p className="text-sm sm:text-base font-semibold text-white">{sponsor.phone}</p>
                               </div>
                             </div>
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-start gap-3">
                               <div className="p-2 bg-gray-700/30 rounded-lg">
                                 <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
                               </div>
                               <div className="flex-1 min-w-0">
                                 <p className="text-xs sm:text-sm text-muted-foreground mb-1">ID Card</p>
-                                <p className="text-xs sm:text-sm font-semibold text-white font-mono">{sponsor.id_card_number}</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-xs sm:text-sm font-semibold text-white font-mono">{sponsor.id_card_number}</p>
+                                  {sponsor.id_card_image && (
+                                    <Button
+                                      onClick={() => handleVerifySponsorIdCard(sponsor.id, sponsor)}
+                                      disabled={verifyingSponsors[sponsor.id]}
+                                      size="sm"
+                                      className={`h-6 text-[10px] px-1.5 ${
+                                        verifyingSponsors[sponsor.id]
+                                          ? 'bg-gray-600 cursor-not-allowed'
+                                          : sponsorVerificationResults[sponsor.id]?.match
+                                          ? 'bg-green-600 hover:bg-green-700'
+                                          : sponsorVerificationResults[sponsor.id]?.match === false
+                                          ? 'bg-red-600 hover:bg-red-700'
+                                          : 'bg-blue-600 hover:bg-blue-700'
+                                      }`}
+                                      title="Verify sponsor ID card number matches the image"
+                                    >
+                                      {verifyingSponsors[sponsor.id] ? (
+                                        '🔄'
+                                      ) : sponsorVerificationResults[sponsor.id]?.match === true ? (
+                                        '✓'
+                                      ) : sponsorVerificationResults[sponsor.id]?.match === false ? (
+                                        '✗'
+                                      ) : (
+                                        '🔍'
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
+                                {/* Sponsor Verification Result Display */}
+                                {sponsorVerificationResults[sponsor.id] && (
+                                  <div className={`mt-2 p-2 rounded-lg text-[10px] ${
+                                    sponsorVerificationResults[sponsor.id].match
+                                      ? 'bg-green-900/30 border border-green-500'
+                                      : 'bg-red-900/30 border border-red-500'
+                                  }`}>
+                                    <div className="flex items-center gap-1 mb-1">
+                                      <span className="text-xs">
+                                        {sponsorVerificationResults[sponsor.id].match ? '✓' : '✗'}
+                                      </span>
+                                      <span className={`font-semibold ${
+                                        sponsorVerificationResults[sponsor.id].match ? 'text-green-400' : 'text-red-400'
+                                      }`}>
+                                        {sponsorVerificationResults[sponsor.id].reason}
+                                      </span>
+                                      <span className="text-[10px] text-gray-400 ml-auto">
+                                        {Math.round(sponsorVerificationResults[sponsor.id].extractionConfidence * 100)}%
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-1 mt-1 pt-1 border-t border-gray-600/50">
+                                      <div>
+                                        <span className="text-gray-400">Stored:</span>
+                                        <p className="font-mono font-semibold text-[10px]">{sponsorVerificationResults[sponsor.id].storedIdNumber}</p>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-400">Extracted:</span>
+                                        <p className="font-mono font-semibold text-[10px]">{sponsorVerificationResults[sponsor.id].extractedIdNumber}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
