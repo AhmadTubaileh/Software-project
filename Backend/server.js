@@ -17,6 +17,7 @@ const projectRoutes = require('./routes/projects');
 const chatRoutes = require('./routes/chats');
 const overdueRoutes = require('./routes/overdue');
 const branchRoutes = require('./routes/branchRoutes');
+const ocrRoutes = require('./routes/ocr');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -118,6 +119,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/chats', chatRoutes);
 app.use('/api/overdue', overdueRoutes);
 app.use('/api/branches', branchRoutes);
+app.use('/api/ocr', ocrRoutes);
 
 // Health check with CORS headers explicitly
 app.get('/api/health', (req, res) => {
@@ -138,7 +140,8 @@ app.get('/api/health', (req, res) => {
       '/api/projects',
       '/api/chats',
       '/api/overdue',
-      '/api/branches'
+      '/api/branches',
+      '/api/ocr'
     ]
   });
 });
