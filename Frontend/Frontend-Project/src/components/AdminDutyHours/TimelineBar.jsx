@@ -48,6 +48,67 @@ const TimelineBar = ({ sessions, date }) => {
     return aStart - bStart;
   });
 
+  // Calculate auto breaks between work sessions
+  const calculateAutoBreaks = () => {
+    const autoBreaks = [];
+    const workSessions = sortedSessions.filter(s => s.session_type === 'work');
+    const breakSessions = sortedSessions.filter(s => s.session_type === 'break');
+    
+    for (let i = 0; i < workSessions.length - 1; i++) {
+      const currentSession = workSessions[i];
+      const nextSession = workSessions[i + 1];
+      
+      const currentEnd = timeToMinutes(currentSession.out_time);
+      const nextStart = timeToMinutes(nextSession.in_time);
+      
+      // If there's a gap between the end of current session and start of next session
+      if (currentEnd && nextStart && nextStart > currentEnd) {
+        // Check if there's already a break session in this gap
+        const hasBreakInGap = breakSessions.some(breakSession => {
+          const breakStart = timeToMinutes(breakSession.in_time);
+          const breakEnd = timeToMinutes(breakSession.out_time);
+          
+          if (!breakStart || !breakEnd) return false;
+          
+          // Check if the break session overlaps with or is within the gap
+          // Break should start after current work ends and end before next work starts
+          return breakStart >= currentEnd && breakEnd <= nextStart;
+        });
+        
+        // Only create auto break if there's no existing break session in the gap
+        if (!hasBreakInGap) {
+          const breakDuration = nextStart - currentEnd;
+          
+          // Only show breaks that are at least 5 minutes (to avoid showing tiny gaps)
+          if (breakDuration >= 5) {
+            autoBreaks.push({
+              id: `auto-break-${i}`,
+              in_time: currentSession.out_time,
+              out_time: nextSession.in_time,
+              session_type: 'break',
+              auto_generated: 1,
+              isAutoBreak: true,
+              duration: breakDuration
+            });
+          }
+        }
+      }
+    }
+    
+    return autoBreaks;
+  };
+
+  const autoBreaks = calculateAutoBreaks();
+  
+  // Combine actual sessions and auto breaks, then sort by start time
+  const allTimelineItems = [...sortedSessions, ...autoBreaks].sort((a, b) => {
+    const aStart = timeToMinutes(a.in_time);
+    const bStart = timeToMinutes(b.in_time);
+    if (!aStart) return 1;
+    if (!bStart) return -1;
+    return aStart - bStart;
+  });
+
   // Generate time markers for the timeline (every 2 hours for 24-hour timeline)
   const timeMarkers = [];
   for (let hour = 0; hour <= 24; hour += 2) {
@@ -81,70 +142,105 @@ const TimelineBar = ({ sessions, date }) => {
   };
 
   return (
-    <div className="w-full min-w-[600px]">
+    <div className="w-full min-w-0 overflow-x-auto">
       {/* Timeline Container */}
-      <div className="relative bg-gray-900/50 rounded-lg p-3 border border-gray-700/50">
+      <div className="relative bg-gray-900/50 rounded-lg p-3 border border-gray-700/50 min-w-[600px]">
         {/* Time Markers */}
-        <div className="relative h-6 mb-2">
-          {timeMarkers.map((marker, index) => (
-            <div
-              key={index}
-              className="absolute top-0 transform -translate-x-1/2"
-              style={{ left: `${marker.position}%` }}
-            >
-              <div className="w-px h-2 bg-gray-600"></div>
-              <div className="text-xs text-gray-400 mt-1 whitespace-nowrap font-mono">
-                {marker.label}
+        <div className="relative h-8 mb-2 overflow-visible">
+          {timeMarkers.map((marker, index) => {
+            // Adjust transform for edge markers to prevent overflow
+            let transformClass = 'transform -translate-x-1/2';
+            if (marker.position === 0) {
+              transformClass = 'transform translate-x-0';
+            } else if (marker.position === 100) {
+              transformClass = 'transform -translate-x-full';
+            }
+            
+            return (
+              <div
+                key={index}
+                className={`absolute top-0 ${transformClass}`}
+                style={{ 
+                  left: `${marker.position}%`,
+                  maxWidth: marker.position === 0 || marker.position === 100 ? 'auto' : '100%'
+                }}
+              >
+                <div className="w-px h-2 bg-gray-600 mx-auto"></div>
+                <div className="text-xs text-gray-400 mt-1 font-mono text-center whitespace-nowrap">
+                  {marker.label}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Timeline Bar */}
         <div className="relative h-14 bg-gray-800/30 rounded border border-gray-700/30 overflow-hidden">
-          {sortedSessions.map((session, index) => {
-            const startMinutes = timeToMinutes(session.in_time);
-            const endMinutes = timeToMinutes(session.out_time);
+          {allTimelineItems.map((item, index) => {
+            const startMinutes = timeToMinutes(item.in_time);
+            const endMinutes = timeToMinutes(item.out_time);
             
             if (!startMinutes || !endMinutes) return null;
 
             const left = minutesToPosition(startMinutes);
             const width = calculateWidth(startMinutes, endMinutes);
-            const isWork = session.session_type === 'work';
-            const isUpdated = session.auto_generated === 0;
+            const isWork = item.session_type === 'work';
+            const isUpdated = item.auto_generated === 0;
+            const isAutoBreak = item.isAutoBreak === true;
 
             // Color scheme - Edited sessions have distinct colors (orange/amber tones)
-            const bgColor = isWork 
-              ? (isUpdated ? 'bg-orange-500' : 'bg-blue-600')
-              : (isUpdated ? 'bg-amber-500' : 'bg-purple-600');
+            // Auto breaks have a different style (dashed border, gray background)
+            let bgColor, borderColor, borderStyle;
             
-            const borderColor = isWork 
-              ? (isUpdated ? 'border-orange-400' : 'border-blue-500')
-              : (isUpdated ? 'border-amber-400' : 'border-purple-500');
+            if (isAutoBreak) {
+              bgColor = 'bg-gray-600/40';
+              borderColor = 'border-gray-500';
+              borderStyle = 'border-dashed';
+            } else {
+              bgColor = isWork 
+                ? (isUpdated ? 'bg-orange-500' : 'bg-blue-600')
+                : (isUpdated ? 'bg-amber-500' : 'bg-purple-600');
+              
+              borderColor = isWork 
+                ? (isUpdated ? 'border-orange-400' : 'border-blue-500')
+                : (isUpdated ? 'border-amber-400' : 'border-purple-500');
+              
+              borderStyle = 'border-solid';
+            }
 
             // Calculate duration for display
             const durationMinutes = endMinutes - startMinutes;
             const durationHours = (durationMinutes / 60).toFixed(2);
+            const durationMinutesOnly = Math.floor(durationMinutes % 60);
 
             return (
               <div
-                key={session.id || index}
-                onClick={() => setSelectedSession(session)}
-                className={`absolute h-full ${bgColor} ${borderColor} border-2 rounded transition-all hover:opacity-90 hover:scale-y-110 cursor-pointer group active:scale-95`}
+                key={item.id || item.session_id || index}
+                onClick={() => setSelectedSession(item)}
+                className={`absolute h-full ${bgColor} ${borderColor} ${borderStyle} border-2 rounded transition-all hover:opacity-90 hover:scale-y-110 cursor-pointer group active:scale-95`}
                 style={{
                   left: `${left}%`,
                   width: `${width}%`,
                   minWidth: width < 0.5 ? '2px' : 'auto'
                 }}
-                title={`Click to view details - ${isWork ? 'Work' : 'Break'}: ${formatTime(session.in_time)} - ${formatTime(session.out_time)} (${durationHours}h)${isUpdated ? ' (Updated)' : ''}`}
+                title={`Click to view details - ${isAutoBreak ? 'Auto Break' : (isWork ? 'Work' : 'Break')}: ${formatTime(item.in_time)} - ${formatTime(item.out_time)} (${durationHours}h)${isUpdated ? ' (Updated)' : ''}`}
               >
                 {/* Tooltip on hover */}
                 <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 hidden group-hover:block z-10 pointer-events-none">
                   <div className="bg-gray-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap border border-gray-600 shadow-lg">
-                    <div className="font-semibold">{isWork ? '💼 Work' : '☕ Break'}</div>
-                    <div>{formatTime(session.in_time)} - {formatTime(session.out_time)}</div>
-                    <div className="text-gray-300">Duration: {durationHours}h</div>
-                    {isUpdated && <div className="text-orange-400 text-xs mt-1">✏️ Manually Updated</div>}
+                    <div className="font-semibold">
+                      {isAutoBreak ? '⏸️ Auto Break' : (isWork ? '💼 Work' : '☕ Break')}
+                    </div>
+                    <div>{formatTime(item.in_time)} - {formatTime(item.out_time)}</div>
+                    <div className="text-gray-300">
+                      Duration: {Math.floor(durationMinutes / 60)}h {durationMinutesOnly}m
+                    </div>
+                    {isAutoBreak && (
+                      <div className="text-blue-400 text-xs mt-1">🔄 Calculated automatically</div>
+                    )}
+                    {isUpdated && !isAutoBreak && (
+                      <div className="text-orange-400 text-xs mt-1">✏️ Manually Updated</div>
+                    )}
                     <div className="text-blue-400 text-xs mt-1">Click for details</div>
                   </div>
                 </div>
@@ -153,7 +249,7 @@ const TimelineBar = ({ sessions, date }) => {
           })}
 
           {/* Empty state */}
-          {sortedSessions.length === 0 && (
+          {allTimelineItems.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center text-gray-500 text-sm">
               No sessions
             </div>
@@ -161,22 +257,22 @@ const TimelineBar = ({ sessions, date }) => {
         </div>
 
         {/* Legend */}
-        <div className="flex gap-4 mt-3 text-xs flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 bg-blue-600 rounded border border-blue-400"></div>
-            <span className="text-gray-300">Work (Auto)</span>
+        <div className="flex gap-3 sm:gap-4 mt-3 text-xs flex-wrap items-center">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="w-3 h-3 bg-blue-600 rounded border border-blue-400 shrink-0"></div>
+            <span className="text-gray-300 whitespace-nowrap">Work (Auto)</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 bg-purple-600 rounded border border-purple-400"></div>
-            <span className="text-gray-300">Break (Auto)</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="w-3 h-3 bg-orange-500 rounded border border-orange-400 shrink-0"></div>
+            <span className="text-gray-300 whitespace-nowrap">Work (Edited)</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 bg-orange-500 rounded border border-orange-400"></div>
-            <span className="text-gray-300">Work (Edited)</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="w-3 h-3 bg-amber-500 rounded border border-amber-400 shrink-0"></div>
+            <span className="text-gray-300 whitespace-nowrap">Break (Edited)</span>
           </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 bg-amber-500 rounded border border-amber-400"></div>
-            <span className="text-gray-300">Break (Edited)</span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <div className="w-3 h-3 bg-gray-600/40 rounded border-2 border-dashed border-gray-500 shrink-0"></div>
+            <span className="text-gray-300 whitespace-nowrap">Auto Break</span>
           </div>
         </div>
       </div>
@@ -205,15 +301,24 @@ const TimelineBar = ({ sessions, date }) => {
               {/* Session Type */}
               <div className="flex items-center gap-3">
                 <div className={`w-4 h-4 rounded ${
-                  selectedSession.session_type === 'work' 
-                    ? (selectedSession.auto_generated === 0 ? 'bg-orange-500' : 'bg-blue-600')
-                    : (selectedSession.auto_generated === 0 ? 'bg-amber-500' : 'bg-purple-600')
+                  selectedSession.isAutoBreak 
+                    ? 'bg-gray-600 border-2 border-dashed border-gray-500'
+                    : selectedSession.session_type === 'work' 
+                      ? (selectedSession.auto_generated === 0 ? 'bg-orange-500' : 'bg-blue-600')
+                      : (selectedSession.auto_generated === 0 ? 'bg-amber-500' : 'bg-purple-600')
                 }`}></div>
                 <div>
                   <div className="text-sm text-gray-400">Session Type</div>
                   <div className="text-lg font-semibold text-white capitalize">
-                    {selectedSession.session_type === 'work' ? '💼 Work' : '☕ Break'}
-                    {selectedSession.auto_generated === 0 && (
+                    {selectedSession.isAutoBreak 
+                      ? '⏸️ Auto Break (Calculated)'
+                      : selectedSession.session_type === 'work' 
+                        ? '💼 Work' 
+                        : '☕ Break'}
+                    {selectedSession.isAutoBreak && (
+                      <span className="ml-2 text-xs text-blue-400 bg-blue-500/20 px-2 py-1 rounded">Auto Calculated</span>
+                    )}
+                    {!selectedSession.isAutoBreak && selectedSession.auto_generated === 0 && (
                       <span className="ml-2 text-xs text-orange-400 bg-orange-500/20 px-2 py-1 rounded">Manually Updated</span>
                     )}
                   </div>

@@ -306,7 +306,7 @@ const AdminDutyHoursTable = ({ sessions, isLoading, onDayAction, onDeleteSession
                 <td className="py-3 px-4 text-gray-300 whitespace-nowrap">{row.dayName}</td>
                 
                 {/* Timeline Visualization - Shows all sessions (work + break) */}
-                <td className="py-3 px-4">
+                <td className="py-3 px-4 min-w-0">
                   <TimelineBar sessions={row.allSessions || []} date={row.rawDate} />
                 </td>
                 
