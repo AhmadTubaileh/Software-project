@@ -1,32 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import WorkerDropdown from '../TaskManagement/WorkerDropdown.jsx';
 
-const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) => {
+const EditTaskModal = ({ task, projectId, workers, currentUser, onUpdate, onClose }) => {
   const [formData, setFormData] = useState({
-    assigned_to: '',
-    task: '',
-    priority: 'medium',
-    estimated_time_minutes: '',
-    start_time: '',
-    end_time: ''
+    assigned_to: task?.assigned_to || '',
+    task: task?.task || '',
+    priority: task?.priority || 'medium',
+    estimated_time_minutes: task?.estimated_time_minutes || '',
+    start_time: task?.start_time ? new Date(task.start_time).toISOString().slice(0, 16) : '',
+    end_time: task?.end_time ? new Date(task.end_time).toISOString().slice(0, 16) : ''
   });
   const [loading, setLoading] = useState(false);
   const [conflicts, setConflicts] = useState([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
   const [dismissedConflicts, setDismissedConflicts] = useState(false);
 
+  // Check for conflicts when form data changes
+  useEffect(() => {
+    if (formData.assigned_to && formData.start_time && formData.end_time && task?.id) {
+      checkForConflicts(formData.assigned_to, formData.start_time, formData.end_time, task.id);
+    }
+  }, [formData.assigned_to, formData.start_time, formData.end_time]);
+
   const calculateEstimatedTime = (startTime, endTime) => {
     if (!startTime || !endTime) return '';
-    
     const start = new Date(startTime);
     const end = new Date(endTime);
     const diffMinutes = Math.round((end - start) / (1000 * 60));
-    
     return diffMinutes > 0 ? diffMinutes : '';
   };
 
-  // Check for scheduling conflicts
-  const checkForConflicts = async (workerId, startTime, endTime) => {
+  // Check for scheduling conflicts (excluding current task)
+  const checkForConflicts = async (workerId, startTime, endTime, excludeTaskId = null) => {
     if (!workerId || !startTime || !endTime) {
       setConflicts([]);
       return;
@@ -34,9 +39,12 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
 
     setCheckingConflicts(true);
     try {
-      const response = await fetch(
-        `http://localhost:5000/api/tasks/worker/${workerId}/conflicts?start_time=${startTime}&end_time=${endTime}`
-      );
+      let url = `http://localhost:5000/api/tasks/worker/${workerId}/conflicts?start_time=${startTime}&end_time=${endTime}`;
+      if (excludeTaskId) {
+        url += `&exclude_task_id=${excludeTaskId}`;
+      }
+      
+      const response = await fetch(url);
       const data = await response.json();
       
       if (response.ok) {
@@ -62,10 +70,11 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
     }
 
     setFormData(newFormData);
+    setDismissedConflicts(false); // Reset dismissal when times change
 
     // Check for conflicts when all time data is available
     if (newFormData.assigned_to && newFormData.start_time && newFormData.end_time) {
-      checkForConflicts(newFormData.assigned_to, newFormData.start_time, newFormData.end_time);
+      checkForConflicts(newFormData.assigned_to, newFormData.start_time, newFormData.end_time, task?.id);
     }
   };
 
@@ -74,10 +83,11 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
       ...prev,
       assigned_to: workerId
     }));
+    setDismissedConflicts(false); // Reset dismissal when worker changes
 
     // Check for conflicts when worker is selected and times are set
     if (workerId && formData.start_time && formData.end_time) {
-      checkForConflicts(workerId, formData.start_time, formData.end_time);
+      checkForConflicts(workerId, formData.start_time, formData.end_time, task?.id);
     }
   };
 
@@ -103,14 +113,14 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
 
     setLoading(true);
     try {
-      await onSubmit({
+      await onUpdate(task.id, {
         ...formData,
         estimated_time_minutes: formData.estimated_time_minutes ? parseInt(formData.estimated_time_minutes) : null,
         assigned_to: parseInt(formData.assigned_to),
         start_time: formData.start_time,
         end_time: formData.end_time
       });
-      // Clear conflicts after successful submission
+      // Clear conflicts after successful update
       setConflicts([]);
       setDismissedConflicts(false);
     } finally {
@@ -136,7 +146,7 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-gray-800 rounded-xl p-6 w-full max-w-2xl border border-gray-700/50 max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl font-bold">Add New Task</h2>
+          <h2 className="text-xl font-bold">Edit Task</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white transition-colors p-2"
@@ -272,7 +282,7 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
                   ))}
                 </div>
                 <p className="text-xs text-orange-300/70 italic">
-                  You can still create the task, but the worker will have overlapping assignments.
+                  You can still update the task, but the worker will have overlapping assignments.
                 </p>
               </div>
             </div>
@@ -308,7 +318,7 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
               className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white px-4 py-3 rounded-lg font-semibold transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
               disabled={loading || !formData.estimated_time_minutes}
             >
-              {loading ? 'Creating...' : 'Create Task'}
+              {loading ? 'Updating...' : 'Update Task'}
             </button>
           </div>
         </form>
@@ -317,4 +327,4 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
   );
 };
 
-export default AddTaskModal;
+export default EditTaskModal;

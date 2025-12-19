@@ -144,11 +144,38 @@ function ProjectDetails() {
 
       toast.success('Task created successfully!');
       setShowAddTask(false);
-      // Refresh tasks in the tasks tab
-      refreshProjectData();
+      await refreshProjectData();
     } catch (error) {
       console.error('Error creating task:', error);
       toast.error(error.message || 'Failed to create task');
+    }
+  };
+
+  // Update existing task
+  const handleUpdateTask = async (taskId, taskData) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...taskData,
+          assigned_by: currentUser.id
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to update task');
+      }
+
+      toast.success('Task updated successfully!');
+      await refreshProjectData();
+    } catch (error) {
+      console.error('Error updating task:', error);
+      toast.error(error.message || 'Failed to update task');
     }
   };
 
@@ -498,7 +525,13 @@ function ProjectDetails() {
           {/* Tab Content */}
           <div>
             {activeTab === 'tasks' && (
-              <ProjectTasks projectId={id} />
+              <ProjectTasks 
+                projectId={id} 
+                workers={workers}
+                currentUser={currentUser}
+                onUpdateTask={handleUpdateTask}
+                canManageTasks={canManageTasks}
+              />
             )}
             
             {activeTab === 'members' && (
