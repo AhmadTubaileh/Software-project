@@ -2,11 +2,13 @@ import React, { useState, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import TaskTimelineBar from './TaskTimelineBar.jsx';
 import Pagination from '../DutyHoursReport/Pagination.jsx';
+import EditTaskModal from './EditTaskModal.jsx';
 
-const ProjectTasks = ({ projectId }) => {
+const ProjectTasks = ({ projectId, workers = [], currentUser, onUpdateTask, canManageTasks = false }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
+  const [editingTask, setEditingTask] = useState(null);
   const rowsPerPage = 10;
 
   useEffect(() => {
@@ -28,6 +30,14 @@ const ProjectTasks = ({ projectId }) => {
       toast.error('Error loading tasks');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdateTask = async (taskId, taskData) => {
+    if (onUpdateTask) {
+      await onUpdateTask(taskId, taskData);
+      await fetchTasks(); // Refresh tasks after update
+      setEditingTask(null);
     }
   };
 
@@ -137,7 +147,11 @@ const ProjectTasks = ({ projectId }) => {
                     
                     {/* Timeline Visualization - Shows all tasks for this day */}
                     <td className="py-3 px-4 min-w-0">
-                      <TaskTimelineBar tasks={row.tasks} date={row.rawDate} />
+                      <TaskTimelineBar 
+                        tasks={row.tasks} 
+                        date={row.rawDate}
+                        onEditTask={canManageTasks ? setEditingTask : null}
+                      />
                     </td>
                     
                     <td className="py-3 px-4 font-semibold text-blue-300 whitespace-nowrap">
@@ -160,6 +174,18 @@ const ProjectTasks = ({ projectId }) => {
             </div>
           )}
         </div>
+      )}
+
+      {/* Edit Task Modal */}
+      {editingTask && canManageTasks && (
+        <EditTaskModal
+          task={editingTask}
+          projectId={projectId}
+          workers={workers}
+          currentUser={currentUser}
+          onUpdate={handleUpdateTask}
+          onClose={() => setEditingTask(null)}
+        />
       )}
     </div>
   );

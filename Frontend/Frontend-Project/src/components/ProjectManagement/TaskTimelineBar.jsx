@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-const TaskTimelineBar = ({ tasks, date }) => {
+const TaskTimelineBar = ({ tasks, date, onEditTask }) => {
   const [selectedTask, setSelectedTask] = useState(null);
 
   // Define the day range - Full 24 hours (00:00 to 23:59)
@@ -199,15 +199,15 @@ const TaskTimelineBar = ({ tasks, date }) => {
         {/* Timeline Bar with Multiple Layers */}
         <div 
           className="relative bg-gray-800/30 rounded border border-gray-700/30 overflow-hidden"
-          style={{ height: `${maxLayers * 14 + (maxLayers - 1) * 2}px` }}
+          style={{ height: `${maxLayers * 20 + (maxLayers - 1) * 4}px` }}
         >
           {layers.map((layerTasks, layerIndex) => (
             <div
               key={layerIndex}
               className="absolute w-full"
               style={{
-                top: `${layerIndex * 16}px`,
-                height: '14px'
+                top: `${layerIndex * 24}px`,
+                height: '20px'
               }}
             >
               {layerTasks.map((task, taskIndex) => {
@@ -427,7 +427,18 @@ const TaskTimelineBar = ({ tasks, date }) => {
               )}
             </div>
 
-            <div className="flex justify-end mt-6">
+            <div className="flex justify-end gap-3 mt-6">
+              {onEditTask && (
+                <button
+                  onClick={() => {
+                    onEditTask(selectedTask);
+                    setSelectedTask(null);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors duration-200"
+                >
+                  ✏️ Edit Task
+                </button>
+              )}
               <button
                 onClick={() => setSelectedTask(null)}
                 className="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-lg font-semibold transition-colors duration-200"

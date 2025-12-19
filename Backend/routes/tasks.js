@@ -533,13 +533,13 @@ router.get('/approval/needed/:userId', (req, res) => {
 // Check for scheduling conflicts
 router.get('/worker/:workerId/conflicts', (req, res) => {
   const workerId = req.params.workerId;
-  const { start_time, end_time } = req.query;
+  const { start_time, end_time, exclude_task_id } = req.query;
 
   if (!start_time || !end_time) {
     return res.status(400).json({ error: 'Start time and end time are required' });
   }
 
-  const query = `
+  let query = `
     SELECT t.*, p.title as project_title 
     FROM tasks t 
     LEFT JOIN projects p ON t.project_id = p.id 
@@ -548,8 +548,16 @@ router.get('/worker/:workerId/conflicts', (req, res) => {
     AND t.status NOT IN ('completed', 'cancelled')
     AND ((t.start_time BETWEEN ? AND ?) OR (t.end_time BETWEEN ? AND ?) OR (t.start_time <= ? AND t.end_time >= ?))
   `;
+  
+  const params = [workerId, start_time, end_time, start_time, end_time, start_time, end_time];
+  
+  // Exclude current task if editing
+  if (exclude_task_id) {
+    query += ` AND t.id != ?`;
+    params.push(exclude_task_id);
+  }
 
-  db.query(query, [workerId, start_time, end_time, start_time, end_time, start_time, end_time], (err, results) => {
+  db.query(query, params, (err, results) => {
     if (err) {
       console.error('Error checking conflicts:', err);
       return res.status(500).json({ error: 'Failed to check conflicts' });
