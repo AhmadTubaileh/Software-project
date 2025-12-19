@@ -1,16 +1,29 @@
 import React, { useMemo, useState } from 'react';
 import Pagination from './Pagination.jsx';
+import TimelineBar from '../AdminDutyHours/TimelineBar.jsx';
 
 const DutyHoursTable = ({ sessions, currentUser, isLoading }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 10;
 
-  // Process sessions into table data - ONLY WORK SESSIONS
+  // Process sessions into table data
   const tableData = useMemo(() => {
-    // Filter only work sessions
+    // Filter only work sessions for pairs calculation
     const workSessions = sessions.filter(session => session.session_type === 'work');
     
-    // Group by date field (the actual work date from database)
+    // Group ALL sessions (work + break) by date for timeline
+    const allSessionsGrouped = sessions.reduce((groups, session) => {
+      const workDate = session.date;
+      if (!groups[workDate]) {
+        groups[workDate] = {
+          allSessions: [] // All sessions for timeline
+        };
+      }
+      groups[workDate].allSessions.push(session);
+      return groups;
+    }, {});
+    
+    // Group work sessions by date for pairs calculation
     const groupedByDate = workSessions.reduce((groups, session) => {
       // Use the date field from database (YYYY-MM-DD format)
       const workDate = session.date;
@@ -67,11 +80,16 @@ const DutyHoursTable = ({ sessions, currentUser, isLoading }) => {
       // Get day name from work date
       const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
 
+      // Get all sessions (work + break) for this day from the allSessionsGrouped
+      const allSessionsForDay = allSessionsGrouped[workDate]?.allSessions || [];
+
       return {
         userName: currentUser?.username || 'User',
         date: formattedDate, // dd/mm/yyyy from date field
         dayName: dayName, // Day name from date field
         pairs,
+        sessions: dateSessions, // Work sessions only
+        allSessions: allSessionsForDay, // All sessions (work + break) for timeline
         totalHours: totalHours.toFixed(2),
         rawDate: workDate // For sorting if needed
       };
@@ -90,10 +108,6 @@ const DutyHoursTable = ({ sessions, currentUser, isLoading }) => {
     currentPage * rowsPerPage
   );
 
-  // Find maximum pairs for column headers
-  const maxPairs = useMemo(() => {
-    return Math.max(...sortedTableData.map(item => item.pairs.length), 1);
-  }, [sortedTableData]);
 
   // Format time display (convert 24h to 12h format)
   const formatTimeDisplay = (timeString) => {
@@ -153,7 +167,7 @@ const DutyHoursTable = ({ sessions, currentUser, isLoading }) => {
       {/* Session Summary */}
       <div className="mb-4 p-4 bg-blue-500/10 rounded-lg">
         <div className="text-sm text-blue-300">
-          Showing {tableData.length} work days • {sessions.filter(s => s.session_type === 'work').length} work sessions
+          Showing {tableData.length} days with sessions • {sessions.length} total sessions
         </div>
       </div>
 
@@ -165,19 +179,7 @@ const DutyHoursTable = ({ sessions, currentUser, isLoading }) => {
               <th className="text-left py-3 px-4 font-semibold text-gray-300 whitespace-nowrap">User Name</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-300 whitespace-nowrap">Work Date</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-300 whitespace-nowrap">Day</th>
-              
-              {/* Dynamic IN/OUT headers */}
-              {Array.from({ length: maxPairs }, (_, index) => (
-                <React.Fragment key={index}>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-300 whitespace-nowrap">
-                    In {index + 1}
-                  </th>
-                  <th className="text-left py-3 px-4 font-semibold text-gray-300 whitespace-nowrap">
-                    Out {index + 1}
-                  </th>
-                </React.Fragment>
-              ))}
-              
+              <th className="text-left py-3 px-4 font-semibold text-gray-300 whitespace-nowrap min-w-[800px]">24-Hour Timeline</th>
               <th className="text-left py-3 px-4 font-semibold text-gray-300 whitespace-nowrap">Total Hours</th>
             </tr>
           </thead>
@@ -193,20 +195,10 @@ const DutyHoursTable = ({ sessions, currentUser, isLoading }) => {
                 <td className="py-3 px-4 text-gray-300 whitespace-nowrap">{row.date}</td>
                 <td className="py-3 px-4 text-gray-300 whitespace-nowrap">{row.dayName}</td>
                 
-                {/* Dynamic IN/OUT cells */}
-                {Array.from({ length: maxPairs }, (_, pairIndex) => {
-                  const pair = row.pairs[pairIndex] || {};
-                  return (
-                    <React.Fragment key={pairIndex}>
-                      <td className="py-3 px-4 text-gray-300 whitespace-nowrap">
-                        {formatTimeDisplay(pair.inTime)}
-                      </td>
-                      <td className="py-3 px-4 text-gray-300 whitespace-nowrap">
-                        {formatTimeDisplay(pair.outTime)}
-                      </td>
-                    </React.Fragment>
-                  );
-                })}
+                {/* Timeline Visualization - Shows all sessions (work + break) */}
+                <td className="py-3 px-4 min-w-0">
+                  <TimelineBar sessions={row.allSessions || []} date={row.rawDate} />
+                </td>
                 
                 <td className="py-3 px-4 font-semibold text-blue-300 whitespace-nowrap">
                   {row.totalHours}h
