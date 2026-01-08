@@ -1,9 +1,10 @@
-import React from "react";
+import React,{useState} from "react";
 import { Link } from "react-router-dom";
-
+import LoginModal from './StoreLoginForm';
 
 export default function Header() {
-  const [searchText, setSearchText] = React.useState("");
+  const [searchText, setSearchText] = useState("");
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   function saveSearch(event) {
     setSearchText(event.target.value);
@@ -15,15 +16,25 @@ export default function Header() {
     }
   }
 
-  function login() {
-    // TODO: open login modal
-  }
+  const handleLoginSubmit = (credentials) => {
+    console.log('Login attempt with:', credentials);
+    // Add your login logic here (API call, authentication, etc.)
+    // For example:
+    // try {
+    //   const response = await api.login(credentials);
+    //   localStorage.setItem('token', response.token);
+    //   setIsLoggedIn(true);
+    // } catch (error) {
+    //   console.error('Login failed:', error);
+    // }
+  };
 
   function signup() {
     // TODO: open signup modal
   }
 
   return (
+    <>
     <header className="mars-header">
       <div className="mars-header-top">
         <a href="#" className="mars-logo">
@@ -40,7 +51,7 @@ export default function Header() {
             onKeyDown={clickedKey}
           />
 
-          <button type="button" className="mars-header-button" onClick={login}>
+          <button type="button" className="mars-header-button" onClick={() => setIsLoginModalOpen(true)}>
             Login
           </button>
 
@@ -64,5 +75,13 @@ export default function Header() {
         </ul>
       </nav>
     </header>
+
+    <LoginModal 
+        isOpen={isLoginModalOpen}
+        onClose={() => setIsLoginModalOpen(false)}
+        onLoginSubmit={handleLoginSubmit}
+    />
+
+    </>
   );
 }

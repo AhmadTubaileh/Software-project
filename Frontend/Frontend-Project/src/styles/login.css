@@ -1,0 +1,330 @@
+/* ===== LOGIN MODAL OVERLAY ===== */
+.login-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    backdrop-filter: blur(4px);
+}
+
+/* ===== LOGIN MODAL CONTAINER ===== */
+.login-modal {
+    background-color: rgba(0, 0, 0, 0.7);
+    border-radius: 12px;
+    width: 90%;
+    max-width: 420px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 178, 0, 0.1);
+    animation: modalSlideIn 0.4s ease-out;
+    overflow: hidden;
+    color: white;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ===== MODAL HEADER ===== */
+.login-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(0, 0, 0, 0.4);
+}
+
+.login-modal-header h2 {
+    margin: 0;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: rgb(255, 178, 0);
+    text-shadow: 0 0 10px rgba(255, 178, 0, 0.3);
+}
+
+/* FIX FOR CLOSE BUTTON - CHROME SPECIFIC */
+.close-button {
+    background: transparent !important; /* Force transparent */
+    border: 1px solid rgba(255, 80, 80, 0.7) !important;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: rgb(255, 80, 80) !important;
+    padding: 0 !important;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    /* Chrome specific fixes */
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    box-shadow: none !important;
+}
+
+.close-button:hover {
+    background-color: rgba(255, 80, 80, 0.15) !important;
+    box-shadow: 0 0 8px rgba(255, 80, 80, 0.4) !important;
+    transform: translateY(-1px);
+}
+
+.close-button:active {
+    transform: translateY(0);
+    box-shadow: none !important;
+}
+
+.close-button:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* ===== LOGIN FORM ===== */
+.login-form {
+    padding: 24px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.95rem;
+}
+
+/* FIX FOR INPUT FIELDS - CHROME SPECIFIC */
+.form-group input {
+    width: 100%;
+    padding: 14px 16px;
+    background-color: rgba(0, 0, 0, 0.6) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 8px;
+    font-size: 1rem;
+    box-sizing: border-box;
+    color: white !important;
+    transition: all 0.2s ease;
+    /* Chrome specific fixes */
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+}
+
+.form-group input:focus {
+    outline: none !important;
+    border-color: rgb(255, 178, 0) !important;
+    box-shadow: 0 0 0 2px rgba(255, 178, 0, 0.2) !important;
+}
+
+.form-group input::placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* Remove Chrome autofill background color */
+.form-group input:-webkit-autofill,
+.form-group input:-webkit-autofill:hover, 
+.form-group input:-webkit-autofill:focus {
+    -webkit-text-fill-color: white !important;
+    -webkit-box-shadow: 0 0 0px 1000px rgba(0, 0, 0, 0.6) inset !important;
+    transition: background-color 5000s ease-in-out 0s;
+}
+
+/* ===== PASSWORD INPUT WRAPPER ===== */
+.password-input-wrapper {
+    position: relative;
+}
+
+.password-input-wrapper input {
+    padding-right: 50px;
+}
+
+/* FIX FOR SHOW PASSWORD BUTTON - CHROME SPECIFIC */
+.show-password-button {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent !important;
+    border: none !important;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.6) !important;
+    padding: 6px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    /* Chrome specific fixes */
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    box-shadow: none !important;
+}
+
+.show-password-button:hover {
+    color: rgb(255, 178, 0) !important;
+    background-color: rgba(255, 178, 0, 0.1) !important;
+}
+
+.show-password-button:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+/* ===== LOGIN SUBMIT BUTTON - FIXED FOR CHROME ===== */
+.login-submit-button {
+    width: 100%;
+    padding: 14px 0;
+    border: none !important;
+    border-radius: 8px;
+    background: linear-gradient(90deg, rgba(181, 62, 32, 0.9), rgba(255, 178, 0, 0.9)) !important;
+    color: white !important;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    /* Chrome specific fixes */
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    box-shadow: none !important;
+}
+
+.login-submit-button:hover {
+    background: linear-gradient(90deg, rgb(181, 62, 32), rgb(255, 178, 0)) !important;
+    box-shadow: 0 0 15px rgba(255, 178, 0, 0.4) !important;
+    transform: translateY(-1px);
+}
+
+.login-submit-button:active {
+    transform: translateY(0);
+    box-shadow: 0 0 8px rgba(255, 178, 0, 0.3) !important;
+}
+
+.login-submit-button:focus {
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(255, 178, 0, 0.3) !important;
+}
+
+/* ===== LOGIN FORM FOOTER ===== */
+.login-form-footer {
+    margin-top: 20px;
+    text-align: center;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.forgot-password-link {
+    color: rgba(255, 178, 0, 0.9);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.forgot-password-link:hover {
+    color: rgb(255, 178, 0);
+    text-decoration: underline;
+    text-shadow: 0 0 8px rgba(255, 178, 0, 0.3);
+}
+
+/* ===== RESET CHROME DEFAULT STYLES ===== */
+/* This is important for Chrome compatibility */
+button, input[type="button"], input[type="submit"], input[type="reset"] {
+    background-color: transparent;
+    background-image: none;
+    -webkit-appearance: none;
+    appearance: none;
+    border: none;
+}
+
+/* Reset for all buttons in the modal */
+.login-modal button {
+    background-color: transparent;
+    background-image: none;
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+    padding: 0;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
+}
+
+/* ===== ADDITIONAL BROWSER COMPATIBILITY ===== */
+@media screen and (-webkit-min-device-pixel-ratio: 0) {
+    /* Chrome/Safari specific */
+    .close-button,
+    .show-password-button,
+    .login-submit-button {
+        background-image: none !important;
+    }
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+@media (max-width: 768px) {
+    .login-modal {
+        max-width: 95%;
+        margin: 20px;
+    }
+    
+    .login-modal-header {
+        padding: 16px 20px;
+    }
+    
+    .login-form {
+        padding: 20px;
+    }
+    
+    .login-modal-header h2 {
+        font-size: 1.4rem;
+    }
+    
+    .form-group input {
+        padding: 12px 14px;
+    }
+    
+    .login-submit-button {
+        padding: 12px 0;
+    }
+}
+
+@media (max-width: 480px) {
+    .login-modal-overlay {
+        backdrop-filter: blur(2px);
+    }
+    
+    .login-modal-header {
+        padding: 14px 16px;
+    }
+    
+    .login-form {
+        padding: 16px;
+    }
+    
+    .login-modal-header h2 {
+        font-size: 1.3rem;
+    }
+    
+    .close-button {
+        width: 28px;
+        height: 28px;
+        font-size: 1.3rem;
+    }
+}

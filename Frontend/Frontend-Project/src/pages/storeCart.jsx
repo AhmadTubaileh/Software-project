@@ -8,7 +8,7 @@ import "../styles/cart.css";
 export default function StoreCart() {
   const [cartItems, setCartItems] = React.useState(initialCartProducts);
 
-  // (optional) if you want to reuse the total below
+  // total below
   const total = cartItems.reduce(
     (sum, item) => sum + item.subtotal,
     0

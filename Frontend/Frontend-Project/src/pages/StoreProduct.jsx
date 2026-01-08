@@ -7,7 +7,7 @@ import Footer from "../components/store/Footer";
 
 
 export default function StoreProduct() {
-  const { id } = useParams(); // from /store/product/:id
+  const { id } = useParams(); //  /store/product/:id
   const product = storeProducts.find((p) => p.id === id);
 
   const [mainImage, setMainImage] = React.useState(product?.imgs?.[0] || product?.img);
