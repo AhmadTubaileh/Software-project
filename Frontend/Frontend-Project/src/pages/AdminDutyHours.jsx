@@ -13,10 +13,49 @@ import FiltersSection from '../components/AdminDutyHours/FiltersSection.jsx';
 import DayActionsModal from '../components/AdminDutyHours/DayActionsModal.jsx';
 
 function AdminDutyHours() {
+  const { currentUser } = useLocalSession();
+  
+  // Check user permissions
+  const userType = currentUser?.user_type ?? 5; // Default to trainee
+  
+  // Only Admin (0), Senior Manager (1), and Manager (2) can access this page
+  const allowedRoles = [0, 1, 2];
+  
+  if (!allowedRoles.includes(userType)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#0e1830]">
+        <AdminSidebar />
+        <div className="ml-64 flex-1 p-6">
+          <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md mx-auto">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+              <p className="text-gray-400 mb-4">
+                Your account ({getRoleName(userType)}) does not have permission to access this page.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                This page is only accessible to Administrators, Senior Managers, and Managers.
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+              >
+                Return to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Original component code continues here...
   const [sessions, setSessions] = useState([]);
   const [workers, setWorkers] = useState([]);
+  const [branches, setBranches] = useState([]);
   const [filter, setFilter] = useState({
     userId: '',
+    branchId: '',
     startDate: '2025-11-01',  // FIXED: Set to include your data
     endDate: '2025-11-30'     // FIXED: Set to include your data
   });
@@ -29,7 +68,6 @@ function AdminDutyHours() {
   const [newSession, setNewSession] = useState({
     user_id: '', session_type: 'work', in_time: '', out_time: '', date: new Date().toISOString().split('T')[0], notes: ''
   });
-  const { currentUser } = useLocalSession();
 
   const apiCall = async (url, options = {}) => {
     try {
@@ -52,24 +90,55 @@ function AdminDutyHours() {
     }
   };
 
+  const fetchAccessibleBranches = useCallback(async () => {
+    try {
+      if (!currentUser?.id) {
+        setBranches([]);
+        return;
+      }
+      
+      const url = `http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`;
+      const data = await apiCall(url);
+      console.log('Accessible branches fetched:', data);
+      setBranches(data);
+    } catch (error) {
+      console.error('Error fetching accessible branches:', error);
+      toast.error('Failed to load branches');
+      setBranches([]);
+    }
+  }, [currentUser]);
+
   const fetchWorkers = useCallback(async () => {
     try {
-      const data = await apiCall('http://localhost:5000/api/duty-hours/admin/workers');
+      // Pass current user ID and branch ID to filter by accessible branches
+      let url = currentUser?.id 
+        ? `http://localhost:5000/api/duty-hours/admin/workers?current_user_id=${currentUser.id}`
+        : 'http://localhost:5000/api/duty-hours/admin/workers';
+      
+      // Add branch filter if selected
+      if (filter.branchId) {
+        url += `&branch_id=${filter.branchId}`;
+      }
+      
+      const data = await apiCall(url);
       console.log('Workers fetched:', data);
       setWorkers(data);
     } catch (error) {
       console.error('Error fetching workers:', error);
       toast.error(error.message);
     }
-  }, []);
+  }, [currentUser, filter.branchId]);
 
   const fetchDutyHours = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { userId, startDate, endDate } = filter;
+      const { userId, branchId, startDate, endDate } = filter;
       let url = 'http://localhost:5000/api/duty-hours/admin/all?';
       if (userId) url += `user_id=${userId}&`;
-      if (startDate && endDate) url += `start_date=${startDate}&end_date=${endDate}`;
+      if (branchId) url += `branch_id=${branchId}&`;
+      if (startDate && endDate) url += `start_date=${startDate}&end_date=${endDate}&`;
+      // Pass current user ID to filter by accessible branches
+      if (currentUser?.id) url += `current_user_id=${currentUser.id}`;
 
       console.log('Fetching from URL:', url);
       
@@ -84,7 +153,11 @@ function AdminDutyHours() {
     } finally {
       setIsLoading(false);
     }
-  }, [filter]);
+  }, [filter, currentUser]);
+
+  useEffect(() => {
+    fetchAccessibleBranches();
+  }, [fetchAccessibleBranches]);
 
   useEffect(() => {
     fetchWorkers();
@@ -93,6 +166,13 @@ function AdminDutyHours() {
   useEffect(() => {
     fetchDutyHours();
   }, [fetchDutyHours]);
+
+  // Reset employee filter when branch changes
+  useEffect(() => {
+    if (filter.branchId) {
+      setFilter(prev => ({ ...prev, userId: '' }));
+    }
+  }, [filter.branchId]);
 
   const handleDeleteSession = async (sessionId) => {
     if (!confirm('Are you sure you want to delete this session?')) return;
@@ -215,6 +295,7 @@ function AdminDutyHours() {
             filter={filter}
             setFilter={setFilter}
             workers={workers}
+            branches={branches}
             isLoading={isLoading}
           />
 
@@ -270,6 +351,19 @@ function AdminDutyHours() {
       )}
     </div>
   );
+}
+
+// Helper function to get role name
+function getRoleName(userType) {
+  switch(userType) {
+    case 0: return 'Administrator';
+    case 1: return 'Senior Manager';
+    case 2: return 'Manager';
+    case 3: return 'Supervisor';
+    case 4: return 'Employee';
+    case 5: return 'Trainee';
+    default: return 'User';
+  }
 }
 
 export default AdminDutyHours;

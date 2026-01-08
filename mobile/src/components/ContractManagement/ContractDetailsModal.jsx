@@ -1,0 +1,876 @@
+import React, { useState } from 'react';
+import { X, ClipboardList, User, Users, DollarSign, Phone, Mail, MapPin, Calendar, Package, FileText, Building2, Eye } from 'lucide-react';
+import toast from 'react-hot-toast';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+// Shadcn Components
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+
+const ContractDetailsModal = ({ isOpen, onClose, contractDetails, sponsors, onViewImage, getImageSrc }) => {
+  const [activeTab, setActiveTab] = useState('overview');
+  const [verifying, setVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null);
+  const [verifyingSponsors, setVerifyingSponsors] = useState({});
+  const [sponsorVerificationResults, setSponsorVerificationResults] = useState({});
+  
+  if (!contractDetails) return null;
+
+  const formatCurrency = (amount) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0
+    }).format(amount);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  const statusColors = {
+    pending: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/20',
+    active: 'bg-green-500/10 text-green-500 border-green-500/20',
+    rejected: 'bg-red-500/10 text-red-500 border-red-500/20',
+    completed: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
+    deleted: 'bg-gray-500/10 text-gray-500 border-gray-500/20',
+  };
+
+  // Handle customer ID card number verification
+  const handleVerifyIdCard = async () => {
+    if (!contractDetails.customer_id_card_image) {
+      toast.error('No ID card image available for verification');
+      return;
+    }
+
+    if (!contractDetails.customer_id_card_number) {
+      toast.error('No ID card number found for verification');
+      return;
+    }
+
+    setVerifying(true);
+    setVerificationResult(null);
+
+    try {
+      const loadingToast = toast.loading('Verifying ID card number...', { id: 'verify-id' });
+
+      const response = await fetch(`${API_BASE_URL}/api/ocr/verify-id-card/${contractDetails.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      toast.dismiss('verify-id');
+
+      if (!data.success) {
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      setVerificationResult(data);
+
+      if (data.match) {
+        toast.success(`✓ ID numbers match! (${Math.round(data.extractionConfidence * 100)}% confidence)`);
+      } else {
+        toast.error(`✗ ID numbers do not match`, {
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      console.error('Verification error:', error);
+      toast.error(error.message || 'Failed to verify ID card number');
+      setVerificationResult(null);
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  // Handle sponsor ID card number verification
+  const handleVerifySponsorIdCard = async (sponsorId, sponsor) => {
+    if (!sponsor.id_card_image) {
+      toast.error('No ID card image available for verification');
+      return;
+    }
+
+    if (!sponsor.id_card_number) {
+      toast.error('No ID card number found for verification');
+      return;
+    }
+
+    setVerifyingSponsors(prev => ({ ...prev, [sponsorId]: true }));
+    setSponsorVerificationResults(prev => {
+      const newResults = { ...prev };
+      delete newResults[sponsorId];
+      return newResults;
+    });
+
+    try {
+      const loadingToast = toast.loading(`Verifying sponsor ${sponsor.full_name}'s ID card number...`, { id: `verify-sponsor-${sponsorId}` });
+
+      const response = await fetch(`${API_BASE_URL}/api/ocr/verify-sponsor-id/${contractDetails.id}/${sponsorId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+
+      toast.dismiss(`verify-sponsor-${sponsorId}`);
+
+      if (!data.success) {
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      setSponsorVerificationResults(prev => ({ ...prev, [sponsorId]: data }));
+
+      if (data.match) {
+        toast.success(`✓ Sponsor ID numbers match! (${Math.round(data.extractionConfidence * 100)}% confidence)`);
+      } else {
+        toast.error(`✗ Sponsor ID numbers do not match`, {
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      console.error('Sponsor verification error:', error);
+      toast.error(error.message || 'Failed to verify sponsor ID card number');
+      setSponsorVerificationResults(prev => {
+        const newResults = { ...prev };
+        delete newResults[sponsorId];
+        return newResults;
+      });
+    } finally {
+      setVerifyingSponsors(prev => {
+        const newResults = { ...prev };
+        delete newResults[sponsorId];
+        return newResults;
+      });
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent 
+        showCloseButton={false}
+        className="max-w-4xl h-[70vh] max-h-[70vh] overflow-hidden flex flex-col p-0 z-[200] bg-gradient-to-br from-gray-900/95 to-gray-800/95 border-gray-700/30"
+      >
+        <DialogHeader className="p-4 sm:p-6 border-b border-gray-700/30 bg-gradient-to-br from-gray-800/80 to-gray-900/90 shrink-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <DialogTitle className="text-lg sm:text-xl text-white">Contract #{contractDetails.id}</DialogTitle>
+              <DialogDescription className="text-xs sm:text-sm mt-1 text-gray-400">
+                {contractDetails.item_name || 'Unknown Item'}
+              </DialogDescription>
+            </div>
+            <Button variant="ghost" size="sm" onClick={onClose} className="h-8 w-8 p-0 shrink-0 text-white hover:bg-gray-700/50">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </DialogHeader>
+
+        {/* Relationship Info */}
+        {(contractDetails.original_contract_info || contractDetails.replacement_contract_info || contractDetails.status === 'rejected') && (
+          <div className="px-4 sm:px-6 py-2 sm:py-3 shrink-0 border-b border-gray-700/30">
+            <div className="flex flex-wrap gap-2">
+              {contractDetails.original_contract_info && (
+                <Badge variant="outline" className="bg-blue-500/10 text-blue-500 border-blue-500/30 text-xs">
+                  🔄 Reapplication of #{contractDetails.original_contract_info.id}
+                </Badge>
+              )}
+              {contractDetails.replacement_contract_info && (
+                <Badge variant="outline" className="bg-gray-500/10 text-gray-500 border-gray-500/30 text-xs">
+                  🔁 Replaced by #{contractDetails.replacement_contract_info.id}
+                </Badge>
+              )}
+              {contractDetails.status === 'rejected' && contractDetails.rejection_reason && (
+                <Badge variant="destructive" className="text-xs">
+                  ❌ Rejected: {contractDetails.rejection_reason}
+                </Badge>
+              )}
+            </div>
+          </div>
+        )}
+
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <TabsList className="grid grid-cols-4 px-3 sm:px-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-b border-gray-700/30 shrink-0">
+            <TabsTrigger value="overview" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <ClipboardList className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Overview</span>
+              <span className="sm:hidden">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger value="customer" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <User className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Customer</span>
+              <span className="sm:hidden">Customer</span>
+            </TabsTrigger>
+            <TabsTrigger value="sponsors" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <Users className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Sponsors ({sponsors.length})</span>
+              <span className="sm:hidden">({sponsors.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="payments" className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm">
+              <DollarSign className="h-3 w-3 sm:h-4 sm:w-4" />
+              <span className="hidden sm:inline">Payments</span>
+              <span className="sm:hidden">Payments</span>
+            </TabsTrigger>
+          </TabsList>
+
+          <div className="flex-1 overflow-hidden min-h-0 flex flex-col relative">
+            {/* Overview Tab */}
+            <TabsContent value="overview" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
+              <div className="space-y-6">
+                <div className="space-y-4">
+                <h3 className="text-base sm:text-lg font-semibold flex items-center gap-3 mb-4 text-white">
+                  <ClipboardList className="h-5 w-5" />
+                  Contract Information
+                </h3>
+                <Card className="p-5 sm:p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                  <div className="space-y-4">
+                    {/* Contract ID & Sale ID */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Contract ID</p>
+                          <p className="text-sm sm:text-base font-semibold text-white">#{contractDetails.id}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Sale ID</p>
+                          <p className="text-sm sm:text-base font-semibold text-white">#{contractDetails.sale_id}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-gray-700/30" />
+
+                    {/* Item */}
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-gray-700/30 rounded-lg">
+                        <Package className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs sm:text-sm text-muted-foreground mb-1">Item Name</p>
+                        <p className="text-sm sm:text-base font-semibold text-white truncate">{contractDetails.item_name}</p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-gray-700/30" />
+
+                    {/* Status & Created By */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Status</p>
+                          <Badge variant="outline" className={statusColors[contractDetails.status]}>
+                            {contractDetails.status.charAt(0).toUpperCase() + contractDetails.status.slice(1)}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <User className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Created By</p>
+                          <p className="text-sm sm:text-base font-semibold text-white truncate">{contractDetails.worker_name}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-gray-700/30" />
+
+                    {/* Branch & Dates */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Branch</p>
+                          <p className="text-sm sm:text-base font-semibold text-white truncate">{contractDetails.branch_name}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Start Date</p>
+                          <p className="text-sm sm:text-base font-semibold text-white">{formatDate(contractDetails.start_date)}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {contractDetails.created_at && (
+                      <>
+                        <Separator className="bg-gray-700/30" />
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-gray-700/30 rounded-lg">
+                            <Calendar className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs sm:text-sm text-muted-foreground mb-1">Created At</p>
+                            <p className="text-sm sm:text-base font-semibold text-white">{formatDate(contractDetails.created_at)}</p>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </Card>
+              </div>
+
+              <Separator className="bg-gray-700/30 my-4" />
+
+              <div className="space-y-4">
+                <h3 className="text-base sm:text-lg font-semibold flex items-center gap-3 mb-4 text-white">
+                  <DollarSign className="h-5 w-5" />
+                  Financial Summary
+                </h3>
+                <Card className="p-5 sm:p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                  <div className="space-y-4">
+                    {/* Main Financial Info */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Total Contract Value</p>
+                        <p className="text-xl sm:text-2xl font-bold text-green-500">{formatCurrency(contractDetails.total_price)}</p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Duration</p>
+                        <p className="text-lg sm:text-xl font-semibold text-white">{contractDetails.months} months</p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-gray-700/30" />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Down Payment</p>
+                        <p className="text-base sm:text-lg font-semibold text-blue-500">
+                          {formatCurrency(contractDetails.down_payment)}
+                        </p>
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Monthly Payment</p>
+                        <p className="text-base sm:text-lg font-semibold text-white">
+                          {formatCurrency(contractDetails.monthly_payment)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Separator className="bg-gray-700/30" />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <p className="text-xs sm:text-sm text-muted-foreground">Remaining Amount</p>
+                        <p className="text-base sm:text-lg font-semibold text-white">
+                          {formatCurrency(contractDetails.total_price - contractDetails.down_payment)}
+                        </p>
+                      </div>
+                      {contractDetails.last_payment_date && (
+                        <div className="space-y-1">
+                          <p className="text-xs sm:text-sm text-muted-foreground">Last Payment Date</p>
+                          <p className="text-base sm:text-lg font-semibold text-white">
+                            {formatDate(contractDetails.last_payment_date)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Customer Tab */}
+            <TabsContent value="customer" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <Card className="p-5 sm:p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                    <div className="space-y-4">
+                      {/* Full Name */}
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <User className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Full Name</p>
+                          <p className="text-sm sm:text-base font-semibold text-white">{contractDetails.customer_name}</p>
+                        </div>
+                      </div>
+
+                      <Separator className="bg-gray-700/30" />
+
+                      {/* Phone */}
+                      <div className="flex items-center gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">Phone</p>
+                          <p className="text-sm sm:text-base font-semibold text-white">{contractDetails.customer_phone}</p>
+                        </div>
+                      </div>
+
+                      {/* ID Card Number */}
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 bg-gray-700/30 rounded-lg">
+                          <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs sm:text-sm text-muted-foreground mb-1">ID Card Number</p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm sm:text-base font-semibold text-white font-mono">{contractDetails.customer_id_card_number}</p>
+                            {contractDetails.customer_id_card_image && (
+                              <Button
+                                onClick={handleVerifyIdCard}
+                                disabled={verifying}
+                                size="sm"
+                                className={`h-7 text-xs px-2 ${
+                                  verifying
+                                    ? 'bg-gray-600 cursor-not-allowed'
+                                    : verificationResult?.match
+                                    ? 'bg-green-600 hover:bg-green-700'
+                                    : verificationResult?.match === false
+                                    ? 'bg-red-600 hover:bg-red-700'
+                                    : 'bg-blue-600 hover:bg-blue-700'
+                                }`}
+                                title="Verify ID card number matches the image"
+                              >
+                                {verifying ? (
+                                  '🔄 Verifying...'
+                                ) : verificationResult?.match === true ? (
+                                  '✓ Verified'
+                                ) : verificationResult?.match === false ? (
+                                  '✗ Mismatch'
+                                ) : (
+                                  '🔍 Verify ID'
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                          {/* Verification Result Display */}
+                          {verificationResult && (
+                            <div className={`mt-2 p-2 rounded-lg text-xs ${
+                              verificationResult.match
+                                ? 'bg-green-900/30 border border-green-500'
+                                : 'bg-red-900/30 border border-red-500'
+                            }`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm">
+                                  {verificationResult.match ? '✓' : '✗'}
+                                </span>
+                                <span className={`font-semibold ${
+                                  verificationResult.match ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                  {verificationResult.reason}
+                                </span>
+                                <span className="text-xs text-gray-400 ml-auto">
+                                  {Math.round(verificationResult.extractionConfidence * 100)}%
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 mt-1 pt-1 border-t border-gray-600/50">
+                                <div>
+                                  <span className="text-gray-400">Stored:</span>
+                                  <p className="font-mono font-semibold text-xs">{verificationResult.storedIdNumber}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400">Extracted:</span>
+                                  <p className="font-mono font-semibold text-xs">{verificationResult.extractedIdNumber}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Email */}
+                      {contractDetails.customer_email && (
+                        <>
+                          <Separator className="bg-gray-700/30" />
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gray-700/30 rounded-lg">
+                              <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Email</p>
+                              <p className="text-sm sm:text-base font-semibold text-white truncate">{contractDetails.customer_email}</p>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Address */}
+                      {contractDetails.customer_address && (
+                        <>
+                          <Separator className="bg-gray-700/30" />
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gray-700/30 rounded-lg">
+                              <MapPin className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Address</p>
+                              <p className="text-sm sm:text-base font-semibold text-white">{contractDetails.customer_address}</p>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </Card>
+
+                  {contractDetails.customer_id_card_image && (() => {
+                    const imageSrc = getImageSrc(contractDetails.customer_id_card_image);
+                    return imageSrc ? (
+                      <Card className="p-5 sm:p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                        <div className="space-y-4">
+                          <h4 className="text-sm font-semibold text-white">ID Card Image</h4>
+                          <div className="aspect-video rounded-lg overflow-hidden bg-muted">
+                            <img
+                              src={imageSrc}
+                              alt="Customer ID Card"
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                console.error('Failed to load customer image:', {
+                                  src: imageSrc?.substring(0, 100),
+                                  srcType: typeof imageSrc,
+                                  rawData: contractDetails.customer_id_card_image?.substring(0, 100),
+                                  rawDataType: typeof contractDetails.customer_id_card_image,
+                                  rawDataLength: contractDetails.customer_id_card_image?.length
+                                });
+                                e.target.style.display = 'none';
+                                const errorDiv = document.createElement('div');
+                                errorDiv.className = 'w-full h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm p-4 bg-gray-800';
+                                errorDiv.textContent = 'Failed to load image';
+                                if (e.target.parentElement) {
+                                  e.target.parentElement.appendChild(errorDiv);
+                                }
+                              }}
+                            />
+                          </div>
+                          <Button
+                            onClick={() => onViewImage({
+                              full_name: contractDetails.customer_name,
+                              phone: contractDetails.customer_phone,
+                              id_card_number: contractDetails.customer_id_card_number,
+                              email: contractDetails.customer_email,
+                              address: contractDetails.customer_address,
+                              id_card_image: contractDetails.customer_id_card_image
+                            }, 'customer')}
+                            variant="outline"
+                            className="w-full bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white"
+                          >
+                            View Full Size
+                          </Button>
+                        </div>
+                      </Card>
+                    ) : null;
+                  })()}
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* Sponsors Tab */}
+            <TabsContent value="sponsors" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
+              {sponsors.length === 0 ? (
+                <div className="text-center py-12">
+                  <Users className="h-12 w-12 mx-auto text-muted-foreground/50 mb-4" />
+                  <p className="text-muted-foreground">No sponsors for this contract</p>
+                </div>
+              ) : (
+                <div className="max-h-[60vh] overflow-y-auto overflow-x-hidden pr-2 space-y-4 sm:space-y-5 custom-scrollbar">
+                  {sponsors.map((sponsor, index) => (
+                    <Card key={sponsor.id || index} className="overflow-hidden bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                      <div className="p-4 sm:p-5 md:p-6 space-y-4">
+                        <div className="flex items-center justify-between gap-2 mb-2">
+                          <h4 className="text-sm sm:text-base font-semibold text-white">Sponsor {index + 1}</h4>
+                          {sponsor.relationship && (
+                            <Badge variant="secondary" className="text-xs shrink-0">{sponsor.relationship}</Badge>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-3">
+                          {/* Full Name */}
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-gray-700/30 rounded-lg">
+                              <User className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs sm:text-sm text-muted-foreground mb-1">Full Name</p>
+                              <p className="text-sm sm:text-base font-semibold text-white">{sponsor.full_name}</p>
+                            </div>
+                          </div>
+
+                          <Separator className="bg-gray-700/30" />
+
+                          {/* Phone & ID Card */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 bg-gray-700/30 rounded-lg">
+                                <Phone className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs sm:text-sm text-muted-foreground mb-1">Phone</p>
+                                <p className="text-sm sm:text-base font-semibold text-white">{sponsor.phone}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <div className="p-2 bg-gray-700/30 rounded-lg">
+                                <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs sm:text-sm text-muted-foreground mb-1">ID Card</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <p className="text-xs sm:text-sm font-semibold text-white font-mono">{sponsor.id_card_number}</p>
+                                  {sponsor.id_card_image && (
+                                    <Button
+                                      onClick={() => handleVerifySponsorIdCard(sponsor.id, sponsor)}
+                                      disabled={verifyingSponsors[sponsor.id]}
+                                      size="sm"
+                                      className={`h-6 text-[10px] px-1.5 ${
+                                        verifyingSponsors[sponsor.id]
+                                          ? 'bg-gray-600 cursor-not-allowed'
+                                          : sponsorVerificationResults[sponsor.id]?.match
+                                          ? 'bg-green-600 hover:bg-green-700'
+                                          : sponsorVerificationResults[sponsor.id]?.match === false
+                                          ? 'bg-red-600 hover:bg-red-700'
+                                          : 'bg-blue-600 hover:bg-blue-700'
+                                      }`}
+                                      title="Verify sponsor ID card number matches the image"
+                                    >
+                                      {verifyingSponsors[sponsor.id] ? (
+                                        '🔄'
+                                      ) : sponsorVerificationResults[sponsor.id]?.match === true ? (
+                                        '✓'
+                                      ) : sponsorVerificationResults[sponsor.id]?.match === false ? (
+                                        '✗'
+                                      ) : (
+                                        '🔍'
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
+                                {/* Sponsor Verification Result Display */}
+                                {sponsorVerificationResults[sponsor.id] && (
+                                  <div className={`mt-2 p-2 rounded-lg text-[10px] ${
+                                    sponsorVerificationResults[sponsor.id].match
+                                      ? 'bg-green-900/30 border border-green-500'
+                                      : 'bg-red-900/30 border border-red-500'
+                                  }`}>
+                                    <div className="flex items-center gap-1 mb-1">
+                                      <span className="text-xs">
+                                        {sponsorVerificationResults[sponsor.id].match ? '✓' : '✗'}
+                                      </span>
+                                      <span className={`font-semibold ${
+                                        sponsorVerificationResults[sponsor.id].match ? 'text-green-400' : 'text-red-400'
+                                      }`}>
+                                        {sponsorVerificationResults[sponsor.id].reason}
+                                      </span>
+                                      <span className="text-[10px] text-gray-400 ml-auto">
+                                        {Math.round(sponsorVerificationResults[sponsor.id].extractionConfidence * 100)}%
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-1 mt-1 pt-1 border-t border-gray-600/50">
+                                      <div>
+                                        <span className="text-gray-400">Stored:</span>
+                                        <p className="font-mono font-semibold text-[10px]">{sponsorVerificationResults[sponsor.id].storedIdNumber}</p>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-400">Extracted:</span>
+                                        <p className="font-mono font-semibold text-[10px]">{sponsorVerificationResults[sponsor.id].extractedIdNumber}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Address */}
+                          {sponsor.address && (
+                            <>
+                              <Separator className="bg-gray-700/30" />
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-gray-700/30 rounded-lg">
+                                  <MapPin className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs sm:text-sm text-muted-foreground mb-1">Address</p>
+                                  <p className="text-sm sm:text-base font-semibold text-white">{sponsor.address}</p>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+
+                        {sponsor.id_card_image && (() => {
+                          const imageSrc = getImageSrc(sponsor.id_card_image);
+                          return imageSrc ? (
+                            <div className="space-y-3 sm:space-y-4 pt-2">
+                              <Separator className="bg-gray-700/30 my-3 sm:my-4" />
+                              <div className="space-y-3 sm:space-y-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 bg-gray-700/30 rounded-lg">
+                                    <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <p className="text-xs sm:text-sm font-semibold text-white mb-1">ID Card Image</p>
+                                    <p className="text-[10px] sm:text-xs text-muted-foreground">Click to view full size</p>
+                                  </div>
+                                </div>
+                                <div className="aspect-video rounded-lg overflow-hidden bg-muted border border-gray-700/30">
+                                  <img
+                                    src={imageSrc}
+                                    alt={`Sponsor ${sponsor.full_name} ID Card`}
+                                    className="w-full h-full object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                                    onClick={() => onViewImage(sponsor, 'sponsor')}
+                                    onError={(e) => {
+                                      console.error('Failed to load sponsor image:', {
+                                        src: imageSrc?.substring(0, 100),
+                                        srcType: typeof imageSrc,
+                                        rawData: sponsor.id_card_image?.substring(0, 100),
+                                        rawDataType: typeof sponsor.id_card_image,
+                                        rawDataLength: sponsor.id_card_image?.length
+                                      });
+                                      e.target.style.display = 'none';
+                                      const errorDiv = document.createElement('div');
+                                      errorDiv.className = 'w-full h-full flex items-center justify-center text-muted-foreground text-xs sm:text-sm p-4 bg-gray-800';
+                                      errorDiv.textContent = 'Failed to load image';
+                                      if (e.target.parentElement) {
+                                        e.target.parentElement.appendChild(errorDiv);
+                                      }
+                                    }}
+                                  />
+                                </div>
+                                <Button
+                                  onClick={() => onViewImage(sponsor, 'sponsor')}
+                                  variant="outline"
+                                  className="w-full bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30 hover:from-gray-700/80 hover:to-gray-800/90 text-white text-xs sm:text-sm"
+                                >
+                                  <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-2" />
+                                  View Full Size
+                                </Button>
+                              </div>
+                            </div>
+                          ) : null;
+                        })()}
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            {/* Payments Tab */}
+            <TabsContent value="payments" className="mt-0 absolute inset-0 overflow-y-auto overflow-x-hidden px-4 sm:px-6 pt-4 sm:pt-6 pb-8 sm:pb-12 custom-scrollbar">
+              <div className="space-y-6">
+                <div className="grid grid-cols-3 gap-4">
+                  <Card className="p-5 sm:p-6 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                    <div className="space-y-2">
+                      <p className="text-xs sm:text-sm text-muted-foreground">Down Payment</p>
+                      <p className="text-xl sm:text-2xl font-bold text-blue-500">
+                        {formatCurrency(contractDetails.down_payment)}
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">Month 1</p>
+                    </div>
+                  </Card>
+                  <Card className="p-5 sm:p-6 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                    <div className="space-y-2">
+                      <p className="text-xs sm:text-sm text-muted-foreground">Monthly Payment</p>
+                      <p className="text-xl sm:text-2xl font-bold text-green-500">
+                        {formatCurrency(contractDetails.monthly_payment)}
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">
+                        ×{Math.max(0, contractDetails.months - 2)} months
+                      </p>
+                    </div>
+                  </Card>
+                  <Card className="p-5 sm:p-6 text-center bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                    <div className="space-y-2">
+                      <p className="text-xs sm:text-sm text-muted-foreground">Last Payment</p>
+                      <p className="text-xl sm:text-2xl font-bold text-purple-500">
+                        {formatCurrency(contractDetails.installment_last_payment)}
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">
+                        Month {contractDetails.months}
+                      </p>
+                    </div>
+                  </Card>
+                </div>
+
+                <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Contract Value</p>
+                      <p className="text-3xl font-bold mt-1 text-green-500">{formatCurrency(contractDetails.total_price)}</p>
+                    </div>
+                    <DollarSign className="h-12 w-12 text-muted-foreground/30" />
+                  </div>
+                </Card>
+
+                <div className="space-y-4">
+                  <h4 className="text-sm font-semibold text-white">Payment Breakdown</h4>
+                  <div className="space-y-3">
+                    {contractDetails.months && Array.from({ length: contractDetails.months }).map((_, index) => {
+                      const monthNumber = index + 1;
+                      let amount = contractDetails.monthly_payment;
+                      if (monthNumber === 1) amount = contractDetails.down_payment;
+                      if (monthNumber === contractDetails.months) amount = contractDetails.installment_last_payment;
+                      
+                      return (
+                        <Card key={index} className="p-4 bg-gradient-to-br from-gray-800/80 to-gray-900/90 border-gray-700/30">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                monthNumber === 1 ? 'bg-blue-500/10 text-blue-500' :
+                                monthNumber === contractDetails.months ? 'bg-purple-500/10 text-purple-500' :
+                                'bg-green-500/10 text-green-500'
+                              }`}>
+                                {monthNumber}
+                              </div>
+                              <div>
+                                <p className="font-medium text-white">Month {monthNumber}</p>
+                                <p className="text-sm text-muted-foreground">
+                                  {monthNumber === 1 ? 'Down Payment' : 
+                                   monthNumber === contractDetails.months ? 'Final Payment' : 
+                                   'Monthly Payment'}
+                                </p>
+                              </div>
+                            </div>
+                            <p className="font-semibold text-white">{formatCurrency(amount)}</p>
+                          </div>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </div>
+        </Tabs>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default ContractDetailsModal;

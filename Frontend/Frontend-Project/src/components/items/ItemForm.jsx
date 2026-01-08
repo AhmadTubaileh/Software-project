@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 
-function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel }) {
+function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel, userBranches, allBranches, userType }) {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -14,7 +14,8 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
     quantity: 0,
     installment: 1,
     on_sale_price: '',
-    item_image: null
+    item_image: null,
+    branch_id: ''
   });
   const [previewImage, setPreviewImage] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -23,6 +24,11 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
     installment_per_month: '',
     installment_last_payment: ''
   });
+
+  // Get available branches for the form
+  const getFormBranches = () => {
+    return userType === 0 ? allBranches : userBranches;
+  };
 
   useEffect(() => {
     if (item) {
@@ -38,7 +44,8 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
         quantity: item.quantity || 0,
         installment: item.installment !== undefined ? item.installment : 1,
         on_sale_price: item.on_sale_price || '',
-        item_image: null
+        item_image: null,
+        branch_id: item.branch_id || ''
       });
       
       // Set calculated payments
@@ -67,7 +74,8 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
         quantity: 0,
         installment: 1,
         on_sale_price: '',
-        item_image: null
+        item_image: null,
+        branch_id: ''
       });
       setPreviewImage(null);
       setCalculatedPayments({
@@ -182,6 +190,11 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
         submitData.append('on_sale_price', formData.on_sale_price);
       }
       
+      // ✅ CRITICAL: Add branch_id for new items
+      if (formData.branch_id) {
+        submitData.append('branch_id', formData.branch_id);
+      }
+      
       // Append image if selected
       if (selectedFile) {
         submitData.append('item_image', selectedFile);
@@ -230,6 +243,32 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel 
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {/* Branch Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Branch * {!item && <span className="text-red-400">(Cannot be changed after creation)</span>}
+                {item && userType !== 0 && <span className="text-red-400">(Cannot be changed)</span>}
+              </label>
+              <select
+                name="branch_id"
+                value={formData.branch_id}
+                onChange={handleInputChange}
+                disabled={item && userType !== 0} // Only disable for non-admin users during edit
+                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500 disabled:opacity-50"
+                required
+              >
+                <option value="">Select a branch</option>
+                {getFormBranches() && getFormBranches().map(branch => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+              {item && userType === 0 && (
+                <p className="text-green-400 text-xs mt-1">✓ As admin, you can change the branch</p>
+              )}
+            </div>
+
             {/* Basic Information */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-1">

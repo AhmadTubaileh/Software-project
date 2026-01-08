@@ -4,15 +4,29 @@ const Project = require('../models/Project');
 const Task = require('../models/Task');
 const db = require('../config/database'); // Add this import
 
-// Get all non-deleted projects
+// Get all non-deleted projects (with optional branch filtering)
 router.get('/', (req, res) => {
-  Project.getAll((err, results) => {
-    if (err) {
-      console.error('Error fetching projects:', err);
-      return res.status(500).json({ error: 'Failed to fetch projects' });
-    }
-    res.json(results);
-  });
+  const branchId = req.query.branch_id ? parseInt(req.query.branch_id) : null;
+  
+  if (branchId) {
+    // Filter by branch_id
+    Project.getByBranch(branchId, (err, results) => {
+      if (err) {
+        console.error('Error fetching projects:', err);
+        return res.status(500).json({ error: 'Failed to fetch projects' });
+      }
+      res.json(results);
+    });
+  } else {
+    // Get all projects
+    Project.getAll((err, results) => {
+      if (err) {
+        console.error('Error fetching projects:', err);
+        return res.status(500).json({ error: 'Failed to fetch projects' });
+      }
+      res.json(results);
+    });
+  }
 });
 
 // Get project by ID
@@ -35,10 +49,14 @@ router.get('/:id', (req, res) => {
 
 // Create new project
 router.post('/', (req, res) => {
-  const { title, description, created_by, team_leader_id, status } = req.body;
+  const { title, description, created_by, team_leader_id, status, branch_id } = req.body;
 
   if (!title || !created_by) {
     return res.status(400).json({ error: 'Title and created_by are required' });
+  }
+
+  if (!branch_id) {
+    return res.status(400).json({ error: 'Branch ID is required' });
   }
 
   const projectData = {
@@ -47,6 +65,7 @@ router.post('/', (req, res) => {
     created_by,
     team_leader_id: team_leader_id || null,
     status: status || 'active',
+    branch_id: parseInt(branch_id),
     is_deleted: 0
   };
 
@@ -193,7 +212,7 @@ router.get('/:id/members', (req, res) => {
   });
 });
 
-// Add member to project
+// Add member to project (with branch validation)
 router.post('/:id/members', (req, res) => {
   const projectId = req.params.id;
   const { user_id, role } = req.body;
@@ -202,28 +221,65 @@ router.post('/:id/members', (req, res) => {
     return res.status(400).json({ error: 'User ID is required' });
   }
 
-  const memberData = {
-    project_id: projectId,
-    user_id,
-    role: role || 'member',
-    joined_at: new Date()
-  };
-
-  Project.addMember(memberData, (err, results) => {
+  // First, get the project to check its branch_id
+  Project.getById(projectId, (err, projectResults) => {
     if (err) {
-      console.error('Error adding project member:', err);
-      
-      // Check if it's a duplicate entry error
-      if (err.code === 'ER_DUP_ENTRY') {
-        return res.status(400).json({ error: 'User is already a member of this project' });
-      }
-      
-      return res.status(500).json({ error: 'Failed to add project member' });
+      console.error('Error fetching project:', err);
+      return res.status(500).json({ error: 'Failed to fetch project' });
     }
 
-    res.status(201).json({
-      message: 'Member added to project successfully',
-      memberId: results.insertId
+    if (projectResults.length === 0) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const project = projectResults[0];
+    const projectBranchId = project.branch_id;
+
+    // Check if the employee's primary_branch_id matches the project's branch_id
+    const checkEmployeeQuery = 'SELECT primary_branch_id FROM users WHERE id = ?';
+    db.query(checkEmployeeQuery, [user_id], (empErr, empResults) => {
+      if (empErr) {
+        console.error('Error checking employee branch:', empErr);
+        return res.status(500).json({ error: 'Failed to validate employee' });
+      }
+
+      if (empResults.length === 0) {
+        return res.status(404).json({ error: 'Employee not found' });
+      }
+
+      const employeePrimaryBranchId = empResults[0].primary_branch_id;
+
+      if (employeePrimaryBranchId !== projectBranchId) {
+        return res.status(400).json({ 
+          error: `Cannot add employee. Employee's primary branch (${employeePrimaryBranchId}) does not match project's branch (${projectBranchId})` 
+        });
+      }
+
+      // Branch matches, proceed with adding member
+      const memberData = {
+        project_id: projectId,
+        user_id,
+        role: role || 'member',
+        joined_at: new Date()
+      };
+
+      Project.addMember(memberData, (addErr, results) => {
+        if (addErr) {
+          console.error('Error adding project member:', addErr);
+          
+          // Check if it's a duplicate entry error
+          if (addErr.code === 'ER_DUP_ENTRY') {
+            return res.status(400).json({ error: 'User is already a member of this project' });
+          }
+          
+          return res.status(500).json({ error: 'Failed to add project member' });
+        }
+
+        res.status(201).json({
+          message: 'Member added to project successfully',
+          memberId: results.insertId
+        });
+      });
     });
   });
 });
@@ -373,273 +429,192 @@ router.delete('/:projectId/members/:userId/remove-with-tasks', (req, res) => {
   console.log(`Removing member ${userId} from project ${projectId}`);
   console.log(`Reassignment strategy: ${reassignment_strategy}, Remaining members: ${remaining_member_count}`);
 
-  // Start a transaction to ensure data consistency
-  db.beginTransaction((err) => {
-    if (err) {
-      console.error('Error starting transaction:', err);
+  // Get a connection from the pool for transaction
+  db.getConnection((connErr, connection) => {
+    if (connErr) {
+      console.error('Error getting connection:', connErr);
       return res.status(500).json({ error: 'Failed to remove member' });
     }
 
-    // 1. Get all tasks assigned to this user in this project
-    const getTasksQuery = 'SELECT id FROM tasks WHERE project_id = ? AND assigned_to = ? AND is_deleted = 0';
-    db.query(getTasksQuery, [projectId, userId], (taskErr, taskResults) => {
-      if (taskErr) {
-        return db.rollback(() => {
-          console.error('Error fetching tasks:', taskErr);
-          res.status(500).json({ error: 'Failed to remove member' });
-        });
+    // Start a transaction to ensure data consistency
+    connection.beginTransaction((err) => {
+      if (err) {
+        connection.release();
+        console.error('Error starting transaction:', err);
+        return res.status(500).json({ error: 'Failed to remove member' });
       }
 
-      const taskIds = taskResults.map(task => task.id);
-      let reassignedTasks = 0;
-      let unassignedTasks = 0;
-
-      if (taskIds.length > 0) {
-        // Process each task based on reassignment strategy
-        let processedTasks = 0;
-        
-        taskIds.forEach((taskId) => {
-          // Remove associated files
-          const deleteFilesQuery = 'DELETE FROM task_files WHERE task_id = ?';
-          db.query(deleteFilesQuery, [taskId], (fileErr) => {
-            if (fileErr) {
-              return db.rollback(() => {
-                console.error('Error deleting files:', fileErr);
-                res.status(500).json({ error: 'Failed to remove member' });
-              });
-            }
-
-            // Determine the new assignee based on strategy
-            let newAssignee = null;
-            let updateQuery = '';
-
-            if (reassignment_strategy === 'auto_reassign' && remaining_member_count === 1) {
-              // Auto-reassign to the only remaining member
-              const getRemainingMemberQuery = `
-                SELECT user_id FROM project_members 
-                WHERE project_id = ? AND user_id != ? 
-                LIMIT 1
-              `;
-              
-              db.query(getRemainingMemberQuery, [projectId, userId], (memberErr, memberResults) => {
-                if (memberErr) {
-                  return db.rollback(() => {
-                    console.error('Error fetching remaining member:', memberErr);
-                    res.status(500).json({ error: 'Failed to remove member' });
-                  });
-                }
-
-                if (memberResults.length > 0) {
-                  newAssignee = memberResults[0].user_id;
-                  console.log(`Auto-reassigning task ${taskId} to member ${newAssignee}`);
-                  
-                  // Update task: reassign and reset to pending
-                  updateQuery = `
-                    UPDATE tasks 
-                    SET assigned_to = ?, status = 'pending', rejection_notes = NULL 
-                    WHERE id = ?
-                  `;
-                  
-                  db.query(updateQuery, [newAssignee, taskId], (updateErr) => {
-                    if (updateErr) {
-                      return db.rollback(() => {
-                        console.error('Error updating task:', updateErr);
-                        res.status(500).json({ error: 'Failed to remove member' });
-                      });
-                    }
-
-                    processedTasks++;
-                    reassignedTasks++;
-
-                    // When all tasks are processed, remove the member
-                    if (processedTasks === taskIds.length) {
-                      removeMember();
-                    }
-                  });
-                } else {
-                  // Fallback: no remaining member found
-                  updateQuery = `
-                    UPDATE tasks 
-                    SET assigned_to = NULL, status = 'pending', rejection_notes = NULL 
-                    WHERE id = ?
-                  `;
-                  
-                  db.query(updateQuery, [taskId], (updateErr) => {
-                    if (updateErr) {
-                      return db.rollback(() => {
-                        console.error('Error updating task:', updateErr);
-                        res.status(500).json({ error: 'Failed to remove member' });
-                      });
-                    }
-
-                    processedTasks++;
-                    unassignedTasks++;
-
-                    if (processedTasks === taskIds.length) {
-                      removeMember();
-                    }
-                  });
-                }
-              });
-            } else {
-              // Default strategy: set to null for admin decision
-              updateQuery = `
-                UPDATE tasks 
-                SET assigned_to = NULL, status = 'pending', rejection_notes = NULL 
-                WHERE id = ?
-              `;
-              
-              db.query(updateQuery, [taskId], (updateErr) => {
-                if (updateErr) {
-                  return db.rollback(() => {
-                    console.error('Error updating task:', updateErr);
-                    res.status(500).json({ error: 'Failed to remove member' });
-                  });
-                }
-
-                processedTasks++;
-                unassignedTasks++;
-
-                if (processedTasks === taskIds.length) {
-                  removeMember();
-                }
-              });
-            }
+      // 1. Get all tasks assigned to this user in this project
+      const getTasksQuery = 'SELECT id FROM tasks WHERE project_id = ? AND assigned_to = ? AND is_deleted = 0';
+      connection.query(getTasksQuery, [projectId, userId], (taskErr, taskResults) => {
+        if (taskErr) {
+          return connection.rollback(() => {
+            connection.release();
+            console.error('Error fetching tasks:', taskErr);
+            res.status(500).json({ error: 'Failed to remove member' });
           });
-        });
-      } else {
-        // If no tasks, just remove the member
-        removeMember();
-      }
+        }
 
-      function removeMember() {
-        // Remove member from project
-        const removeMemberQuery = 'DELETE FROM project_members WHERE project_id = ? AND user_id = ?';
-        db.query(removeMemberQuery, [projectId, userId], (removeErr, removeResults) => {
-          if (removeErr) {
-            return db.rollback(() => {
-              console.error('Error removing member:', removeErr);
-              res.status(500).json({ error: 'Failed to remove member' });
-            });
-          }
+        const taskIds = taskResults.map(task => task.id);
+        let reassignedTasks = 0;
+        let unassignedTasks = 0;
 
-          // Commit transaction
-          db.commit((commitErr) => {
-            if (commitErr) {
-              return db.rollback(() => {
-                console.error('Error committing transaction:', commitErr);
-                res.status(500).json({ error: 'Failed to remove member' });
-              });
-            }
-
-            res.json({ 
-              message: 'Member removed successfully', 
-              reassignedTasks,
-              unassignedTasks,
-              totalAffectedTasks: reassignedTasks + unassignedTasks
-            });
-          });
-        });
-      }
-    });
-  });
-});
-
-// NEW: Remove member and unassign their tasks
-router.delete('/:projectId/members/:userId/remove-with-tasks', (req, res) => {
-  const { projectId, userId } = req.params;
-
-  // Start a transaction to ensure data consistency
-  db.beginTransaction((err) => {
-    if (err) {
-      console.error('Error starting transaction:', err);
-      return res.status(500).json({ error: 'Failed to remove member' });
-    }
-
-    // 1. Get all tasks assigned to this user in this project
-    const getTasksQuery = 'SELECT id FROM tasks WHERE project_id = ? AND assigned_to = ? AND is_deleted = 0';
-    db.query(getTasksQuery, [projectId, userId], (taskErr, taskResults) => {
-      if (taskErr) {
-        return db.rollback(() => {
-          console.error('Error fetching tasks:', taskErr);
-          res.status(500).json({ error: 'Failed to remove member' });
-        });
-      }
-
-      const taskIds = taskResults.map(task => task.id);
-      let unassignedTasks = 0;
-
-      if (taskIds.length > 0) {
-        // Process each task to remove files and unassign
-        let processedTasks = 0;
-        
-        taskIds.forEach((taskId) => {
-          // Remove associated files
-          const deleteFilesQuery = 'DELETE FROM task_files WHERE task_id = ?';
-          db.query(deleteFilesQuery, [taskId], (fileErr) => {
-            if (fileErr) {
-              return db.rollback(() => {
-                console.error('Error deleting files:', fileErr);
-                res.status(500).json({ error: 'Failed to remove member' });
-              });
-            }
-
-            // Unassign task and reset status
-            const updateTaskQuery = `
-              UPDATE tasks 
-              SET assigned_to = NULL, status = 'pending', rejection_notes = NULL 
-              WHERE id = ?
-            `;
-            db.query(updateTaskQuery, [taskId], (updateErr) => {
-              if (updateErr) {
-                return db.rollback(() => {
-                  console.error('Error updating task:', updateErr);
+        if (taskIds.length > 0) {
+          // Process each task based on reassignment strategy
+          let processedTasks = 0;
+          
+          taskIds.forEach((taskId) => {
+            // Remove associated files
+            const deleteFilesQuery = 'DELETE FROM task_files WHERE task_id = ?';
+            connection.query(deleteFilesQuery, [taskId], (fileErr) => {
+              if (fileErr) {
+                return connection.rollback(() => {
+                  connection.release();
+                  console.error('Error deleting files:', fileErr);
                   res.status(500).json({ error: 'Failed to remove member' });
                 });
               }
 
-              processedTasks++;
-              unassignedTasks++;
+              // Determine the new assignee based on strategy
+              let newAssignee = null;
+              let updateQuery = '';
 
-              // When all tasks are processed, remove the member
-              if (processedTasks === taskIds.length) {
-                removeMember();
+              if (reassignment_strategy === 'auto_reassign' && remaining_member_count === 1) {
+                // Auto-reassign to the only remaining member
+                const getRemainingMemberQuery = `
+                  SELECT user_id FROM project_members 
+                  WHERE project_id = ? AND user_id != ? 
+                  LIMIT 1
+                `;
+                
+                connection.query(getRemainingMemberQuery, [projectId, userId], (memberErr, memberResults) => {
+                  if (memberErr) {
+                    return connection.rollback(() => {
+                      connection.release();
+                      console.error('Error fetching remaining member:', memberErr);
+                      res.status(500).json({ error: 'Failed to remove member' });
+                    });
+                  }
+
+                  if (memberResults.length > 0) {
+                    newAssignee = memberResults[0].user_id;
+                    console.log(`Auto-reassigning task ${taskId} to member ${newAssignee}`);
+                    
+                    // Update task: reassign and reset to pending
+                    updateQuery = `
+                      UPDATE tasks 
+                      SET assigned_to = ?, status = 'pending', rejection_notes = NULL 
+                      WHERE id = ?
+                    `;
+                    
+                    connection.query(updateQuery, [newAssignee, taskId], (updateErr) => {
+                      if (updateErr) {
+                        return connection.rollback(() => {
+                          connection.release();
+                          console.error('Error updating task:', updateErr);
+                          res.status(500).json({ error: 'Failed to remove member' });
+                        });
+                      }
+
+                      processedTasks++;
+                      reassignedTasks++;
+
+                      // When all tasks are processed, remove the member
+                      if (processedTasks === taskIds.length) {
+                        removeMember();
+                      }
+                    });
+                  } else {
+                    // Fallback: no remaining member found
+                    updateQuery = `
+                      UPDATE tasks 
+                      SET assigned_to = NULL, status = 'pending', rejection_notes = NULL 
+                      WHERE id = ?
+                    `;
+                    
+                    connection.query(updateQuery, [taskId], (updateErr) => {
+                      if (updateErr) {
+                        return connection.rollback(() => {
+                          connection.release();
+                          console.error('Error updating task:', updateErr);
+                          res.status(500).json({ error: 'Failed to remove member' });
+                        });
+                      }
+
+                      processedTasks++;
+                      unassignedTasks++;
+
+                      if (processedTasks === taskIds.length) {
+                        removeMember();
+                      }
+                    });
+                  }
+                });
+              } else {
+                // Default strategy: set to null for admin decision
+                updateQuery = `
+                  UPDATE tasks 
+                  SET assigned_to = NULL, status = 'pending', rejection_notes = NULL 
+                  WHERE id = ?
+                `;
+                
+                connection.query(updateQuery, [taskId], (updateErr) => {
+                  if (updateErr) {
+                    return connection.rollback(() => {
+                      connection.release();
+                      console.error('Error updating task:', updateErr);
+                      res.status(500).json({ error: 'Failed to remove member' });
+                    });
+                  }
+
+                  processedTasks++;
+                  unassignedTasks++;
+
+                  if (processedTasks === taskIds.length) {
+                    removeMember();
+                  }
+                });
               }
             });
           });
-        });
-      } else {
-        // If no tasks, just remove the member
-        removeMember();
-      }
+        } else {
+          // If no tasks, just remove the member
+          removeMember();
+        }
 
-      function removeMember() {
-        // Remove member from project
-        const removeMemberQuery = 'DELETE FROM project_members WHERE project_id = ? AND user_id = ?';
-        db.query(removeMemberQuery, [projectId, userId], (removeErr, removeResults) => {
-          if (removeErr) {
-            return db.rollback(() => {
-              console.error('Error removing member:', removeErr);
-              res.status(500).json({ error: 'Failed to remove member' });
-            });
-          }
-
-          // Commit transaction
-          db.commit((commitErr) => {
-            if (commitErr) {
-              return db.rollback(() => {
-                console.error('Error committing transaction:', commitErr);
+        function removeMember() {
+          // Remove member from project
+          const removeMemberQuery = 'DELETE FROM project_members WHERE project_id = ? AND user_id = ?';
+          connection.query(removeMemberQuery, [projectId, userId], (removeErr, removeResults) => {
+            if (removeErr) {
+              return connection.rollback(() => {
+                connection.release();
+                console.error('Error removing member:', removeErr);
                 res.status(500).json({ error: 'Failed to remove member' });
               });
             }
 
-            res.json({ 
-              message: 'Member removed successfully', 
-              unassignedTasks 
+            // Commit transaction
+            connection.commit((commitErr) => {
+              if (commitErr) {
+                return connection.rollback(() => {
+                  connection.release();
+                  console.error('Error committing transaction:', commitErr);
+                  res.status(500).json({ error: 'Failed to remove member' });
+                });
+              }
+
+              connection.release();
+              res.json({ 
+                message: 'Member removed successfully', 
+                reassignedTasks,
+                unassignedTasks,
+                totalAffectedTasks: reassignedTasks + unassignedTasks
+              });
             });
           });
-        });
-      }
+        }
+      });
     });
   });
 });

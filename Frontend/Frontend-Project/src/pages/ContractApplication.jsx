@@ -13,10 +13,50 @@ const ContractApplication = () => {
   const location = useLocation();
   const { currentUser } = useLocalSession();
   
+  // Check user permissions at the very beginning
+  const userType = currentUser?.user_type ?? 5; // Default to trainee
+  
+  // Only Admin (0), Senior Manager (1), Manager (2), Supervisor (3), and Employee (4) can access
+  // Trainee (5) cannot access
+  const allowedRoles = [0, 1, 2, 3, 4];
+  
+  if (!allowedRoles.includes(userType)) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white">
+        <AdminSidebar />
+        <div className="ml-64 min-h-screen flex items-center justify-center">
+          <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+              <p className="text-gray-400 mb-4">
+                Your account ({getRoleName(userType)}) does not have permission to access this page.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                This page is only accessible to Administrators, Managers, Supervisors, and Employees.
+                Trainees cannot create new contracts.
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+              >
+                Return to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Original component code continues here...
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [isReapplication, setIsReapplication] = useState(false);
   const [originalContractId, setOriginalContractId] = useState(null);
+  const [accessibleBranches, setAccessibleBranches] = useState([]);
+  const [selectedBranchId, setSelectedBranchId] = useState(null);
+  const [loadingBranches, setLoadingBranches] = useState(true);
   
   // Main form state - UPDATED FOR MULTIPLE ITEMS WITH QUANTITY
   const [formData, setFormData] = useState({
@@ -40,6 +80,44 @@ const ContractApplication = () => {
     // Step 4: Contract Items - ARRAY FOR MULTIPLE ITEMS WITH QUANTITY
     contractItems: []
   });
+
+  // Fetch accessible branches on mount
+  useEffect(() => {
+    const fetchAccessibleBranches = async () => {
+      if (!currentUser?.id) {
+        setLoadingBranches(false);
+        return;
+      }
+      
+      try {
+        setLoadingBranches(true);
+        const response = await fetch(`http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch accessible branches');
+        }
+        
+        const branches = await response.json();
+        setAccessibleBranches(branches);
+        
+        // Default to user's primary branch if available
+        if (currentUser.primary_branch_id) {
+          setSelectedBranchId(currentUser.primary_branch_id);
+        } else if (branches.length > 0) {
+          // If no primary branch, use first accessible branch
+          setSelectedBranchId(branches[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching accessible branches:', error);
+        toast.error('Failed to load branches');
+        setAccessibleBranches([]);
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+
+    fetchAccessibleBranches();
+  }, [currentUser]);
 
   // Load reapplication data from location state or sessionStorage
   useEffect(() => {
@@ -186,15 +264,30 @@ const ContractApplication = () => {
       // Create FormData for batch submission
       const submitData = new FormData();
       
-      // Append customer data
-      submitData.append('customer_data', JSON.stringify(formData.customer));
-      
-      // Append sponsors data
-      submitData.append('sponsors_data', JSON.stringify(formData.sponsors));
+      // Create clean data objects without image data (images are sent as separate files)
+      const customerDataClean = { ...formData.customer };
+      delete customerDataClean.id_card_image;
+
+      const sponsorsDataClean = formData.sponsors.map(sponsor => {
+        const { id_card_image, ...sponsorWithoutImage } = sponsor;
+        return sponsorWithoutImage;
+      });
+
+      // Append customer data (without image)
+      submitData.append('customer_data', JSON.stringify(customerDataClean));
+
+      // Append sponsors data (without images)
+      submitData.append('sponsors_data', JSON.stringify(sponsorsDataClean));
       
       // Append all contract items with quantity - INCLUDING ORIGINAL CONTRACT ID
       const contractsData = [];
       
+      // Validate branch selection
+      if (!selectedBranchId) {
+        toast.error('Please select a branch for this contract');
+        return;
+      }
+
       formData.contractItems.forEach(item => {
         // For each quantity unit, create a separate contract entry
         for (let i = 0; i < item.quantity; i++) {
@@ -210,6 +303,7 @@ const ContractApplication = () => {
             installment_last_payment: item.installment_last_payment,
             start_date: item.start_date,
             worker_id: currentUser.id,
+            branch_id: selectedBranchId, // Include selected branch_id
             quantity: 1, // Each entry is for 1 item
             contract_number: i + 1, // Which copy this is (1st, 2nd, etc.)
             original_quantity: item.quantity, // Keep original for reference
@@ -220,15 +314,73 @@ const ContractApplication = () => {
       
       submitData.append('contracts_data', JSON.stringify(contractsData));
 
-      // Append customer ID card image if exists
-      if (formData.customer.id_card_image && formData.customer.id_card_image instanceof File) {
-        submitData.append('customer_id_card_image', formData.customer.id_card_image);
+      // Append customer ID card image if exists (handle both uploaded files and database base64)
+      if (formData.customer.id_card_image) {
+        if (formData.customer.id_card_image instanceof File) {
+          // New uploaded file
+          submitData.append('customer_id_card_image', formData.customer.id_card_image);
+        } else if (typeof formData.customer.id_card_image === 'string') {
+          // Base64 string from database - convert to Blob and append
+          try {
+            if (formData.customer.id_card_image.startsWith('data:')) {
+              // Extract base64 data from data URL
+              const base64Data = formData.customer.id_card_image.split(',')[1];
+              const binaryString = atob(base64Data);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const blob = new Blob([bytes], { type: 'image/jpeg' });
+              submitData.append('customer_id_card_image', blob, 'customer_image.jpg');
+            } else {
+              // Assume it's raw base64
+              const binaryString = atob(formData.customer.id_card_image);
+              const bytes = new Uint8Array(binaryString.length);
+              for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+              }
+              const blob = new Blob([bytes], { type: 'image/jpeg' });
+              submitData.append('customer_id_card_image', blob, 'customer_image.jpg');
+            }
+          } catch (error) {
+            console.warn('Failed to convert customer base64 image:', error);
+          }
+        }
       }
 
-      // Append sponsor ID card images
+      // Append sponsor ID card images (both uploaded files and database base64 strings)
       formData.sponsors.forEach((sponsor, index) => {
-        if (sponsor.id_card_image && sponsor.id_card_image instanceof File) {
-          submitData.append(`sponsor_${index}_id_card_image`, sponsor.id_card_image);
+        if (sponsor.id_card_image) {
+          if (sponsor.id_card_image instanceof File) {
+            // New uploaded file
+            submitData.append(`sponsor_${index}_id_card_image`, sponsor.id_card_image);
+          } else if (typeof sponsor.id_card_image === 'string') {
+            // Base64 string from database - convert to Blob and append
+            try {
+              if (sponsor.id_card_image.startsWith('data:')) {
+                // Extract base64 data from data URL
+                const base64Data = sponsor.id_card_image.split(',')[1];
+                const binaryString = atob(base64Data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: 'image/jpeg' });
+                submitData.append(`sponsor_${index}_id_card_image`, blob, `sponsor_${index}_image.jpg`);
+              } else {
+                // Assume it's raw base64
+                const binaryString = atob(sponsor.id_card_image);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                  bytes[i] = binaryString.charCodeAt(i);
+                }
+                const blob = new Blob([bytes], { type: 'image/jpeg' });
+                submitData.append(`sponsor_${index}_id_card_image`, blob, `sponsor_${index}_image.jpg`);
+              }
+            } catch (error) {
+              console.warn(`Failed to convert sponsor ${index} base64 image:`, error);
+            }
+          }
         }
       });
 
@@ -347,6 +499,7 @@ const ContractApplication = () => {
             isReapplication={isReapplication}
             originalContractId={originalContractId}
             onCancelEdit={handleCancelEdit}
+            selectedBranchId={selectedBranchId}
           />
         );
       default:
@@ -354,17 +507,8 @@ const ContractApplication = () => {
     }
   };
 
-  // Access control
-  if (!currentUser || (currentUser.role !== 'admin' && currentUser.role !== 'employee')) {
-    return (
-      <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p>You need admin or employee privileges to access this page.</p>
-        </div>
-      </div>
-    );
-  }
+  // Remove the old access control that was checking role field
+  // We already checked user_type at the beginning
 
   // Calculate progress based on steps completed
   const totalContracts = calculateTotalContracts();
@@ -420,6 +564,37 @@ const ContractApplication = () => {
                 <span>❌</span>
                 Cancel Edit
               </button>
+            )}
+          </div>
+
+          {/* Branch Selection - Always visible */}
+          <div className="mb-6 bg-gray-800/50 rounded-xl p-4 border border-gray-700/50">
+            <label className="block text-sm font-medium text-gray-300 mb-2">
+              Select Branch <span className="text-red-400">*</span>
+            </label>
+            {loadingBranches ? (
+              <div className="text-gray-400 text-sm">Loading branches...</div>
+            ) : accessibleBranches.length === 0 ? (
+              <div className="text-red-400 text-sm">No accessible branches found. Please contact administrator.</div>
+            ) : (
+              <select
+                value={selectedBranchId || ''}
+                onChange={(e) => setSelectedBranchId(parseInt(e.target.value))}
+                className="w-full md:w-64 px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                required
+              >
+                <option value="">-- Select Branch --</option>
+                {accessibleBranches.map((branch) => (
+                  <option key={branch.id} value={branch.id}>
+                    {branch.name}
+                  </option>
+                ))}
+              </select>
+            )}
+            {selectedBranchId && (
+              <p className="mt-2 text-xs text-gray-400">
+                Selected: {accessibleBranches.find(b => b.id === selectedBranchId)?.name || 'Unknown'}
+              </p>
             )}
           </div>
 
@@ -499,5 +674,18 @@ const ContractApplication = () => {
     </div>
   );
 };
+
+// Helper function to get role name
+function getRoleName(userType) {
+  switch(userType) {
+    case 0: return 'Administrator';
+    case 1: return 'Senior Manager';
+    case 2: return 'Manager';
+    case 3: return 'Supervisor';
+    case 4: return 'Employee';
+    case 5: return 'Trainee';
+    default: return 'User';
+  }
+}
 
 export default ContractApplication;

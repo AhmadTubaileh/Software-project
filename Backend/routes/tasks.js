@@ -94,15 +94,35 @@ router.get('/project/:projectId', (req, res) => {
   });
 });
 
-// Get workers list
+// Get workers list (with optional branch filtering)
 router.get('/workers', (req, res) => {
-  Task.getWorkers((err, results) => {
-    if (err) {
-      console.error('Error fetching workers:', err);
-      return res.status(500).json({ error: 'Failed to fetch workers' });
-    }
-    res.json(results);
-  });
+  const branchId = req.query.branch_id ? parseInt(req.query.branch_id) : null;
+  
+  if (branchId) {
+    // Filter workers by primary_branch_id
+    const query = `
+      SELECT id, username, user_type, primary_branch_id 
+      FROM users 
+      WHERE user_type BETWEEN 0 AND 9 AND primary_branch_id = ?
+      ORDER BY username
+    `;
+    db.query(query, [branchId], (err, results) => {
+      if (err) {
+        console.error('Error fetching workers by branch:', err);
+        return res.status(500).json({ error: 'Failed to fetch workers' });
+      }
+      res.json(results);
+    });
+  } else {
+    // Get all workers
+    Task.getWorkers((err, results) => {
+      if (err) {
+        console.error('Error fetching workers:', err);
+        return res.status(500).json({ error: 'Failed to fetch workers' });
+      }
+      res.json(results);
+    });
+  }
 });
 
 // Create new task
@@ -513,13 +533,13 @@ router.get('/approval/needed/:userId', (req, res) => {
 // Check for scheduling conflicts
 router.get('/worker/:workerId/conflicts', (req, res) => {
   const workerId = req.params.workerId;
-  const { start_time, end_time } = req.query;
+  const { start_time, end_time, exclude_task_id } = req.query;
 
   if (!start_time || !end_time) {
     return res.status(400).json({ error: 'Start time and end time are required' });
   }
 
-  const query = `
+  let query = `
     SELECT t.*, p.title as project_title 
     FROM tasks t 
     LEFT JOIN projects p ON t.project_id = p.id 
@@ -528,8 +548,16 @@ router.get('/worker/:workerId/conflicts', (req, res) => {
     AND t.status NOT IN ('completed', 'cancelled')
     AND ((t.start_time BETWEEN ? AND ?) OR (t.end_time BETWEEN ? AND ?) OR (t.start_time <= ? AND t.end_time >= ?))
   `;
+  
+  const params = [workerId, start_time, end_time, start_time, end_time, start_time, end_time];
+  
+  // Exclude current task if editing
+  if (exclude_task_id) {
+    query += ` AND t.id != ?`;
+    params.push(exclude_task_id);
+  }
 
-  db.query(query, [workerId, start_time, end_time, start_time, end_time, start_time, end_time], (err, results) => {
+  db.query(query, params, (err, results) => {
     if (err) {
       console.error('Error checking conflicts:', err);
       return res.status(500).json({ error: 'Failed to check conflicts' });
@@ -538,23 +566,37 @@ router.get('/worker/:workerId/conflicts', (req, res) => {
   });
 });
 
-// Get archived tasks (completed and deleted)
+// Get archived tasks (completed and deleted) - with optional branch filtering
 router.get('/archive', (req, res) => {
-  const query = `
+  const branchId = req.query.branch_id ? parseInt(req.query.branch_id) : null;
+  
+  let query = `
     SELECT 
       t.*,
       p.title as project_title,
+      p.branch_id as project_branch_id,
+      b.name as branch_name,
       assigner.username as assigned_by_name,
       assignee.username as assigned_to_name
     FROM tasks t
     LEFT JOIN projects p ON t.project_id = p.id
+    LEFT JOIN branches b ON p.branch_id = b.id
     LEFT JOIN users assigner ON t.assigned_by = assigner.id
     LEFT JOIN users assignee ON t.assigned_to = assignee.id
-    WHERE t.status = 'completed' OR t.is_deleted = 1
-    ORDER BY COALESCE(t.approved_at, t.deleted_at, t.created_at) DESC
+    WHERE (t.status = 'completed' OR t.is_deleted = 1)
   `;
-
-  db.query(query, (err, results) => {
+  
+  const params = [];
+  
+  // Add branch filter if provided
+  if (branchId) {
+    query += ` AND p.branch_id = ?`;
+    params.push(branchId);
+  }
+  
+  query += ` ORDER BY COALESCE(t.approved_at, t.deleted_at, t.created_at) DESC`;
+  
+  db.query(query, params, (err, results) => {
     if (err) {
       console.error('Error fetching archived tasks:', err);
       return res.status(500).json({ error: 'Failed to fetch archived tasks' });

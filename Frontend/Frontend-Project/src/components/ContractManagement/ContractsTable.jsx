@@ -1,6 +1,6 @@
 import React from 'react';
 
-const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject, onEditReapply, showActions = true, isAdmin = false }) => {
+const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject, onEditReapply, showActions = true, canApproveReject = false, canApproveRejectContract = null }) => {
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -92,6 +92,12 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
                       <p className="text-sm text-gray-400 mt-1">
                         Contract #{contract.id}
                       </p>
+                      {contract.branch_name && (
+                        <p className="text-xs text-blue-400 mt-1 flex items-center gap-1">
+                          <span>📍</span>
+                          <span>Branch: {contract.branch_name}</span>
+                        </p>
+                      )}
                       {contract.original_contract_info && (
                         <p className="text-xs text-blue-400 mt-1">
                           ↻ Reapplication of #{contract.original_contract_info.id}
@@ -173,8 +179,8 @@ const ContractsTable = ({ contracts, loading, onViewDetails, onApprove, onReject
                         View Details
                       </button>
 
-                      {/* Approve/Reject Buttons - ADMIN ONLY on PENDING contracts */}
-                      {showActions && contract.status === 'pending' && isAdmin && (
+                      {/* Approve/Reject Buttons - Admin/Senior Manager/Manager on PENDING contracts from accessible branches */}
+                      {showActions && contract.status === 'pending' && canApproveReject && canApproveRejectContract && canApproveRejectContract(contract) && (
                         <>
                           <button
                             onClick={() => onApprove(contract)}

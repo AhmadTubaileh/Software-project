@@ -1,6 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
+import toast from 'react-hot-toast';
 
 const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage, getImageSrc }) => {
+  const [verifying, setVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null);
+  const [verifyingSponsors, setVerifyingSponsors] = useState({}); // Track verifying state for each sponsor
+  const [sponsorVerificationResults, setSponsorVerificationResults] = useState({}); // Track results for each sponsor
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
@@ -10,6 +15,118 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleDateString();
+  };
+
+  // Handle sponsor ID card number verification
+  const handleVerifySponsorIdCard = async (sponsorId, sponsor) => {
+    if (!sponsor.id_card_image) {
+      toast.error('No ID card image available for verification');
+      return;
+    }
+
+    if (!sponsor.id_card_number) {
+      toast.error('No ID card number found for verification');
+      return;
+    }
+
+    setVerifyingSponsors(prev => ({ ...prev, [sponsorId]: true }));
+    setSponsorVerificationResults(prev => {
+      const newResults = { ...prev };
+      delete newResults[sponsorId]; // Clear previous result
+      return newResults;
+    });
+
+    try {
+      const loadingToast = toast.loading(`Verifying sponsor ${sponsor.full_name}'s ID card number...`, { id: `verify-sponsor-${sponsorId}` });
+
+      const response = await fetch(`http://localhost:5000/api/ocr/verify-sponsor-id/${contractDetails.id}/${sponsorId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      toast.dismiss(`verify-sponsor-${sponsorId}`);
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      setSponsorVerificationResults(prev => ({ ...prev, [sponsorId]: data }));
+
+      if (data.match) {
+        toast.success(`✓ Sponsor ID numbers match! (${Math.round(data.extractionConfidence * 100)}% confidence)`);
+      } else {
+        toast.error(`✗ Sponsor ID numbers do not match`, {
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      console.error('Sponsor verification error:', error);
+      toast.error(error.message || 'Failed to verify sponsor ID card number');
+      setSponsorVerificationResults(prev => {
+        const newResults = { ...prev };
+        delete newResults[sponsorId];
+        return newResults;
+      });
+    } finally {
+      setVerifyingSponsors(prev => {
+        const newResults = { ...prev };
+        delete newResults[sponsorId];
+        return newResults;
+      });
+    }
+  };
+
+  // Handle ID card number verification
+  const handleVerifyIdCard = async () => {
+    if (!contractDetails.customer_id_card_image) {
+      toast.error('No ID card image available for verification');
+      return;
+    }
+
+    if (!contractDetails.customer_id_card_number) {
+      toast.error('No ID card number found for verification');
+      return;
+    }
+
+    setVerifying(true);
+    setVerificationResult(null);
+
+    try {
+      const loadingToast = toast.loading('Verifying ID card number...', { id: 'verify-id' });
+
+      const response = await fetch(`http://localhost:5000/api/ocr/verify-id-card/${contractDetails.id}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const data = await response.json();
+      toast.dismiss('verify-id');
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Verification failed');
+      }
+
+      setVerificationResult(data);
+
+      if (data.match) {
+        toast.success(`✓ ID numbers match! (${Math.round(data.extractionConfidence * 100)}% confidence)`);
+      } else {
+        toast.error(`✗ ID numbers do not match`, {
+          duration: 5000,
+        });
+      }
+    } catch (error) {
+      console.error('Verification error:', error);
+      toast.error(error.message || 'Failed to verify ID card number');
+      setVerificationResult(null);
+    } finally {
+      setVerifying(false);
+    }
   };
 
   return (
@@ -251,7 +368,68 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
                   </div>
                   <div>
                     <label className="text-sm text-gray-400">ID Card</label>
-                    <p className="font-semibold font-mono">{contractDetails.customer_id_card_number}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold font-mono">{contractDetails.customer_id_card_number}</p>
+                      {contractDetails.customer_id_card_image && (
+                        <button
+                          type="button"
+                          onClick={handleVerifyIdCard}
+                          disabled={verifying}
+                          className={`px-3 py-1 rounded text-xs font-medium transition-colors duration-200 ${
+                            verifying
+                              ? 'bg-gray-600 cursor-not-allowed'
+                              : verificationResult?.match
+                              ? 'bg-green-600 hover:bg-green-700'
+                              : verificationResult?.match === false
+                              ? 'bg-red-600 hover:bg-red-700'
+                              : 'bg-blue-600 hover:bg-blue-700'
+                          }`}
+                          title="Verify ID card number matches the image"
+                        >
+                          {verifying ? (
+                            '🔄 Verifying...'
+                          ) : verificationResult?.match === true ? (
+                            '✓ Verified'
+                          ) : verificationResult?.match === false ? (
+                            '✗ Mismatch'
+                          ) : (
+                            '🔍 Verify ID'
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    {/* Verification Result Display */}
+                    {verificationResult && (
+                      <div className={`mt-2 p-3 rounded-lg text-sm ${
+                        verificationResult.match
+                          ? 'bg-green-900/30 border border-green-500'
+                          : 'bg-red-900/30 border border-red-500'
+                      }`}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-lg">
+                            {verificationResult.match ? '✓' : '✗'}
+                          </span>
+                          <span className={`font-semibold ${
+                            verificationResult.match ? 'text-green-400' : 'text-red-400'
+                          }`}>
+                            {verificationResult.reason}
+                          </span>
+                          <span className="text-xs text-gray-400 ml-auto">
+                            {Math.round(verificationResult.extractionConfidence * 100)}% confidence
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-xs mt-2 pt-2 border-t border-gray-600/50">
+                          <div>
+                            <span className="text-gray-400">Stored:</span>
+                            <p className="font-mono font-semibold">{verificationResult.storedIdNumber}</p>
+                          </div>
+                          <div>
+                            <span className="text-gray-400">Extracted:</span>
+                            <p className="font-mono font-semibold">{verificationResult.extractedIdNumber}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 {contractDetails.customer_email && (
@@ -348,7 +526,68 @@ const ContractDetailsModal = ({ contractDetails, sponsors, onClose, onViewImage,
                         </div>
                         <div>
                           <span className="text-gray-400">ID Card:</span>
-                          <p className="font-semibold font-mono">{sponsor.id_card_number}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold font-mono">{sponsor.id_card_number}</p>
+                            {sponsor.id_card_image && (
+                              <button
+                                type="button"
+                                onClick={() => handleVerifySponsorIdCard(sponsor.id, sponsor)}
+                                disabled={verifyingSponsors[sponsor.id]}
+                                className={`px-2 py-1 rounded text-xs font-medium transition-colors duration-200 ${
+                                  verifyingSponsors[sponsor.id]
+                                    ? 'bg-gray-600 cursor-not-allowed'
+                                    : sponsorVerificationResults[sponsor.id]?.match
+                                    ? 'bg-green-600 hover:bg-green-700'
+                                    : sponsorVerificationResults[sponsor.id]?.match === false
+                                    ? 'bg-red-600 hover:bg-red-700'
+                                    : 'bg-blue-600 hover:bg-blue-700'
+                                }`}
+                                title="Verify sponsor ID card number matches the image"
+                              >
+                                {verifyingSponsors[sponsor.id] ? (
+                                  '🔄 Verifying...'
+                                ) : sponsorVerificationResults[sponsor.id]?.match === true ? (
+                                  '✓ Verified'
+                                ) : sponsorVerificationResults[sponsor.id]?.match === false ? (
+                                  '✗ Mismatch'
+                                ) : (
+                                  '🔍 Verify ID'
+                                )}
+                              </button>
+                            )}
+                          </div>
+                          {/* Sponsor Verification Result Display */}
+                          {sponsorVerificationResults[sponsor.id] && (
+                            <div className={`mt-2 p-2 rounded-lg text-xs ${
+                              sponsorVerificationResults[sponsor.id].match
+                                ? 'bg-green-900/30 border border-green-500'
+                                : 'bg-red-900/30 border border-red-500'
+                            }`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-sm">
+                                  {sponsorVerificationResults[sponsor.id].match ? '✓' : '✗'}
+                                </span>
+                                <span className={`font-semibold ${
+                                  sponsorVerificationResults[sponsor.id].match ? 'text-green-400' : 'text-red-400'
+                                }`}>
+                                  {sponsorVerificationResults[sponsor.id].reason}
+                                </span>
+                                <span className="text-xs text-gray-400 ml-auto">
+                                  {Math.round(sponsorVerificationResults[sponsor.id].extractionConfidence * 100)}%
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 mt-1 pt-1 border-t border-gray-600/50">
+                                <div>
+                                  <span className="text-gray-400">Stored:</span>
+                                  <p className="font-mono font-semibold text-xs">{sponsorVerificationResults[sponsor.id].storedIdNumber}</p>
+                                </div>
+                                <div>
+                                  <span className="text-gray-400">Extracted:</span>
+                                  <p className="font-mono font-semibold text-xs">{sponsorVerificationResults[sponsor.id].extractedIdNumber}</p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         {sponsor.address && (
                           <div>

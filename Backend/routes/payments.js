@@ -89,6 +89,27 @@ router.post('/process', async (req, res) => {
     }
 
     try {
+      // 0. Get worker's primary branch_id
+      const workerBranch = await new Promise((resolve, reject) => {
+        db.query('SELECT primary_branch_id FROM users WHERE id = ?', [worker_id], (err, results) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          if (!results || results.length === 0) {
+            reject(new Error('Worker not found'));
+            return;
+          }
+          resolve(results[0].primary_branch_id);
+        });
+      });
+
+      if (!workerBranch) {
+        throw new Error('Worker does not have a primary branch assigned');
+      }
+
+      console.log(`📍 Worker ${worker_id} primary branch: ${workerBranch}`);
+
       // 1. Get payment details with contract info
       const payment = await Payment.getPaymentById(payment_id);
       if (!payment) {
@@ -134,13 +155,14 @@ router.post('/process', async (req, res) => {
         console.log(`✅ Down payment amount validated successfully`);
       }
 
-      // 3. Create sales record for this payment session
+      // 3. Create sales record for this payment session (with worker's branch_id)
       const salesRecordId = await Payment.createSalesRecord({
         user_id: worker_id,
         customer_id: customerId,
         item_id: itemId,
         price: paymentAmount, // Total amount paid in this session
-        contract_id: contractId
+        contract_id: contractId,
+        branch_id: workerBranch // Use worker's branch, not contract's branch
       });
 
       console.log(`   Created sales record ID: ${salesRecordId}`);
@@ -186,8 +208,8 @@ router.post('/process', async (req, res) => {
         const newAmountPaid = currentPaid + amountToApply;
         await Payment.updatePaymentAmountPaid(currentPaymentId, newAmountPaid);
         
-        // Create transaction
-        await Payment.createTransaction(currentPaymentId, salesRecordId, amountToApply, worker_id);
+        // Create transaction (with worker's branch_id)
+        await Payment.createTransaction(currentPaymentId, salesRecordId, amountToApply, worker_id, workerBranch);
         
         processedPayments.push({
           payment_id: currentPaymentId,
@@ -206,8 +228,8 @@ router.post('/process', async (req, res) => {
           // Decrease inventory
           await Payment.decreaseItemQuantity(itemId);
           
-          // Create inventory log
-          await Payment.createInventoryLog(itemId, worker_id, 'sale', -1);
+          // Create inventory log (with worker's branch_id)
+          await Payment.createInventoryLog(itemId, worker_id, 'sale', -1, workerBranch);
           
           inventoryUpdated = true;
           console.log(`     Inventory decreased for item ${itemId}`);
@@ -220,8 +242,8 @@ router.post('/process', async (req, res) => {
             // No more payments, keep remaining as credit
             console.log(`     No more payments, recording excess ${remainingPayment} as credit`);
             
-            // Create credit transaction for excess
-            await Payment.createCreditTransaction(salesRecordId, remainingPayment, worker_id, contractId);
+            // Create credit transaction for excess (with worker's branch_id)
+            await Payment.createCreditTransaction(salesRecordId, remainingPayment, worker_id, contractId, workerBranch);
             
             processedPayments.push({
               type: 'credit',

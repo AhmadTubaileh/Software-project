@@ -6,14 +6,58 @@ import ItemCard from '../components/items/ItemCard.jsx';
 import ItemForm from '../components/items/ItemForm.jsx';
 import ImageModal from '../components/items/ImageModal.jsx';
 import PriceHistoryModal from '../components/items/PriceHistoryModal.jsx';
+import ItemDuplicateModal from '../components/items/ItemDuplicateModal.jsx';
 import EmptyState from '../components/items/EmptyState.jsx';
 import toast, { Toaster } from 'react-hot-toast';
 
 function Items() {
+  const { currentUser } = useLocalSession();
+  
+  // ========== ACCESS CONTROL START ==========
+  // Get user_type from currentUser
+  const userType = currentUser?.user_type ?? 5; // Default to trainee if not set
+  
+  // Only Admin (0), Senior Manager (1), and Manager (2) can access this page
+  // Supervisor (3), Employee (4), and Trainee (5) cannot access
+  const allowedRoles = [0, 1, 2];
+  
+  if (!allowedRoles.includes(userType)) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white">
+        <AdminSidebar />
+        <div className="ml-64 min-h-screen flex items-center justify-center">
+          <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+              <p className="text-gray-400 mb-4">
+                Your account ({getRoleName(userType)}) does not have permission to access this page.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                This page is only accessible to Administrators and Managers.
+                Supervisors, Employees, and Trainees cannot access item management.
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+              >
+                Return to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ========== ACCESS CONTROL END ==========
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [availableFilter, setAvailableFilter] = useState('all');
+  const [branchFilter, setBranchFilter] = useState('all');
+  const [allBranches, setAllBranches] = useState([]);
+  const [userBranches, setUserBranches] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [isUpdateMode, setIsUpdateMode] = useState(false);
@@ -21,19 +65,72 @@ function Items() {
   const [viewingPriceHistory, setViewingPriceHistory] = useState(null);
   const [priceHistory, setPriceHistory] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
-  const { currentUser } = useLocalSession();
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false);
+  const [itemToDuplicate, setItemToDuplicate] = useState(null);
 
-  // Access control - only user_type 0-9 (workers) can access
-  if (!currentUser || currentUser.user_type > 9) {
-    return (
-      <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold mb-4">Access Denied</h1>
-          <p>You need worker privileges to access this page.</p>
-        </div>
-      </div>
-    );
-  }
+  // Load branches on mount
+  useEffect(() => {
+    loadBranches();
+  }, []);
+
+  // Load all branches for admin, accessible branches for others
+  const loadBranches = async () => {
+    try {
+      if (userType === 0) {
+        // Admin loads all branches
+        const response = await fetch('http://localhost:5000/api/employees/branches/all');
+        if (!response.ok) {
+          throw new Error('Failed to load branches');
+        }
+        const branchesData = await response.json();
+        console.log('Admin loaded all branches:', branchesData.length);
+        setAllBranches(branchesData);
+        setUserBranches(branchesData);
+      } else {
+        // Non-admin loads only accessible branches
+        await loadUserBranches();
+      }
+    } catch (error) {
+      console.error('Error loading branches:', error);
+      setAllBranches([]);
+    }
+  };
+
+  // Load accessible branches for current user
+  const loadUserBranches = async () => {
+    if (!currentUser?.id) {
+      console.log('No current user ID, skipping branch load');
+      setUserBranches([]);
+      return;
+    }
+    
+    try {
+      console.log('Loading accessible branches for user:', currentUser.id);
+      const response = await fetch(`http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`);
+      
+      if (!response.ok) {
+        console.error('Failed to load accessible branches:', response.status);
+        throw new Error('Failed to load accessible branches');
+      }
+      
+      const branchesData = await response.json();
+      console.log('User accessible branches:', branchesData);
+      
+      setUserBranches(branchesData);
+      
+      // If user is not admin, also set allBranches to accessible branches for filter dropdown
+      if (userType !== 0) {
+        setAllBranches(branchesData);
+      }
+      
+    } catch (error) {
+      console.error('Error loading user branches:', error);
+      setUserBranches([]);
+      if (userType !== 0) {
+        setAllBranches([]);
+      }
+    }
+  };
 
   // Fetch items from backend
   const fetchItems = useCallback(async () => {
@@ -82,7 +179,7 @@ function Items() {
     fetchItems();
   }, [fetchItems]);
 
-  // Filter items based on search and availability
+  // Filter items based on search, availability, and branch access
   const filteredItems = items.filter(item => {
     const matchesSearch = item.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
                          item.description?.toLowerCase().includes(searchQuery.toLowerCase());
@@ -90,7 +187,22 @@ function Items() {
     const matchesAvailability = availableFilter === 'all' || 
                                String(item.available) === availableFilter;
     
-    return matchesSearch && matchesAvailability;
+    // Branch filter
+    let matchesBranch = false;
+    if (branchFilter === 'all') {
+      // For non-admin users, filter by accessible branches even when "all" is selected
+      if (userType !== 0 && userBranches.length > 0) {
+        matchesBranch = userBranches.some(ub => ub.id === item.branch_id);
+      } else {
+        // Admin can see all items
+        matchesBranch = true;
+      }
+    } else {
+      const branchId = parseInt(branchFilter);
+      matchesBranch = item.branch_id === branchId;
+    }
+    
+    return matchesSearch && matchesAvailability && matchesBranch;
   });
 
   // Handle add new item
@@ -143,6 +255,19 @@ function Items() {
     }
   };
 
+  // Handle duplicate item
+  const handleDuplicateItem = (item) => {
+    setItemToDuplicate(item);
+    setShowDuplicateModal(true);
+  };
+
+  // Handle duplicate completion
+  const handleDuplicateComplete = () => {
+    setShowDuplicateModal(false);
+    setItemToDuplicate(null);
+    fetchItems();
+  };
+
   // Handle viewing item image
   const handleViewImage = (item) => {
     setViewingImage(item);
@@ -167,6 +292,9 @@ function Items() {
   // Handle form submission
   const handleFormSubmit = async (formData, isUpdate) => {
     try {
+      // Add currentUserId for backend access control
+      formData.append('currentUserId', currentUser?.id || 1);
+      
       let url, method;
       
       if (isUpdate) {
@@ -240,6 +368,16 @@ function Items() {
     setAvailableFilter(e.target.value);
   };
 
+  // Handle branch filter change
+  const handleBranchFilterChange = (e) => {
+    setBranchFilter(e.target.value);
+  };
+
+  // Get branches for filter dropdown
+  const getFilterBranches = () => {
+    return userType === 0 ? allBranches : userBranches;
+  };
+
   // Get full image source for modal
   const getFullImageSrc = (item) => {
     if (item.item_image) {
@@ -265,7 +403,28 @@ function Items() {
             onAddItem={handleAddItem}
             availableFilter={availableFilter}
             onAvailableFilterChange={handleAvailableFilterChange}
+            branchFilter={branchFilter}
+            onBranchFilterChange={handleBranchFilterChange}
+            allBranches={getFilterBranches()}
+            currentUser={currentUser}
           />
+
+          {/* Access Information Banner for Non-Admin */}
+          {userType !== 0 && (
+            <div className="mb-6 p-4 bg-yellow-900/30 border border-yellow-700 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-yellow-300">📋 Branch Access Information</h3>
+                  <p className="text-sm text-yellow-200 mt-1">
+                    You can only view and manage items in your accessible branches.
+                  </p>
+                  <p className="text-xs text-yellow-300 mt-1">
+                    Accessible Branches: {userBranches.map(b => b.name).join(', ')}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Loading State */}
           {loading && (
@@ -283,6 +442,9 @@ function Items() {
             currentUser={currentUser}
             onSubmit={handleFormSubmit}
             onCancel={handleFormCancel}
+            userBranches={userBranches}
+            allBranches={allBranches}
+            userType={userType}
           />
 
           {/* Image View Modal */}
@@ -306,6 +468,21 @@ function Items() {
             />
           )}
 
+          {/* Duplicate Item Modal */}
+          {itemToDuplicate && (
+            <ItemDuplicateModal
+              isOpen={showDuplicateModal}
+              item={itemToDuplicate}
+              allBranches={allBranches}
+              currentUser={currentUser}
+              onDuplicate={handleDuplicateComplete}
+              onCancel={() => {
+                setShowDuplicateModal(false);
+                setItemToDuplicate(null);
+              }}
+            />
+          )}
+
           {/* Items Grid */}
           {!loading && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -318,6 +495,8 @@ function Items() {
                   onDelete={handleDeleteItem}
                   onViewImage={handleViewImage}
                   onViewPriceHistory={handleViewPriceHistory}
+                  onDuplicate={handleDuplicateItem}
+                  isAdmin={userType === 0}
                 />
               ))}
             </div>
@@ -348,6 +527,19 @@ function Items() {
       </main>
     </div>
   );
+}
+
+// Helper function to get role name
+function getRoleName(userType) {
+  switch(userType) {
+    case 0: return 'Administrator';
+    case 1: return 'Senior Manager';
+    case 2: return 'Manager';
+    case 3: return 'Supervisor';
+    case 4: return 'Employee';
+    case 5: return 'Trainee';
+    default: return 'User';
+  }
 }
 
 export default Items;

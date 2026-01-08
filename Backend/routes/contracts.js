@@ -2,11 +2,45 @@ const express = require('express');
 const router = express.Router();
 const Contract = require('../models/Contract');
 const upload = require('../middleware/upload');
+const db = require('../config/database');
+const Employee = require('../models/Employee');
 
-// GET /api/contracts/items - Get items available for installment with latest prices
+// Helper function to get accessible branch IDs for a user
+async function getAccessibleBranchIds(userId, userType) {
+  return new Promise((resolve, reject) => {
+    // Admins see all branches (return null to skip filtering)
+    if (userType === 0) {
+      resolve(null);
+      return;
+    }
+    
+    // Get accessible branches for non-admin users
+    Employee.getAccessibleBranches(userId, (err, results) => {
+      if (err) {
+        console.error('Error getting accessible branches:', err);
+        reject(err);
+        return;
+      }
+      
+      if (!results || results.length === 0) {
+        // No accessible branches, return empty array (will show no contracts)
+        resolve([]);
+        return;
+      }
+      
+      const branchIds = results.map(b => b.id);
+      resolve(branchIds);
+    });
+  });
+}
+
+// GET /api/contracts/items - Get items available for installment with latest prices (filtered by branch)
 router.get('/items', async (req, res) => {
   try {
-    const items = await Contract.getInstallmentItems();
+    const { branch_id } = req.query;
+    const branchId = branch_id ? parseInt(branch_id) : null;
+    
+    const items = await Contract.getInstallmentItems(branchId);
     res.json(items);
   } catch (error) {
     console.error('Get installment items error:', error);
@@ -20,7 +54,21 @@ router.get('/items', async (req, res) => {
 // GET /api/contracts/pending - Get all pending contracts for review
 router.get('/pending', async (req, res) => {
   try {
-    const contracts = await Contract.getPendingContracts();
+    // Get user info from query or session (for branch filtering)
+    const userId = req.query.userId || (req.user ? req.user.id : null);
+    const userType = req.query.userType || (req.user ? req.user.user_type : 0);
+    
+    let branchIds = null;
+    if (userId) {
+      try {
+        branchIds = await getAccessibleBranchIds(userId, userType);
+      } catch (err) {
+        console.error('Error getting accessible branches:', err);
+        // Continue without branch filtering if error
+      }
+    }
+    
+    const contracts = await Contract.getPendingContracts(branchIds);
     res.json({
       success: true,
       contracts
@@ -37,8 +85,45 @@ router.get('/pending', async (req, res) => {
 // GET /api/contracts/all - Get all contracts with filters
 router.get('/all', async (req, res) => {
   try {
-    const { status } = req.query;
-    const contracts = await Contract.getAllContracts(status);
+    const { status, branch_id, showAllBranches } = req.query;
+    
+    // Get user info from query or session (for validation and branch filtering)
+    // Note: PaymentProcessing should pass showAll=true to bypass branch filtering
+    const userId = req.query.userId || (req.user ? req.user.id : null);
+    const userType = parseInt(req.query.userType || (req.user ? req.user.user_type : 0));
+    const showAll = req.query.showAll === 'true'; // For PaymentProcessing page
+    
+    // Validate user_type (must be 0-9)
+    if (userType < 0 || userType > 9 || isNaN(userType)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid user type. Must be between 0 and 9.'
+      });
+    }
+    
+    let branchIds = null;
+    
+    // If specific branch_id is provided, use that (override accessible branches filter)
+    if (branch_id) {
+      const branchId = parseInt(branch_id);
+      if (!isNaN(branchId)) {
+        branchIds = [branchId];
+      }
+    } else if (showAllBranches === 'true') {
+      // When "All Branches" is selected, show ALL contracts (no branch filtering)
+      // branchIds remains null to show all branches
+      branchIds = null;
+    } else if (!showAll && userId) {
+      // Otherwise, get accessible branches for filtering
+      try {
+        branchIds = await getAccessibleBranchIds(userId, userType);
+      } catch (err) {
+        console.error('Error getting accessible branches:', err);
+        // Continue without branch filtering if error
+      }
+    }
+    
+    const contracts = await Contract.getAllContracts(status, branchIds);
     
     res.json({
       success: true,
@@ -49,6 +134,49 @@ router.get('/all', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch contracts'
+    });
+  }
+});
+
+// GET /api/contracts/branch-analysis - Get contracts with branch analysis
+// NOTE: This route MUST come before /:id to avoid route conflicts
+router.get('/branch-analysis', async (req, res) => {
+  try {
+    const userId = req.query.userId || (req.user ? req.user.id : null);
+    const userType = req.query.userType || (req.user ? req.user.user_type : 0);
+    const { branchId } = req.query;
+    
+    let branchIds = null;
+    if (userId && userType !== 0) {
+      // Non-admins: filter by accessible branches
+      try {
+        branchIds = await getAccessibleBranchIds(userId, userType);
+      } catch (err) {
+        console.error('Error getting accessible branches:', err);
+        // Continue without branch filtering if error
+      }
+    }
+    // Admins: branchIds remains null (see all branches)
+    
+    // If specific branchId is provided, use that (override accessible branches filter)
+    if (branchId) {
+      const parsedBranchId = parseInt(branchId);
+      if (!isNaN(parsedBranchId)) {
+        branchIds = [parsedBranchId];
+      }
+    }
+    
+    const contracts = await Contract.getContractsWithBranchAnalysis(branchIds);
+    
+    res.json({
+      success: true,
+      contracts
+    });
+  } catch (error) {
+    console.error('Get branch analysis error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch branch analysis'
     });
   }
 });
@@ -179,23 +307,38 @@ router.post('/apply', upload.fields([
       item_id: contract_data.item_id
     });
 
-    // Handle file uploads
+    // Handle customer file uploads and existing images
     if (req.files && req.files['customer_id_card_image']) {
-      console.log('Customer image uploaded');
+      console.log('Customer image uploaded as file');
       customer_data.id_card_image = req.files['customer_id_card_image'][0].buffer;
+    } else if (customer_data.id_card_image) {
+      console.log('Customer image already in data (from database)');
+      // Keep existing image data - it will be processed by the Contract.apply method
+    } else {
+      console.log('Customer has no image');
+      customer_data.id_card_image = null;
     }
 
-    // Handle sponsor file uploads
-    if (req.files) {
-      console.log('Processing sponsor images');
-      sponsors_data.forEach((sponsor, index) => {
-        const fileField = `sponsor_${index}_id_card_image`;
-        if (req.files[fileField]) {
-          console.log(`Sponsor ${index} image uploaded`);
-          sponsor.id_card_image = req.files[fileField][0].buffer;
-        }
-      });
-    }
+    // Handle sponsor file uploads and existing images
+    console.log('Processing sponsor images');
+    sponsors_data.forEach((sponsor, index) => {
+      const fileField = `sponsor_${index}_id_card_image`;
+
+      // First, check for uploaded files
+      if (req.files && req.files[fileField]) {
+        console.log(`Sponsor ${index} image uploaded as file`);
+        sponsor.id_card_image = req.files[fileField][0].buffer;
+      }
+      // If no uploaded file but sponsor already has image data (from database verification)
+      else if (sponsor.id_card_image) {
+        console.log(`Sponsor ${index} image already in data (from database)`);
+        // Keep existing image data - it will be processed by insertSponsorSafely
+      }
+      else {
+        console.log(`Sponsor ${index} has no image`);
+        sponsor.id_card_image = null;
+      }
+    });
 
     // Apply for contract
     const result = await Contract.apply({
@@ -253,23 +396,38 @@ router.post('/apply-multiple', upload.fields([
       });
     }
 
-    // Handle file uploads
+    // Handle customer file uploads and existing images
     if (req.files && req.files['customer_id_card_image']) {
-      console.log('Customer image uploaded');
+      console.log('Customer image uploaded as file');
       customer_data.id_card_image = req.files['customer_id_card_image'][0].buffer;
+    } else if (customer_data.id_card_image) {
+      console.log('Customer image already in data (from database)');
+      // Keep existing image data - it will be processed by the Contract.apply method
+    } else {
+      console.log('Customer has no image');
+      customer_data.id_card_image = null;
     }
 
-    // Handle sponsor file uploads
-    if (req.files) {
-      console.log('Processing sponsor images');
-      sponsors_data.forEach((sponsor, index) => {
-        const fileField = `sponsor_${index}_id_card_image`;
-        if (req.files[fileField]) {
-          console.log(`Sponsor ${index} image uploaded`);
-          sponsor.id_card_image = req.files[fileField][0].buffer;
-        }
-      });
-    }
+    // Handle sponsor file uploads and existing images
+    console.log('Processing sponsor images');
+    sponsors_data.forEach((sponsor, index) => {
+      const fileField = `sponsor_${index}_id_card_image`;
+
+      // First, check for uploaded files
+      if (req.files && req.files[fileField]) {
+        console.log(`Sponsor ${index} image uploaded as file`);
+        sponsor.id_card_image = req.files[fileField][0].buffer;
+      }
+      // If no uploaded file but sponsor already has image data (from database verification)
+      else if (sponsor.id_card_image) {
+        console.log(`Sponsor ${index} image already in data (from database)`);
+        // Keep existing image data - it will be processed by insertSponsorSafely
+      }
+      else {
+        console.log(`Sponsor ${index} has no image`);
+        sponsor.id_card_image = null;
+      }
+    });
 
     // Prepare contracts for batch processing
     const contractsToProcess = contracts_data.map(contract_data => ({
@@ -397,6 +555,129 @@ router.get('/search/customer', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to search contracts'
+    });
+  }
+});
+
+// POST /api/contracts/transfer-transactions - Transfer transaction(s) to contract's branch
+// Updates transaction branch_id to contract's branch_id
+router.post('/transfer-transactions', async (req, res) => {
+  try {
+    const { transaction_ids } = req.body; // Array of transaction IDs
+    
+    if (!transaction_ids || !Array.isArray(transaction_ids) || transaction_ids.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Transaction IDs array is required'
+      });
+    }
+
+    // Get user info (optional - for logging)
+    const userId = req.body.userId || (req.user ? req.user.id : null);
+
+    // Start transaction
+    db.query('START TRANSACTION', async (startErr) => {
+      if (startErr) {
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to start transaction'
+        });
+      }
+
+      try {
+        let updatedCount = 0;
+        const errors = [];
+
+        // Process each transaction
+        for (const transactionId of transaction_ids) {
+          // Get transaction details and contract branch_id
+          const transactionData = await new Promise((resolve, reject) => {
+            const query = `
+              SELECT 
+                it.id,
+                it.branch_id as current_branch_id,
+                ip.contract_id,
+                ic.branch_id as contract_branch_id
+              FROM installment_transactions it
+              INNER JOIN installment_payments ip ON it.payment_id = ip.id
+              INNER JOIN installment_contracts ic ON ip.contract_id = ic.id
+              WHERE it.id = ?
+            `;
+            
+            db.query(query, [transactionId], (err, results) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              if (results.length === 0) {
+                reject(new Error(`Transaction ${transactionId} not found`));
+                return;
+              }
+              resolve(results[0]);
+            });
+          });
+
+          // Check if transfer is needed
+          if (transactionData.current_branch_id === transactionData.contract_branch_id) {
+            // Already in correct branch, skip
+            continue;
+          }
+
+          // Update transaction branch_id to contract's branch_id
+          await new Promise((resolve, reject) => {
+            const updateQuery = `
+              UPDATE installment_transactions
+              SET branch_id = ?
+              WHERE id = ?
+            `;
+            
+            db.query(updateQuery, [transactionData.contract_branch_id, transactionId], (err, result) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              resolve(result);
+            });
+          });
+
+          updatedCount++;
+        }
+
+        // Commit transaction
+        await new Promise((resolve, reject) => {
+          db.query('COMMIT', (err) => {
+            if (err) {
+              reject(err);
+            } else {
+              resolve();
+            }
+          });
+        });
+
+        res.json({
+          success: true,
+          message: `Successfully transferred ${updatedCount} transaction(s)`,
+          updated_count: updatedCount,
+          total_requested: transaction_ids.length
+        });
+      } catch (error) {
+        // Rollback on error
+        await new Promise((resolve) => {
+          db.query('ROLLBACK', () => resolve());
+        });
+
+        console.error('Transfer transactions error:', error);
+        res.status(500).json({
+          success: false,
+          error: error.message || 'Failed to transfer transactions'
+        });
+      }
+    });
+  } catch (error) {
+    console.error('Transfer transactions error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message || 'Failed to transfer transactions'
     });
   }
 });

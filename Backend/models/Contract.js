@@ -10,33 +10,81 @@ class Contract {
         
         // Compress image if exists
         let compressedImage = null;
+        let imageBuffer = null; // Declare outside try block for catch block access
+        
         if (sponsor.id_card_image) {
           try {
-            // If it's a base64 string, convert to buffer
-            if (typeof sponsor.id_card_image === 'string') {
+            // Handle different image formats
+            
+            if (Buffer.isBuffer(sponsor.id_card_image)) {
+              // Already a Buffer (from multer file upload)
+              console.log(`📸 Sponsor ${index + 1}: Image is Buffer (${Math.round(sponsor.id_card_image.length / 1024)}KB)`);
+              imageBuffer = sponsor.id_card_image;
+            } else if (typeof sponsor.id_card_image === 'string') {
+              // Base64 string - convert to Buffer
+              console.log(`📸 Sponsor ${index + 1}: Image is string, converting to Buffer...`);
               if (sponsor.id_card_image.startsWith('data:')) {
                 // Extract base64 from data URL
                 const base64Data = sponsor.id_card_image.split(',')[1];
-                sponsor.id_card_image = Buffer.from(base64Data, 'base64');
+                imageBuffer = Buffer.from(base64Data, 'base64');
               } else {
                 // Assume it's already base64
-                sponsor.id_card_image = Buffer.from(sponsor.id_card_image, 'base64');
+                imageBuffer = Buffer.from(sponsor.id_card_image, 'base64');
               }
+              console.log(`📸 Sponsor ${index + 1}: Converted to Buffer (${Math.round(imageBuffer.length / 1024)}KB)`);
+            } else {
+              console.log(`⚠️ Sponsor ${index + 1}: Unknown image type: ${typeof sponsor.id_card_image}`);
+              imageBuffer = null;
             }
             
-            // Compress the image
-            compressedImage = await compressImageBuffer(sponsor.id_card_image);
-            
-            if (compressedImage && compressedImage.length > 0) {
-              console.log(`✅ Sponsor ${index + 1}: Compressed image to ${Math.round(compressedImage.length / 1024)}KB`);
+            // Compress the image if we have a valid buffer
+            if (imageBuffer && imageBuffer.length > 0) {
+              console.log(`🔄 Sponsor ${index + 1}: Compressing image...`);
+              try {
+                // Add timeout to prevent hanging (10 seconds max)
+                const compressionPromise = compressImageBuffer(imageBuffer);
+                const timeoutPromise = new Promise((_, reject) => 
+                  setTimeout(() => reject(new Error('Compression timeout after 10 seconds')), 10000)
+                );
+                compressedImage = await Promise.race([compressionPromise, timeoutPromise]);
+              } catch (compressionError) {
+                console.error(`⚠️ Sponsor ${index + 1}: Compression error:`, compressionError.message);
+                compressedImage = imageBuffer; // Use original on error
+              }
+              
+              if (compressedImage && compressedImage.length > 0) {
+                console.log(`✅ Sponsor ${index + 1}: Compressed image to ${Math.round(compressedImage.length / 1024)}KB`);
+              } else {
+                console.log(`⚠️ Sponsor ${index + 1}: Compression returned null/empty, using original`);
+                compressedImage = imageBuffer; // Use original if compression fails
+              }
             } else {
-              console.log(`⚠️ Sponsor ${index + 1}: No valid image after compression`);
+              console.log(`⚠️ Sponsor ${index + 1}: No valid image buffer to compress`);
               compressedImage = null;
             }
           } catch (imageError) {
-            console.error(`❌ Sponsor ${index + 1}: Image compression failed:`, imageError.message);
-            compressedImage = null;
+            console.error(`❌ Sponsor ${index + 1}: Image processing failed:`, imageError.message);
+            console.error(`❌ Sponsor ${index + 1}: Error stack:`, imageError.stack);
+            // Try to use original if available
+            if (imageBuffer && imageBuffer.length > 0) {
+              compressedImage = imageBuffer;
+              console.log(`🔄 Sponsor ${index + 1}: Using original Buffer after error`);
+            } else if (Buffer.isBuffer(sponsor.id_card_image)) {
+              compressedImage = sponsor.id_card_image;
+              console.log(`🔄 Sponsor ${index + 1}: Using original sponsor.id_card_image after error`);
+            } else {
+              compressedImage = null;
+            }
           }
+        } else {
+          console.log(`ℹ️ Sponsor ${index + 1}: No image provided`);
+        }
+        
+        // Log final image status before database operation
+        if (compressedImage) {
+          console.log(`💾 Sponsor ${index + 1}: Ready to save image (${Math.round(compressedImage.length / 1024)}KB)`);
+        } else {
+          console.log(`💾 Sponsor ${index + 1}: No image to save`);
         }
         
         // Check if sponsor already exists
@@ -60,6 +108,9 @@ class Contract {
                   id_card_image = COALESCE(?, id_card_image)
               WHERE contract_id = ? AND id_card_number = ?
             `;
+            
+            // Log what we're about to update
+            console.log(`💾 Sponsor ${index + 1}: Updating with image: ${compressedImage ? `YES (${Math.round(compressedImage.length / 1024)}KB)` : 'NO (keeping existing)'}`);
             
             db.query(updateQuery, [
               sponsor.full_name,
@@ -89,6 +140,9 @@ class Contract {
             (contract_id, full_name, phone, id_card_number, relationship, address, id_card_image) 
             VALUES (?, ?, ?, ?, ?, ?, ?)
           `;
+          
+          // Log what we're about to insert
+          console.log(`💾 Sponsor ${index + 1}: Inserting with image: ${compressedImage ? `YES (${Math.round(compressedImage.length / 1024)}KB)` : 'NO'}`);
           
           db.query(insertQuery, [
             contractId,
@@ -157,10 +211,10 @@ class Contract {
     });
   }
 
-  // Get items available for installment with latest prices
-  static getInstallmentItems() {
+  // Get items available for installment with latest prices (filtered by branch)
+  static getInstallmentItems(branchId = null) {
     return new Promise((resolve, reject) => {
-      const query = `
+      let query = `
         SELECT 
           i.id,
           i.name,
@@ -169,6 +223,8 @@ class Contract {
           i.installment,
           i.quantity,
           i.item_image,
+          i.branch_id,
+          b.name as branch_name,
           ip.id as price_id,
           ip.price_cash,
           ip.price_installment_total,
@@ -180,6 +236,7 @@ class Contract {
           ip.on_sale_price
         FROM items i
         LEFT JOIN item_prices ip ON i.id = ip.item_id
+        LEFT JOIN branches b ON i.branch_id = b.id
         WHERE i.available = 1 
           AND i.installment = 1
           AND ip.date = (
@@ -187,10 +244,17 @@ class Contract {
             FROM item_prices 
             WHERE item_id = i.id
           )
-        ORDER BY i.name
       `;
       
-      db.query(query, (err, results) => {
+      const params = [];
+      if (branchId) {
+        query += ` AND i.branch_id = ?`;
+        params.push(branchId);
+      }
+      
+      query += ` ORDER BY i.name`;
+      
+      db.query(query, params, (err, results) => {
         if (err) {
           reject(err);
           return;
@@ -414,14 +478,16 @@ class Contract {
               // 3. Create installment contract
               const contractQuery = `
                 INSERT INTO installment_contracts 
-                (user_id, customer_id, item_id, price_id,
+                (branch_id, user_id, customer_id, item_id, price_id,
                  total_price, down_payment, months, monthly_payment, 
                  installment_last_payment, start_date, status, original_contract_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
               `;
               
               console.log('📝 Creating contract...');
+              console.log('📍 Branch ID:', contract_data.branch_id);
               db.query(contractQuery, [
+                contract_data.branch_id,
                 contract_data.worker_id,
                 customerId,
                 contract_data.item_id,
@@ -645,9 +711,9 @@ class Contract {
   }
 
   // Get pending contracts for admin review with price info
-  static getPendingContracts() {
+  static getPendingContracts(branchIds = null) {
     return new Promise((resolve, reject) => {
-      const query = `
+      let query = `
         SELECT 
           ic.*,
           cc.full_name as customer_name,
@@ -663,16 +729,28 @@ class Contract {
           ip.on_sale_price,
           i.quantity as item_quantity,
           u.username as worker_name,
-          ca.status as approval_status
+          ca.status as approval_status,
+          b.name as branch_name
         FROM installment_contracts ic
         LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
         LEFT JOIN items i ON ic.item_id = i.id
         LEFT JOIN item_prices ip ON ic.price_id = ip.id
         LEFT JOIN users u ON ic.user_id = u.id
         LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+        LEFT JOIN branches b ON ic.branch_id = b.id
         WHERE ic.status = 'pending'
-        ORDER BY ic.created_at DESC
       `;
+      
+      const params = [];
+      
+      // Filter by accessible branches if provided
+      if (branchIds && Array.isArray(branchIds) && branchIds.length > 0) {
+        const placeholders = branchIds.map(() => '?').join(',');
+        query += ` AND ic.branch_id IN (${placeholders})`;
+        params.push(...branchIds);
+      }
+      
+      query += ' ORDER BY ic.created_at DESC';
       
       db.query(query, (err, results) => {
         if (err) {
@@ -685,7 +763,7 @@ class Contract {
   }
 
   // Get all contracts with filters and price info
-  static getAllContracts(status = null) {
+  static getAllContracts(status = null, branchIds = null) {
     return new Promise((resolve, reject) => {
       let query = `
         SELECT 
@@ -706,6 +784,7 @@ class Contract {
           ca.reason as rejection_reason,
           ca.approver_id,
           ca.updated_at as decision_date,
+          b.name as branch_name,
           -- Count payments for this contract
           (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as total_payments,
           (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id AND ipay.status = 'paid') as paid_payments,
@@ -727,6 +806,7 @@ class Contract {
         LEFT JOIN item_prices ip ON ic.price_id = ip.id
         LEFT JOIN users u ON ic.user_id = u.id
         LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+        LEFT JOIN branches b ON ic.branch_id = b.id
         -- Left join for original contract (if this is a reapplication)
         LEFT JOIN installment_contracts oic ON ic.original_contract_id = oic.id
         LEFT JOIN contract_customers occ ON oic.customer_id = occ.id
@@ -736,9 +816,22 @@ class Contract {
       `;
       
       const params = [];
+      const conditions = [];
+      
       if (status && status !== 'all') {
-        query += ' WHERE ic.status = ?';
+        conditions.push('ic.status = ?');
         params.push(status);
+      }
+      
+      // Filter by accessible branches if provided
+      if (branchIds && Array.isArray(branchIds) && branchIds.length > 0) {
+        const placeholders = branchIds.map(() => '?').join(',');
+        conditions.push(`ic.branch_id IN (${placeholders})`);
+        params.push(...branchIds);
+      }
+      
+      if (conditions.length > 0) {
+        query += ' WHERE ' + conditions.join(' AND ');
       }
       
       query += ' ORDER BY ic.created_at DESC';
@@ -1393,6 +1486,118 @@ static rollbackTransaction() {
           return;
         }
         resolve(results[0] || null);
+      });
+    });
+  }
+
+  // Get contracts with branch analysis (for Contract Branches page)
+  static getContractsWithBranchAnalysis(branchIds = null) {
+    return new Promise((resolve, reject) => {
+      let query = `
+        SELECT 
+          ic.id as contract_id,
+          ic.branch_id as contract_branch_id,
+          b.name as contract_branch_name,
+          ic.customer_id,
+          cc.full_name as customer_name,
+          cc.phone as customer_phone,
+          ic.item_id,
+          i.name as item_name,
+          ic.total_price,
+          ic.down_payment,
+          ic.months,
+          ic.monthly_payment,
+          ic.status,
+          ic.created_at,
+          u.username as worker_name
+        FROM installment_contracts ic
+        LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+        LEFT JOIN items i ON ic.item_id = i.id
+        LEFT JOIN users u ON ic.user_id = u.id
+        LEFT JOIN branches b ON ic.branch_id = b.id
+        WHERE ic.status IN ('active', 'completed')
+      `;
+      
+      const params = [];
+      if (branchIds && Array.isArray(branchIds) && branchIds.length > 0) {
+        const placeholders = branchIds.map(() => '?').join(',');
+        query += ` AND ic.branch_id IN (${placeholders})`;
+        params.push(...branchIds);
+      }
+      
+      query += ` ORDER BY ic.created_at DESC`;
+      
+      db.query(query, params, (err, contracts) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+        
+        // For each contract, get payments and transactions
+        const contractsWithDetails = contracts.map(contract => ({
+          ...contract,
+          payments: []
+        }));
+        
+        // Get payments and transactions for each contract
+        const paymentPromises = contractsWithDetails.map(contract => {
+          return new Promise((resolvePayment) => {
+            // Get payments for this contract
+            const paymentQuery = `
+              SELECT 
+                ip.*,
+                (SELECT COUNT(*) FROM installment_transactions it WHERE it.payment_id = ip.id) as transaction_count
+              FROM installment_payments ip
+              WHERE ip.contract_id = ?
+              ORDER BY ip.month_number ASC
+            `;
+            
+            db.query(paymentQuery, [contract.contract_id], (err, payments) => {
+              if (err) {
+                resolvePayment({ contract, payments: [] });
+                return;
+              }
+              
+              // Get transactions for each payment
+              const transactionPromises = payments.map(payment => {
+                return new Promise((resolveTransaction) => {
+                  const transactionQuery = `
+                    SELECT 
+                      it.*,
+                      b.name as branch_name,
+                      u.username as worker_name
+                    FROM installment_transactions it
+                    LEFT JOIN branches b ON it.branch_id = b.id
+                    LEFT JOIN users u ON it.worker_id = u.id
+                    WHERE it.payment_id = ?
+                    ORDER BY it.payment_date DESC
+                  `;
+                  
+                  db.query(transactionQuery, [payment.id], (err, transactions) => {
+                    if (err) {
+                      resolveTransaction({ ...payment, transactions: [] });
+                    } else {
+                      resolveTransaction({ ...payment, transactions: transactions || [] });
+                    }
+                  });
+                });
+              });
+              
+              Promise.all(transactionPromises).then(paymentsWithTransactions => {
+                resolvePayment({ contract, payments: paymentsWithTransactions });
+              });
+            });
+          });
+        });
+        
+        Promise.all(paymentPromises).then(results => {
+          const finalContracts = results.map(result => ({
+            ...result.contract,
+            payments: result.payments
+          }));
+          
+          resolve(finalContracts);
+        });
       });
     });
   }

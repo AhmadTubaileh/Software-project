@@ -11,10 +11,53 @@ import DeleteConfirmationModal from '../components/ProjectManagement/DeleteConfi
 import ProjectMembersModal from '../components/ProjectManagement/ProjectMembersModal.jsx';
 
 function ProjectManagement() {
+  const { currentUser } = useLocalSession();
+  
+  // ========== ACCESS CONTROL START ==========
+  // Get user_type from currentUser
+  const userType = currentUser?.user_type ?? 5; // Default to trainee if not set
+  
+  // Only Admin (0), Senior Manager (1), and Manager (2) can access this page
+  // Supervisor (3), Employee (4), and Trainee (5) cannot access
+  const allowedRoles = [0, 1, 2];
+  
+  if (!allowedRoles.includes(userType)) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white">
+        <AdminSidebar />
+        <div className="ml-64 min-h-screen flex items-center justify-center">
+          <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+              <p className="text-gray-400 mb-4">
+                Your account ({getRoleName(userType)}) does not have permission to access this page.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                This page is only accessible to Administrators and Managers.
+                Supervisors, Employees, and Trainees cannot access project management.
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+              >
+                Return to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ========== ACCESS CONTROL END ==========
+
   const [projects, setProjects] = useState([]);
   const [tasks, setTasks] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [projectMembers, setProjectMembers] = useState({});
+  const [accessibleBranches, setAccessibleBranches] = useState([]);
+  const [selectedBranchId, setSelectedBranchId] = useState(null);
+  const [loadingBranches, setLoadingBranches] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
@@ -41,17 +84,49 @@ function ProjectManagement() {
   const [showHeaderAddMemberDropdown, setShowHeaderAddMemberDropdown] = useState(false);
   const [showProjectCardAddMemberDropdown, setShowProjectCardAddMemberDropdown] = useState({});
   const [loading, setLoading] = useState(true);
-  const { currentUser } = useLocalSession();
 
-  // Debug currentUser
+  // Load accessible branches on mount
   useEffect(() => {
-    console.log('Current User:', currentUser);
+    const loadBranches = async () => {
+      if (!currentUser?.id) {
+        setLoadingBranches(false);
+        return;
+      }
+      
+      try {
+        setLoadingBranches(true);
+        const response = await fetch(`http://localhost:5000/api/employees/branches/accessible?userId=${currentUser.id}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch accessible branches');
+        }
+        
+        const branches = await response.json();
+        setAccessibleBranches(branches);
+        
+        // Set default to "all" (null) - user can see all projects but create in primary branch
+        setSelectedBranchId(null);
+      } catch (error) {
+        console.error('Error loading accessible branches:', error);
+        toast.error('Failed to load branches');
+        setAccessibleBranches([]);
+      } finally {
+        setLoadingBranches(false);
+      }
+    };
+
+    loadBranches();
   }, [currentUser]);
 
-  // Fetch all projects (only non-deleted ones)
+  // Fetch all projects (only non-deleted ones) - filtered by branch
   const fetchProjects = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/projects');
+      let url = 'http://localhost:5000/api/projects';
+      if (selectedBranchId !== null) {
+        url += `?branch_id=${selectedBranchId}`;
+      }
+      
+      const response = await fetch(url);
       const data = await response.json();
       
       if (!response.ok) {
@@ -65,7 +140,7 @@ function ProjectManagement() {
       console.error('Error fetching projects:', error);
       toast.error('Failed to load projects');
     }
-  }, []);
+  }, [selectedBranchId]);
 
   // Fetch all tasks
   const fetchTasks = useCallback(async () => {
@@ -84,22 +159,55 @@ function ProjectManagement() {
     }
   }, []);
 
-  // Fetch workers
+  // Fetch workers (filtered by branch if branch is selected)
+  // When "All Branches" is selected, fetch workers from all accessible branches
   const fetchWorkers = useCallback(async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/tasks/workers');
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch workers');
+      // If "All Branches" is selected, fetch workers from all accessible branches
+      if (selectedBranchId === null && accessibleBranches.length > 0) {
+        // Fetch workers from each accessible branch and combine them
+        const branchIds = accessibleBranches.map(b => b.id);
+        const allWorkers = [];
+        
+        for (const branchId of branchIds) {
+          try {
+            const response = await fetch(`http://localhost:5000/api/tasks/workers?branch_id=${branchId}`);
+            if (response.ok) {
+              const data = await response.json();
+              allWorkers.push(...data);
+            }
+          } catch (error) {
+            console.error(`Error fetching workers for branch ${branchId}:`, error);
+          }
+        }
+        
+        // Remove duplicates based on worker id
+        const uniqueWorkers = allWorkers.filter((worker, index, self) =>
+          index === self.findIndex(w => w.id === worker.id)
+        );
+        
+        setWorkers(uniqueWorkers);
+      } else if (selectedBranchId !== null) {
+        // Specific branch selected, fetch workers from that branch only
+        const url = `http://localhost:5000/api/tasks/workers?branch_id=${selectedBranchId}`;
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch workers');
+        }
+        
+        setWorkers(data);
+      } else {
+        // No branches available, set empty array
+        setWorkers([]);
       }
-      
-      setWorkers(data);
     } catch (error) {
       console.error('Error fetching workers:', error);
       toast.error('Failed to load workers');
+      setWorkers([]);
     }
-  }, []);
+  }, [selectedBranchId, accessibleBranches]);
 
   // Fetch members for each project
   const fetchProjectMembers = useCallback(async () => {
@@ -133,9 +241,12 @@ function ProjectManagement() {
     }
   }, [fetchProjects, fetchTasks, fetchWorkers]);
 
+  // Refresh data when branch selection changes
   useEffect(() => {
-    refreshAllData();
-  }, [refreshAllData]);
+    if (!loadingBranches) {
+      refreshAllData();
+    }
+  }, [selectedBranchId, loadingBranches, refreshAllData]);
 
   useEffect(() => {
     if (projects.length > 0) {
@@ -145,6 +256,15 @@ function ProjectManagement() {
 
   // Create new project
   const handleCreateProject = async (projectData) => {
+    // If "All Branches" is selected, use branch_id from formData (user selected in modal)
+    // Otherwise, use selectedBranchId
+    const branchIdForProject = projectData.branch_id || selectedBranchId;
+    
+    if (!branchIdForProject) {
+      toast.error('Please select a branch for the project');
+      return;
+    }
+
     try {
       const response = await fetch('http://localhost:5000/api/projects', {
         method: 'POST',
@@ -153,7 +273,8 @@ function ProjectManagement() {
         },
         body: JSON.stringify({
           ...projectData,
-          created_by: currentUser.id
+          created_by: currentUser.id,
+          branch_id: parseInt(branchIdForProject)
         }),
       });
 
@@ -584,11 +705,16 @@ function ProjectManagement() {
     });
   }, [refreshAllData]);
 
-  // Get workers for a specific project
+  // Get workers for a specific project (filtered by project's branch_id)
   const getWorkersForProject = (projectId) => {
-    if (!projectId || !projectMembers[projectId]) return [];
+    if (!projectId) return [];
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return [];
+    
+    // Filter workers by project's branch_id and who are already members
     return workers.filter(worker => 
-      projectMembers[projectId].some(member => member.user_id === worker.id)
+      worker.primary_branch_id === project.branch_id &&
+      projectMembers[projectId]?.some(member => member.user_id === worker.id)
     );
   };
 
@@ -610,13 +736,16 @@ function ProjectManagement() {
     };
   }, [showHeaderAddTaskDropdown, showHeaderAddMemberDropdown]);
 
+  // Check if user should see sidebar (based on original logic)
+  const showSidebar = currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee');
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0e1830] text-white">
         <Toaster position="top-center" />
-        {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
+        {showSidebar && <AdminSidebar />}
         <main className={`flex-1 min-h-screen transition-all duration-300 ${
-          currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : ''
+          showSidebar ? 'ml-64' : ''
         }`}>
           <div className="p-6 flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
@@ -631,11 +760,11 @@ function ProjectManagement() {
       <Toaster position="top-center" />
 
       {/* Sidebar */}
-      {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
+      {showSidebar && <AdminSidebar />}
 
       {/* Main Content */}
       <main className={`flex-1 min-h-screen bg-[#0e1830] transition-all duration-300 ${
-        currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : 'ml-0'
+        showSidebar ? 'ml-64' : 'ml-0'
       }`}>
         <div className="p-6">
           {/* Header */}
@@ -645,8 +774,34 @@ function ProjectManagement() {
                 Project Management
               </h1>
               <p className="text-gray-400">Full administrative control over all projects and tasks</p>
+              <p className="text-gray-500 text-sm mt-1">
+                Logged in as: {currentUser?.username} ({getRoleName(userType)})
+              </p>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center">
+              {/* Branch Filter - Show if user has accessible branches */}
+              {accessibleBranches.length > 0 && (
+                <div className="relative">
+                  <select
+                    value={selectedBranchId !== null ? selectedBranchId : 'all'}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setSelectedBranchId(value === 'all' ? null : parseInt(value));
+                    }}
+                    className="px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 appearance-none pr-10 min-w-[200px]"
+                  >
+                    <option value="all">All Branches</option>
+                    {accessibleBranches.map(branch => (
+                      <option key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="absolute right-3 top-3.5 text-gray-400 pointer-events-none">
+                    🏢
+                  </div>
+                </div>
+              )}
               {/* Header Add Task Button with Enhanced Dropdown */}
               <div className="relative header-add-task-dropdown">
                 <button
@@ -793,7 +948,7 @@ function ProjectManagement() {
                         </select>
                       </div>
 
-                      {/* Worker Selection */}
+                      {/* Worker Selection - Filter by project's branch_id */}
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
                           Team Member *
@@ -807,12 +962,36 @@ function ProjectManagement() {
                           className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-green-500 transition-colors"
                         >
                           <option value="">Choose a team member...</option>
-                          {workers.map(worker => (
-                            <option key={worker.id} value={worker.id}>
-                              {worker.username} ({worker.role})
-                            </option>
-                          ))}
+                          {(() => {
+                            const selectedProject = projects.find(p => p.id === parseInt(headerAddMemberData.projectId));
+                            if (!selectedProject) return null;
+                            // Filter workers by project's branch_id
+                            const availableWorkers = workers
+                              .filter(worker => 
+                                worker.primary_branch_id === selectedProject.branch_id &&
+                                !projectMembers[selectedProject.id]?.some(member => member.user_id === worker.id)
+                              );
+                            return availableWorkers.map(worker => (
+                              <option key={worker.id} value={worker.id}>
+                                {worker.username}
+                              </option>
+                            ));
+                          })()}
                         </select>
+                        {(() => {
+                          const selectedProject = projects.find(p => p.id === parseInt(headerAddMemberData.projectId));
+                          if (selectedProject) {
+                            const availableWorkers = workers.filter(w => w.primary_branch_id === selectedProject.branch_id);
+                            if (availableWorkers.length === 0) {
+                              return (
+                                <p className="text-xs text-yellow-400 mt-1">
+                                  No available employees in this branch
+                                </p>
+                              );
+                            }
+                          }
+                          return null;
+                        })()}
                       </div>
 
                       <div className="flex gap-3 pt-2">
@@ -867,6 +1046,12 @@ function ProjectManagement() {
                         }`}>
                           {project.status.toUpperCase()}
                         </span>
+                        {project.branch_name && (
+                          <span className="px-2 py-1 rounded text-xs font-medium bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                            <span>🏢</span>
+                            {project.branch_name}
+                          </span>
+                        )}
                       </div>
                       <h3 className="text-xl font-semibold text-white mb-2">{project.title}</h3>
                       <p className="text-gray-400 text-sm mb-4 line-clamp-2">
@@ -920,14 +1105,22 @@ function ProjectManagement() {
                                 className="w-full bg-gray-700/50 border border-gray-600/50 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
                               >
                                 <option value="">Choose a team member...</option>
-                                {workers.filter(worker => 
-                                  !projectMembers[project.id]?.some(member => member.user_id === worker.id)
-                                ).map(worker => (
-                                  <option key={worker.id} value={worker.id}>
-                                    {worker.username} ({worker.role})
-                                  </option>
-                                ))}
+                                {workers
+                                  .filter(worker => 
+                                    worker.primary_branch_id === project.branch_id &&
+                                    !projectMembers[project.id]?.some(member => member.user_id === worker.id)
+                                  )
+                                  .map(worker => (
+                                    <option key={worker.id} value={worker.id}>
+                                      {worker.username}
+                                    </option>
+                                  ))}
                               </select>
+                              {workers.filter(w => w.primary_branch_id === project.branch_id).length === 0 && (
+                                <p className="text-xs text-yellow-400 mt-1">
+                                  No available employees in this branch
+                                </p>
+                              )}
                             </div>
 
                             <div className="flex gap-2">
@@ -1020,6 +1213,14 @@ function ProjectManagement() {
         <CreateProjectModal
           workers={workers}
           currentUser={currentUser}
+          selectedBranchId={selectedBranchId !== null ? selectedBranchId : null}
+          selectedBranchName={
+            selectedBranchId !== null 
+              ? accessibleBranches.find(b => b.id === selectedBranchId)?.name
+              : null
+          }
+          accessibleBranches={accessibleBranches}
+          showBranchSelector={selectedBranchId === null}
           onSubmit={handleCreateProject}
           onClose={() => setShowCreateModal(false)}
         />
@@ -1082,6 +1283,19 @@ function ProjectManagement() {
       )}
     </div>
   );
+}
+
+// Helper function to get role name
+function getRoleName(userType) {
+  switch(userType) {
+    case 0: return 'Administrator';
+    case 1: return 'Senior Manager';
+    case 2: return 'Manager';
+    case 3: return 'Supervisor';
+    case 4: return 'Employee';
+    case 5: return 'Trainee';
+    default: return 'User';
+  }
 }
 
 export default ProjectManagement;

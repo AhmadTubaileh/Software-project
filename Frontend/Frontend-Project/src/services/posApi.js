@@ -1,10 +1,16 @@
+// services/posApi.js
 const API_BASE = 'http://localhost:5000/api/pos';
 
 class PosApi {
-  // Get ALL items (including out of stock)
-  static async getItems() {
+  // Get ALL items with latest prices (filtered by user's accessible branches)
+  static async getItems(userId = null) {
     try {
-      const response = await fetch(`${API_BASE}/items`);
+      // Add userId as query parameter if provided
+      const url = userId 
+        ? `${API_BASE}/items?userId=${userId}`
+        : `${API_BASE}/items`;
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -16,59 +22,73 @@ class PosApi {
         throw new Error(data.message || 'Failed to fetch items');
       }
       
-      return data.items;
+      // Process items to add display_price
+      const processedItems = data.items.map(item => {
+        const displayPrice = item.on_sale_price && item.on_sale_price < item.price_cash 
+          ? item.on_sale_price 
+          : item.price_cash;
+        
+        return {
+          ...item,
+          display_price: displayPrice
+        };
+      });
+      
+      return processedItems;
     } catch (error) {
       console.error('Error fetching POS items:', error);
       throw error;
     }
   }
 
-  // Process checkout/sale
-  static async checkout(cart, userId) {
-    try {
-      const response = await fetch(`${API_BASE}/checkout`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          cart: cart.map(item => ({
-            id: item.id,
-            name: item.name,
-            qty: item.qty,
-            price_cash: item.price_cash,
-            quantity: item.quantity // Current available quantity
-          })),
-          userId: userId
-        }),
-      });
+  // services/posApi.js - Update the checkout function:
+static async checkout(cart, userId) {
+  try {
+    const response = await fetch(`${API_BASE}/checkout`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        cart: cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          qty: item.qty,
+          price_cash: item.price_cash,
+          original_price: item.original_price,
+          price_id: item.price_id, // Make sure this is included
+          quantity: item.quantity // Current available quantity
+        })),
+        userId: userId
+      }),
+    });
 
-      const data = await response.json();
+    const data = await response.json();
 
-      if (!response.ok) {
-        // Handle insufficient quantities
-        if (data.insufficientItems) {
-          throw {
-            type: 'INSUFFICIENT_QUANTITY',
-            items: data.insufficientItems,
-            message: data.message
-          };
-        }
-        throw new Error(data.message || 'Checkout failed');
+    if (!response.ok) {
+      // Handle insufficient quantities
+      if (data.insufficientItems) {
+        throw {
+          type: 'INSUFFICIENT_QUANTITY',
+          items: data.insufficientItems,
+          message: data.message
+        };
       }
-
-      if (!data.success) {
-        throw new Error(data.message || 'Checkout failed');
-      }
-
-      return data;
-    } catch (error) {
-      console.error('Checkout error:', error);
-      throw error;
+      throw new Error(data.message || 'Checkout failed');
     }
-  }
 
-  // Update item price
+    if (!data.success) {
+      throw new Error(data.message || 'Checkout failed');
+    }
+
+    return data;
+  } catch (error) {
+    console.error('Checkout error:', error);
+    throw error;
+  }
+}
+
+  // Update item price (creates new price entry)
   static async updateItemPrice(itemId, newPrice, userId) {
     try {
       const response = await fetch(`${API_BASE}/update-price`, {
@@ -99,6 +119,34 @@ class PosApi {
       throw error;
     }
   }
+
+  // Add to existing PosApi class
+static async searchSales(params) {
+  const queryString = new URLSearchParams(params).toString();
+  const response = await fetch(`${API_BASE}/search-sales?${queryString}`);
+  return response.json();
+}
+
+static async getSaleDetails(saleId) {
+  const response = await fetch(`${API_BASE}/sale-details/${saleId}`);
+  return response.json();
+}
+
+static async processReturn(returnData) {
+  const response = await fetch(`${API_BASE}/process-return`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(returnData),
+  });
+  return response.json();
+}
+
+static async getWorkers() {
+  const response = await fetch(`${API_BASE}/workers`);
+  return response.json();
+}
 
   // Health check
   static async healthCheck() {

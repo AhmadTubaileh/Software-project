@@ -14,6 +14,70 @@ function TimeTracking() {
   const [clockOutNotes, setClockOutNotes] = useState('');
   const { currentUser } = useLocalSession();
 
+  // ========== ACCESS CONTROL ==========
+  // Get user_type from currentUser
+  const userType = currentUser?.user_type ?? 5;
+  
+  // Define allowed roles for Time Tracking
+  // Currently: ALL roles (0-5) can access, but this is explicit for future changes
+  const allowedRoles = [0, 1, 2, 3, 4, 5];
+  
+  // Check if user is authenticated
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white flex items-center justify-center">
+        <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md w-full mx-4">
+          <div className="text-center">
+            <div className="text-6xl mb-4">🔒</div>
+            <h2 className="text-2xl font-bold text-white mb-2">Authentication Required</h2>
+            <p className="text-gray-400 mb-4">
+              Please log in to access Time Tracking.
+            </p>
+            <a
+              href="/"
+              className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+            >
+              Go to Login
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
+  // Check if user has permission (even though all roles currently allowed)
+  if (!allowedRoles.includes(userType)) {
+    return (
+      <div className="min-h-screen bg-[#0e1830] text-white">
+        {/* Show sidebar if user has access to other parts */}
+        {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
+        <div className={`min-h-screen flex items-center justify-center ${
+          currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : ''
+        }`}>
+          <div className="bg-gray-800/50 p-8 rounded-xl border border-red-500/30 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="text-6xl mb-4">🚫</div>
+              <h2 className="text-2xl font-bold text-white mb-2">Access Denied</h2>
+              <p className="text-gray-400 mb-4">
+                Your account ({getRoleName(userType)}) does not have permission to access Time Tracking.
+              </p>
+              <p className="text-sm text-gray-500 mb-6">
+                Contact your administrator if you believe this is an error.
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
+              >
+                Return to Home
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  // ========== END ACCESS CONTROL ==========
+
   const fetchCurrentStatus = useCallback(async () => {
     if (!currentUser?.id) return;
 
@@ -165,20 +229,26 @@ function TimeTracking() {
 
   const todayStats = calculateTodayStats();
 
+  // Check if user should see sidebar (based on original logic)
+  const showSidebar = currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee');
+
   return (
     <div className="min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
-      {currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') && <AdminSidebar />}
+      {showSidebar && <AdminSidebar />}
 
       <main className={`flex-1 min-h-screen transition-all duration-300 ${
-        currentUser && (currentUser.role === 'admin' || currentUser.role === 'employee') ? 'ml-64' : ''
+        showSidebar ? 'ml-64' : ''
       }`}>
         <div className="p-6 max-w-4xl mx-auto">
           <div className="text-center mb-8">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent mb-3">
+            <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent mb-3">
               Time Tracking
             </h1>
             <p className="text-gray-400 text-lg">Simple clock in/out with automatic break detection</p>
+            <p className="text-gray-500 text-sm mt-1">
+              Logged in as: {currentUser?.username} ({getRoleName(userType)})
+            </p>
           </div>
 
           <CurrentStatusCard
@@ -203,6 +273,19 @@ function TimeTracking() {
       </main>
     </div>
   );
+}
+
+// Helper function to get role name
+function getRoleName(userType) {
+  switch(userType) {
+    case 0: return 'Administrator';
+    case 1: return 'Senior Manager';
+    case 2: return 'Manager';
+    case 3: return 'Supervisor';
+    case 4: return 'Employee';
+    case 5: return 'Trainee';
+    default: return 'User';
+  }
 }
 
 export default TimeTracking;

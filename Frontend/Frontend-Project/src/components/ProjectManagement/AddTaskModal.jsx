@@ -13,6 +13,7 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
   const [loading, setLoading] = useState(false);
   const [conflicts, setConflicts] = useState([]);
   const [checkingConflicts, setCheckingConflicts] = useState(false);
+  const [dismissedConflicts, setDismissedConflicts] = useState(false);
 
   const calculateEstimatedTime = (startTime, endTime) => {
     if (!startTime || !endTime) return '';
@@ -100,14 +101,6 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
       return;
     }
 
-    // Warn about conflicts but allow proceeding
-    if (conflicts.length > 0) {
-      const shouldProceed = confirm(
-        `Warning: This worker has ${conflicts.length} conflicting task(s) during this time. Do you want to proceed anyway?`
-      );
-      if (!shouldProceed) return;
-    }
-
     setLoading(true);
     try {
       await onSubmit({
@@ -117,6 +110,9 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
         start_time: formData.start_time,
         end_time: formData.end_time
       });
+      // Clear conflicts after successful submission
+      setConflicts([]);
+      setDismissedConflicts(false);
     } finally {
       setLoading(false);
     }
@@ -230,22 +226,54 @@ const AddTaskModal = ({ projectId, workers, currentUser, onSubmit, onClose }) =>
           </div>
 
           {/* Conflict Warning */}
-          {conflicts.length > 0 && (
-            <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-4">
-              <div className="flex items-center gap-2 text-orange-300 mb-2">
-                <span>⚠️</span>
-                <span className="font-medium">Scheduling Conflict Detected</span>
+          {conflicts.length > 0 && !dismissedConflicts && (
+            <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 relative">
+              <button
+                type="button"
+                onClick={() => setDismissedConflicts(true)}
+                className="absolute top-2 right-2 text-orange-400 hover:text-orange-300 transition-colors text-lg"
+                title="Dismiss warning"
+              >
+                ✕
+              </button>
+              <div className="flex items-center gap-2 text-orange-300 mb-3">
+                <span className="text-xl">⚠️</span>
+                <span className="font-semibold text-base">Scheduling Conflict Detected</span>
               </div>
-              <div className="text-sm text-orange-200 space-y-2">
-                <p>This worker has {conflicts.length} task(s) during this time:</p>
-                {conflicts.map((conflict, index) => (
-                  <div key={index} className="flex justify-between items-center">
-                    <span>{conflict.task}</span>
-                    <span className="text-xs">
-                      {new Date(conflict.start_time).toLocaleString()} - {new Date(conflict.end_time).toLocaleString()}
-                    </span>
-                  </div>
-                ))}
+              <div className="text-sm text-orange-200 space-y-3">
+                <p className="font-medium">
+                  This worker has <span className="font-bold text-orange-300">{conflicts.length}</span> conflicting task(s) during this time period.
+                </p>
+                <div className="bg-orange-500/20 rounded-lg p-3 space-y-2 max-h-48 overflow-y-auto">
+                  {conflicts.map((conflict, index) => (
+                    <div key={index} className="bg-gray-800/50 rounded p-3 border border-orange-500/20">
+                      <div className="font-medium text-orange-200 mb-1">{conflict.task}</div>
+                      <div className="text-xs text-orange-300/80 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span>📅</span>
+                          <span>
+                            {new Date(conflict.start_time).toLocaleDateString()} - {new Date(conflict.end_time).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span>⏰</span>
+                          <span>
+                            {new Date(conflict.start_time).toLocaleTimeString()} - {new Date(conflict.end_time).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        {conflict.status && (
+                          <div className="flex items-center gap-2">
+                            <span>📊</span>
+                            <span className="capitalize">{conflict.status.replace('_', ' ')}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-orange-300/70 italic">
+                  You can still create the task, but the worker will have overlapping assignments.
+                </p>
               </div>
             </div>
           )}
