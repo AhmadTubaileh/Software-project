@@ -47,7 +47,7 @@ export default function Header() {
       // Admin (role 0) and Employee (role 1-9) go to backend home (/)
       // Customer stays on store pages
       if (data.user.role === 'admin' || data.user.role === 'employee') {
-        navigate('/');
+        navigate('/home');
       }
       // Customer stays on current page (store)
     } catch (error) {

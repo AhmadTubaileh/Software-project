@@ -17,9 +17,9 @@ router.post('/login', async (req, res) => {
     console.log('Login attempt for username:', username);
 
     // Query the database for the user
-    const query = 'SELECT * FROM users WHERE username = ?';
+    const query = 'SELECT * FROM users WHERE username = ? OR email = ?';
     
-    db.execute(query, [username], async (error, results) => {
+    db.execute(query, [username, username], async (error, results) => {
       if (error) {
         console.error('Database error:', error);
         return res.status(500).json({ error: 'Database error' });
