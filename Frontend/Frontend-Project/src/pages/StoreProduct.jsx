@@ -4,12 +4,14 @@ import { storeProducts } from "../data/storeProducts";
 import { cartProducts } from "../data/cartProducts";
 import Header from "../components/store/Header";
 import Footer from "../components/store/Footer";
+//import InstallmentModal from "../components/StoreProduct/StoreInstallmentModal";
 
 
 export default function StoreProduct() {
   const { id } = useParams(); //  /store/product/:id
   const product = storeProducts.find((p) => p.id === id);
 
+  const [isInstallmentModalOpen, setIsInstallmentModalOpen] = React.useState(false);
   const [mainImage, setMainImage] = React.useState(product?.imgs?.[0] || product?.img);
   const [quantity, setQuantity] = React.useState(1);
 
@@ -35,11 +37,20 @@ export default function StoreProduct() {
       subtotal: product.price * quantity
     });
   }
+  const handleInstallmentSubmit = (credentials) => {
+    console.log('installment attempt with:', credentials);
+    // Add your installment logic here (API call, authentication, etc.)
+    // For example:
+    // try {
+    //   const response = await api.login(credentials);
+    //   localStorage.setItem('token', response.token);
+    //   setIsLoggedIn(true);
+    // } catch (error) {
+    //   console.error('Login failed:', error);
+    // }
+  };
 
-  function payInstallment() {
-    console.log("Installment for:", product.name);
-  }
-
+ 
   return (
     <>
       <Header />
@@ -86,7 +97,7 @@ export default function StoreProduct() {
 
             {/* second line: installment */}
             <div className="mars-order-row">
-              <button className="mars-order-installment-btn" onClick={payInstallment}>
+              <button className="mars-order-installment-btn" onClick={()=>setIsInstallmentModalOpen(true)}>
                 Buy in Installments
               </button>
             </div>
@@ -101,6 +112,14 @@ export default function StoreProduct() {
       </div>
 
       <Footer />
+
+
+      {/* installment modal */}
+      <InstallmentModal
+        isOpen={isInstallmentModalOpen}
+        onClose={() => setIsInstallmentModalOpen(false)}
+        onInstallmentSubmit={handleInstallmentSubmit}
+    />
     </>
   );
 }

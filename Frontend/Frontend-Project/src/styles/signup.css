@@ -1,5 +1,5 @@
-/* ===== LOGIN MODAL OVERLAY ===== */
-.login-modal-overlay {
+/* ===== SIGNUP MODAL OVERLAY ===== */
+.signup-modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
@@ -13,21 +13,21 @@
     backdrop-filter: blur(4px);
 }
 
-/* ===== LOGIN MODAL CONTAINER ===== */
-.login-modal {
+/* ===== SIGNUP MODAL CONTAINER ===== */
+.signup-modal {
     background-color: rgba(0, 0, 0, 0.7);
     border-radius: 12px;
     width: 90%;
     max-width: 420px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 0 30px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 178, 0, 0.1);
-    animation: loginModalSlideIn 0.4s ease-out;
+    animation: signupModalSlideIn 0.4s ease-out;
     overflow: hidden;
     color: white;
     position: relative;
 }
 
-@keyframes loginModalSlideIn {
+@keyframes signupModalSlideIn {
     from {
         opacity: 0;
         transform: translateY(-20px);
@@ -38,8 +38,8 @@
     }
 }
 
-/* ===== LOGIN MODAL HEADER ===== */
-.login-modal .modal-header {
+/* ===== SIGNUP MODAL HEADER ===== */
+.signup-modal .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -48,7 +48,7 @@
     background-color: rgba(0, 0, 0, 0.4);
 }
 
-.login-modal .modal-header h2 {
+.signup-modal .modal-header h2 {
     margin: 0;
     font-size: 1.6rem;
     font-weight: 600;
@@ -56,17 +56,17 @@
     text-shadow: 0 0 10px rgba(255, 178, 0, 0.3);
 }
 
-/* RED CLOSE BUTTON - ROUND CIRCLE */
-.login-modal .close-btn {
+/* RED CLOSE BUTTON - ROUND CIRCLE (NOT SQUARE) */
+.signup-modal .close-btn {
     background: transparent !important;
     border: 1px solid rgba(255, 80, 80, 0.7) !important;
     font-size: 1.5rem;
     cursor: pointer;
     color: rgb(255, 80, 80) !important;
     padding: 0 !important;
-    width: 40px;
-    height: 40px;
-    border-radius: 50% !important;
+    width: 40px; /* Increased for better circle */
+    height: 40px; /* Increased for better circle */
+    border-radius: 50% !important; /* FORCE circle */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -78,34 +78,33 @@
     box-shadow: none !important;
 }
 
-.login-modal .close-btn:hover {
+.signup-modal .close-btn:hover {
     background-color: rgba(255, 80, 80, 0.15) !important;
     box-shadow: 0 0 12px rgba(255, 80, 80, 0.4) !important;
     transform: translateY(-1px) scale(1.05);
 }
 
-.login-modal .close-btn:active {
+.signup-modal .close-btn:active {
     transform: translateY(0) scale(1);
     box-shadow: none !important;
 }
 
-.login-modal .close-btn:focus {
+.signup-modal .close-btn:focus {
     outline: none !important;
     box-shadow: none !important;
 }
 
-/* ===== LOGIN FORM ===== */
-.login-form {
+/* ===== SIGNUP FORM ===== */
+.signup-form {
     padding: 24px;
-    position: relative;
 }
 
-.login-form .form-group {
+.signup-form .form-group {
     margin-bottom: 20px;
     position: relative;
 }
 
-.login-form .form-group label {
+.signup-form .form-group label {
     display: block;
     margin-bottom: 8px;
     font-weight: 500;
@@ -113,7 +112,7 @@
     font-size: 0.95rem;
 }
 
-.login-form .form-group input {
+.signup-form .form-group input {
     width: 100%;
     padding: 14px 16px;
     background-color: rgba(0, 0, 0, 0.6) !important;
@@ -127,41 +126,41 @@
     appearance: none;
 }
 
-.login-form .form-group input:focus {
+.signup-form .form-group input:focus {
     outline: none !important;
     border-color: rgb(255, 178, 0) !important;
     box-shadow: 0 0 0 2px rgba(255, 178, 0, 0.2) !important;
 }
 
-.login-form .form-group input::placeholder {
+.signup-form .form-group input::placeholder {
     color: rgba(255, 255, 255, 0.4) !important;
 }
 
 /* Chrome autofill fix */
-.login-form .form-group input:-webkit-autofill,
-.login-form .form-group input:-webkit-autofill:hover, 
-.login-form .form-group input:-webkit-autofill:focus {
+.signup-form .form-group input:-webkit-autofill,
+.signup-form .form-group input:-webkit-autofill:hover, 
+.signup-form .form-group input:-webkit-autofill:focus {
     -webkit-text-fill-color: white !important;
     -webkit-box-shadow: 0 0 0px 1000px rgba(0, 0, 0, 0.6) inset !important;
     transition: background-color 5000s ease-in-out 0s;
 }
 
 /* ===== PASSWORD INPUT WRAPPER ===== */
-.login-form .password-wrapper {
+.signup-form .password-wrapper {
     position: relative;
 }
 
-.login-form .password-wrapper input {
-    padding-right: 16px; /* No need for extra padding since eye button is outside */
+.signup-form .password-wrapper input {
+    padding-right: 16px;
 }
 
 /* ===== ERROR MESSAGES ===== */
-.login-form .input-error {
+.signup-form .input-error {
     border-color: rgb(255, 80, 80) !important;
     box-shadow: 0 0 0 2px rgba(255, 80, 80, 0.2) !important;
 }
 
-.login-form .error-message {
+.signup-form .error-message {
     display: block;
     color: rgb(255, 80, 80);
     font-size: 0.85rem;
@@ -169,21 +168,21 @@
     padding-left: 4px;
 }
 
-/* ===== LOGIN SUBMIT BUTTON - SAME AS CREATE ACCOUNT ===== */
-.login-form .login-submit-btn {
-    width: 80%; /* Same as signup */
-    padding: 18px 0; /* Same as signup */
+/* ===== SIGNUP SUBMIT BUTTON - BIGGER & CENTERED ===== */
+.signup-form .signup-submit-btn {
+    width: 80%; /* Reduced width for centering */
+    padding: 18px 0; /* Bigger padding */
     border: none !important;
-    border-radius: 10px; /* Same as signup */
+    border-radius: 10px; /* Slightly more rounded */
     background: linear-gradient(90deg, rgba(181, 62, 32, 0.9), rgba(255, 178, 0, 0.9)) !important;
     color: white !important;
-    font-size: 1.2rem; /* Same as signup */
+    font-size: 1.2rem; /* Bigger font */
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
-    margin: 25px auto 0 auto; /* Same as signup */
+    margin: 25px auto 0 auto; /* Centered with auto margins */
     text-transform: uppercase;
-    letter-spacing: 1px; /* Same as signup */
+    letter-spacing: 1px; /* More spacing */
     display: block; /* Required for centering */
     -webkit-appearance: none !important;
     appearance: none !important;
@@ -191,24 +190,28 @@
     box-shadow: none !important;
 }
 
-.login-form .login-submit-btn:hover {
+.signup-form .signup-submit-btn:hover {
     background: linear-gradient(90deg, rgb(181, 62, 32), rgb(255, 178, 0)) !important;
     box-shadow: 0 0 25px rgba(255, 178, 0, 0.6) !important;
-    transform: translateY(-3px) scale(1.03); /* Same as signup */
+    transform: translateY(-3px) scale(1.03);
 }
 
-.login-form .login-submit-btn:active {
+.signup-form .signup-submit-btn:active {
     transform: translateY(0) scale(1);
     box-shadow: 0 0 12px rgba(255, 178, 0, 0.4) !important;
 }
 
-.login-form .login-submit-btn:focus {
+.signup-form .signup-submit-btn:focus {
     outline: none !important;
     box-shadow: 0 0 0 3px rgba(255, 178, 0, 0.3) !important;
 }
 
-/* ===== EYE BUTTON - SAME AS SIGNUP ===== */
-.login-eye-button-container {
+/* ===== EYE BUTTON INSIDE FORM AFTER CONFIRM PASSWORD ===== */
+.signup-form {
+    position: relative;
+}
+
+.signup-eye-button-container {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -216,8 +219,8 @@
     width: 100%;
 }
 
-.login-eye-button,
-button.login-eye-button {
+.signup-eye-button,
+button.signup-eye-button {
     background: transparent !important;
     background-color: transparent !important;
     border: 1px solid rgba(255, 178, 0, 0.3) !important;
@@ -237,11 +240,12 @@ button.login-eye-button {
     box-shadow: none !important;
     padding: 0 !important;
     margin: 0 !important;
+    /* Chrome-specific overrides */
     -webkit-background-clip: padding-box !important;
     background-clip: padding-box !important;
 }
 
-.login-eye-button:hover {
+.signup-eye-button:hover {
     background-color: rgba(255, 178, 0, 0.1) !important;
     border-color: rgb(255, 178, 0) !important;
     color: rgb(255, 178, 0) !important;
@@ -249,19 +253,19 @@ button.login-eye-button {
     box-shadow: 0 0 15px rgba(255, 178, 0, 0.3) !important;
 }
 
-.login-eye-button:focus {
+.signup-eye-button:focus {
     outline: none !important;
     box-shadow: 0 0 0 2px rgba(255, 178, 0, 0.3) !important;
 }
 
 /* Eye icon styling */
-.login-eye-button svg {
+.signup-eye-button svg {
     width: 22px;
     height: 22px;
 }
 
 /* Tooltip on hover */
-.login-eye-button::after {
+.signup-eye-button::after {
     content: attr(title);
     position: absolute;
     left: -120px;
@@ -279,109 +283,88 @@ button.login-eye-button {
     border: 1px solid rgba(255, 178, 0, 0.2);
 }
 
-.login-eye-button:hover::after {
+.signup-eye-button:hover::after {
     opacity: 1;
-}
-
-/* ===== LOGIN FORM FOOTER ===== */
-.login-form-footer {
-    margin-top: 20px;
-    text-align: center;
-    padding-top: 16px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.forgot-password-link {
-    color: rgba(255, 178, 0, 0.9);
-    text-decoration: none;
-    font-size: 0.9rem;
-    transition: all 0.2s ease;
-}
-
-.forgot-password-link:hover {
-    color: rgb(255, 178, 0);
-    text-decoration: underline;
-    text-shadow: 0 0 8px rgba(255, 178, 0, 0.3);
 }
 
 /* ===== RESPONSIVE DESIGN ===== */
 @media (max-width: 768px) {
-    .login-modal {
+    .signup-modal {
         max-width: 95%;
         margin: 20px;
     }
     
-    .login-modal .modal-header {
+    .signup-modal .modal-header {
         padding: 16px 20px;
     }
     
-    .login-form {
+    .signup-form {
         padding: 20px;
     }
     
-    .login-modal .modal-header h2 {
+    .signup-modal .modal-header h2 {
         font-size: 1.4rem;
     }
     
-    .login-form .form-group input {
+    .signup-form .form-group input {
         padding: 12px 14px;
     }
     
-    .login-form .login-submit-btn {
+    .signup-form .signup-submit-btn {
         padding: 16px 0;
         width: 85%;
         font-size: 1.1rem;
     }
     
-    .login-modal .close-btn {
+    .signup-modal .close-btn {
         width: 36px;
         height: 36px;
         font-size: 1.4rem;
     }
     
-    /* Eye button on mobile */
-    .login-eye-button-container {
+    /* Eye button on mobile - already centered by default */
+    .signup-eye-button-container {
         margin: 15px 0;
     }
     
-    .login-eye-button {
+    .signup-eye-button {
         width: 50px;
         height: 50px;
     }
     
-    .login-eye-button::after {
+    .signup-eye-button::after {
         display: none;
     }
 }
 
 @media (max-width: 480px) {
-    .login-modal-overlay {
+    .signup-modal-overlay {
         backdrop-filter: blur(2px);
     }
     
-    .login-modal .modal-header {
+    .signup-modal .modal-header {
         padding: 14px 16px;
     }
     
-    .login-form {
+    .signup-form {
         padding: 16px;
     }
     
-    .login-modal .modal-header h2 {
+    .signup-modal .modal-header h2 {
         font-size: 1.3rem;
     }
     
-    .login-modal .close-btn {
+    .signup-modal .close-btn {
         width: 34px;
         height: 34px;
         font-size: 1.3rem;
     }
     
-    .login-form .form-group {
+    .signup-form .form-group {
         margin-bottom: 16px;
     }
     
-    .login-form .login-submit-btn {
+    .signup-form .signup-submit-btn {
         width: 90%;
         padding: 14px 0;
         font-size: 1rem;
