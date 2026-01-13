@@ -287,6 +287,104 @@ button.signup-eye-button {
     opacity: 1;
 }
 
+/* ===== IMAGE UPLOAD SECTION ===== */
+.signup-hidden-input {
+    display: none !important;
+}
+
+.signup-image-upload {
+    width: 100%;
+}
+
+.signup-image-dropzone {
+    border: 2px dashed rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background-color: rgba(0, 0, 0, 0.3);
+}
+
+.signup-image-dropzone:hover {
+    border-color: rgba(255, 178, 0, 0.5);
+    background-color: rgba(255, 178, 0, 0.05);
+}
+
+.signup-drag-over {
+    border-color: rgb(255, 178, 0);
+    background-color: rgba(255, 178, 0, 0.1);
+}
+
+.signup-upload-icon {
+    margin: 0 auto 12px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.signup-upload-text {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 6px;
+}
+
+.signup-upload-hint {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.signup-image-selected {
+    border: 2px solid rgba(76, 175, 80, 0.5);
+    border-radius: 8px;
+    padding: 16px;
+    background-color: rgba(76, 175, 80, 0.05);
+}
+
+.signup-image-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.signup-image-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.signup-check-icon {
+    color: rgb(76, 175, 80);
+}
+
+.signup-image-status-text {
+    font-size: 0.9rem;
+    color: rgba(76, 175, 80, 0.9);
+    font-weight: 500;
+}
+
+.signup-remove-btn {
+    background: transparent;
+    border: none;
+    color: rgba(255, 80, 80, 0.9);
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.signup-remove-btn:hover {
+    color: rgb(255, 80, 80);
+    background-color: rgba(255, 80, 80, 0.1);
+}
+
+.signup-image-info {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.5);
+    word-break: break-all;
+}
+
 /* ===== RESPONSIVE DESIGN ===== */
 @media (max-width: 768px) {
     .signup-modal {

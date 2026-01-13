@@ -58,18 +58,47 @@ export default function Header() {
 
   
 
-  const handleSignupSubmit = (credentials) => {
-    console.log('Signup attempt with:', credentials);
-    // Add your signup logic here (API call, authentication, etc.)
-    // For example:
-    // try {
-    //   const response = await api.signup(credentials);
-    //   localStorage.setItem('token', response.token);
-    //   setIsLoggedIn(true);
-    // } catch (error) {
-    //   console.error('Signup failed:', error);
-    // }
-  }
+  const handleSignupSubmit = useCallback(async (userData) => {
+    try {
+      // Create FormData to handle file upload
+      const formData = new FormData();
+      formData.append('username', userData.username);
+      formData.append('email', userData.email);
+      formData.append('phone', userData.phone);
+      formData.append('password', userData.password);
+      
+      // Set default user_type to 10 (customer)
+      formData.append('user_type', '10');
+      
+      // Append image if provided
+      if (userData.card_image) {
+        formData.append('card_image', userData.card_image);
+      }
+
+      const response = await fetch('http://localhost:5000/api/auth/signup', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Signup failed');
+      }
+
+      console.log('Signup successful, user data:', data.user);
+
+      // Set session with user data from backend
+      setSession(data.user);
+      toast.success(data.message || 'Account created successfully!');
+      setIsSignupModalOpen(false);
+
+      // Customers stay on store pages, so no navigation needed
+    } catch (error) {
+      console.error('Signup error:', error);
+      toast.error(error.message || 'Signup failed');
+    }
+  }, [setSession]);
 
   return (
     <>

@@ -158,34 +158,45 @@ router.post('/signup', upload.single('card_image'), async (req, res) => {
             user_type: parsedUserType
           };
 
-          console.log('Creating customer account with encrypted password');
-
-          // Insert into database
-          const insertQuery = 'INSERT INTO users (username, email, phone, card_image, password, user_type) VALUES (?, ?, ?, ?, ?, ?)';
-          db.execute(insertQuery, 
-            [username, email, phone, card_image, hashedPassword, parsedUserType], 
-            (insertErr, results) => {
-              if (insertErr) {
-                console.error('Error creating user:', insertErr);
-                return res.status(500).json({ error: 'Failed to create account' });
-              }
-
-              // Return user data without password
-              const userResponse = {
-                id: results.insertId,
-                username: username,
-                email: email,
-                phone: phone,
-                user_type: parsedUserType,
-                role: 'customer'
-              };
-
-              res.status(201).json({
-                message: 'Account created successfully',
-                user: userResponse
-              });
+          // First, get the first available branch ID (or use 1 as default)
+          const getBranchQuery = 'SELECT id FROM branches ORDER BY id LIMIT 1';
+          db.execute(getBranchQuery, [], (branchErr, branchResults) => {
+            if (branchErr) {
+              console.error('Error getting branch:', branchErr);
+              return res.status(500).json({ error: 'Server error' });
             }
-          );
+
+            // Use the first branch ID if available, otherwise default to 1
+            const defaultBranchId = branchResults.length > 0 ? branchResults[0].id : 1;
+            console.log('Creating customer account with encrypted password, using branch_id:', defaultBranchId);
+
+            // Insert into database - customers get assigned to default branch
+            const insertQuery = 'INSERT INTO users (username, email, phone, card_image, password, user_type, primary_branch_id) VALUES (?, ?, ?, ?, ?, ?, ?)';
+            db.execute(insertQuery, 
+              [username, email, phone, card_image, hashedPassword, parsedUserType, defaultBranchId], 
+              (insertErr, results) => {
+                if (insertErr) {
+                  console.error('Error creating user:', insertErr);
+                  return res.status(500).json({ error: 'Failed to create account' });
+                }
+
+                // Return user data without password
+                const userResponse = {
+                  id: results.insertId,
+                  username: username,
+                  email: email,
+                  phone: phone,
+                  user_type: parsedUserType,
+                  role: 'customer'
+                };
+
+                res.status(201).json({
+                  message: 'Account created successfully',
+                  user: userResponse
+                });
+              }
+            );
+          });
         });
       });
     });
