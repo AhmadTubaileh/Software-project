@@ -2,12 +2,14 @@ import React from "react";
 import { cartProducts as initialCartProducts } from "../data/cartProducts";
 import Header from "../components/store/Header";
 import Footer from "../components/store/Footer";
+import Checkout from "../components/store/Checkout";
+
 import "../styles/cart.css";
 
 
 export default function StoreCart() {
   const [cartItems, setCartItems] = React.useState(initialCartProducts);
-
+  const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
   // total below
   const total = cartItems.reduce(
     (sum, item) => sum + item.subtotal,
@@ -19,6 +21,46 @@ export default function StoreCart() {
       copy.filter(item => item.id !== itemToDelete.id)
     )
   }
+
+  async function handleCheckout(paymentData) {
+    try {
+      console.log("Processing checkout with payment data:", paymentData);
+      
+      // TODO: Implement actual API call to process payment
+      // For now, simulate successful payment
+      // Example API call:
+      // const response = await fetch('/api/store/checkout', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify({
+      //     cartItems,
+      //     paymentData,
+      //     total
+      //   })
+      // });
+      // const result = await response.json();
+      // return result;
+      
+      // Simulate API delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Clear cart on success
+      setCartItems([]);
+      
+      return {
+        success: true,
+        message: 'Payment processed successfully'
+      };
+    } catch (error) {
+      console.error('Checkout error:', error);
+      return {
+        success: false,
+        message: error.message || 'Payment processing failed'
+      };
+    }
+  }
+
+  
 
   return (
     <div className="mars-page">
@@ -81,7 +123,7 @@ export default function StoreCart() {
                 </span>
               </div>
 
-              <button className="cart-checkout-btn">
+              <button className="cart-checkout-btn" onClick={() => setIsCheckoutOpen(true)}>
                 Proceed to Checkout
               </button>
             </div>
@@ -90,6 +132,7 @@ export default function StoreCart() {
       </div>
 
       <Footer />
+      <Checkout isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} cartTotal={total} onCheckoutSubmit={handleCheckout} />
     </div>
   );
 }

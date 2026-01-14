@@ -144,9 +144,12 @@ export default function Header() {
           </button>
           </>
           )}
+          
+          {isLoggedIn && (
           <Link to="/storeCart">
             <button type="button" className="mars-header-button">Cart</button>
           </Link>
+          )}
 
         </form>
       </div>
