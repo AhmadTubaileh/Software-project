@@ -9,7 +9,8 @@ export default function Header() {
   const [searchText, setSearchText] = useState("");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSignupModalOpen, setIsSignupModalOpen] = useState(false);
-  const { setSession } = useLocalSession();
+  const { currentUser, setSession } = useLocalSession();
+  const isLoggedIn = !!currentUser;
   const navigate = useNavigate();
 
   function saveSearch(event) {
@@ -56,7 +57,17 @@ export default function Header() {
     }
   }, [setSession, navigate]);
 
-  
+
+
+  const handleLogout = useCallback(() => {
+    setSession(null);
+    setIsLoginModalOpen(false);
+    setIsSignupModalOpen(false);
+    toast.success('Logged out successfully!');
+    navigate('/');
+  }, [setSession, navigate]);
+
+
 
   const handleSignupSubmit = useCallback(async (userData) => {
     try {
@@ -118,6 +129,12 @@ export default function Header() {
             onKeyDown={clickedKey}
           />
 
+          {isLoggedIn ? (
+            <button type="button" className="mars-header-button" onClick={handleLogout}>
+              Logout
+            </button>
+          ) : (
+          <>
           <button type="button" className="mars-header-button" onClick={() => setIsLoginModalOpen(true)}>
             Login
           </button>
@@ -125,7 +142,8 @@ export default function Header() {
           <button type="button" className="mars-header-button" onClick={() => setIsSignupModalOpen(true)}>
             Signup
           </button>
-
+          </>
+          )}
           <Link to="/storeCart">
             <button type="button" className="mars-header-button">Cart</button>
           </Link>

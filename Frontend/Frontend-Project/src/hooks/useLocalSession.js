@@ -12,12 +12,20 @@ export function useLocalSession(storageKey = 'frontend_user') {
 
   const setSession = useCallback((user) => {
     setCurrentUser(user);
-    try { localStorage.setItem(storageKey, JSON.stringify(user)); } catch {}
+    try { 
+      localStorage.setItem(storageKey, JSON.stringify(user)); 
+    } catch (error) {
+      console.error('Error setting session:', error);
+    }
   }, [storageKey]);
 
   const clearSession = useCallback(() => {
     setCurrentUser(null);
-    try { localStorage.removeItem(storageKey); } catch {}
+    try { 
+      localStorage.removeItem(storageKey); 
+    } catch (error) {
+      console.error('Error clearing session:', error);
+    }
   }, [storageKey]);
 
   return { currentUser, setSession, clearSession };
