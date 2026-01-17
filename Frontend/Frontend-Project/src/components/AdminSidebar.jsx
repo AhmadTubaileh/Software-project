@@ -163,12 +163,7 @@ function AdminSidebar() {
 
   // Filtered menu sections based on user_type
   const menuSections = [
-    {
-      name: 'Main',
-      items: [
-        { name: 'Online Store', path: '/', icon: '💰' }
-      ].filter(item => canSeeItem(item.name, 'Main'))
-    },
+    
     {
       name: 'Sales',
       items: [
