@@ -157,7 +157,7 @@ export default function Header() {
       <nav className="mars-nav">
         <ul className="mars-nav-list">
           <li><a href="#" className="mars-nav-link">Mobile</a></li>
-          <li><a href="#" className="mars-nav-link">Laptops</a></li>
+          <li><a href="#" className="mars-nav-link">PC</a></li>
           <li><a href="#" className="mars-nav-link">Accessories</a></li>
           <li><a href="#" className="mars-nav-link">Consoles</a></li>
         </ul>

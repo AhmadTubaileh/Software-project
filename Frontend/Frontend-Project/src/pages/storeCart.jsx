@@ -132,7 +132,16 @@ export default function StoreCart() {
       </div>
 
       <Footer />
-      <Checkout isOpen={isCheckoutOpen} onClose={() => setIsCheckoutOpen(false)} cartTotal={total} onCheckoutSubmit={handleCheckout} />
+      
+      {/* CHECKOUT MODAL */}
+      <Checkout 
+      isOpen={isCheckoutOpen} 
+      onClose={() => setIsCheckoutOpen(false)} 
+      cartTotal={total} 
+      onCheckoutSubmit={handleCheckout} 
+      cartItems={cartItems}
+      />
+
     </div>
   );
 }

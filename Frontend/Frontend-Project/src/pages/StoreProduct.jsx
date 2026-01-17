@@ -1,22 +1,66 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { storeProducts } from "../data/storeProducts";
 import { cartProducts } from "../data/cartProducts";
 import Header from "../components/store/Header";
 import Footer from "../components/store/Footer";
+import StoreApi from "../services/storeApi";
 //import InstallmentModal from "../components/StoreProduct/StoreInstallmentModal";
 
 
 export default function StoreProduct() {
   const { id } = useParams(); //  /store/product/:id
-  const product = storeProducts.find((p) => p.id === id);
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  //const [isInstallmentModalOpen, setIsInstallmentModalOpen] = React.useState(false);
+  const [mainImage, setMainImage] = useState(null);
+  const [quantity, setQuantity] = useState(1);
 
-  const [isInstallmentModalOpen, setIsInstallmentModalOpen] = React.useState(false);
-  const [mainImage, setMainImage] = React.useState(product?.imgs?.[0] || product?.img);
-  const [quantity, setQuantity] = React.useState(1);
+  useEffect(() => {
+    async function fetchProduct() {
+      try {
+        setLoading(true);
+        const fetchedProduct = await StoreApi.getItemById(id);
+        if (fetchedProduct) {
+          setProduct(fetchedProduct);
+          setMainImage(fetchedProduct.imgs?.[0] || fetchedProduct.img);
+        } else {
+          setError("Product not found");
+        }
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching product:", err);
+        setError("Failed to load product. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    }
 
-  if (!product) {
-    return <div style={{ color: "white", padding: "20px" }}>Product not found.</div>;
+    if (id) {
+      fetchProduct();
+    }
+  }, [id]);
+
+  if (loading) {
+    return (
+      <>
+        <Header />
+        <div style={{ color: "white", padding: "20px", textAlign: "center" }}>Loading product...</div>
+        <Footer />
+      </>
+    );
+  }
+
+  if (error || !product) {
+    return (
+      <>
+        <Header />
+        <div style={{ color: "white", padding: "20px", textAlign: "center" }}>
+          {error || "Product not found."}
+        </div>
+        <Footer />
+      </>
+    );
   }
 
   function increaseQty() {
@@ -37,7 +81,7 @@ export default function StoreProduct() {
       subtotal: product.price * quantity
     });
   }
-  const handleInstallmentSubmit = (credentials) => {
+  /*const handleInstallmentSubmit = (credentials) => {
     console.log('installment attempt with:', credentials);
     // Add your installment logic here (API call, authentication, etc.)
     // For example:
@@ -49,7 +93,7 @@ export default function StoreProduct() {
     //   console.error('Login failed:', error);
     // }
   };
-
+*/
  
   return (
     <>
@@ -97,7 +141,7 @@ export default function StoreProduct() {
 
             {/* second line: installment */}
             <div className="mars-order-row">
-              <button className="mars-order-installment-btn" onClick={()=>setIsInstallmentModalOpen(true)}>
+              <button className="mars-order-installment-btn" >
                 Buy in Installments
               </button>
             </div>
@@ -114,12 +158,14 @@ export default function StoreProduct() {
       <Footer />
 
 
-      {/* installment modal */}
+      {/* installment modal 
       <InstallmentModal
         isOpen={isInstallmentModalOpen}
         onClose={() => setIsInstallmentModalOpen(false)}
         onInstallmentSubmit={handleInstallmentSubmit}
     />
+    */}
+
     </>
   );
 }
