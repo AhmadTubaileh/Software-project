@@ -187,4 +187,145 @@ router.get('/items/:id', (req, res) => {
   });
 });
 
+// POST /api/store/checkout - Process store checkout and create order
+router.post('/checkout', (req, res) => {
+  const { cartItems, billingAddress, totalAmount, userId } = req.body;
+
+  console.log('🏪 Store: Processing checkout...');
+  console.log(`👤 User ID: ${userId}`);
+  console.log(`📦 Cart items: ${cartItems?.length || 0}`);
+  console.log(`💰 Total amount: ${totalAmount}`);
+
+  // Validation
+  if (!userId) {
+    return res.status(400).json({
+      success: false,
+      message: 'User ID is required'
+    });
+  }
+
+  if (!cartItems || cartItems.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Cart is empty'
+    });
+  }
+
+  if (!billingAddress || !billingAddress.trim()) {
+    return res.status(400).json({
+      success: false,
+      message: 'Billing address is required'
+    });
+  }
+
+  if (!totalAmount || totalAmount <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid total amount'
+    });
+  }
+
+  // Use transaction to ensure data consistency
+  db.getConnection((err, connection) => {
+    if (err) {
+      console.error('❌ Error getting database connection:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection error',
+        error: err.message
+      });
+    }
+
+    connection.beginTransaction((err) => {
+      if (err) {
+        console.error('❌ Error starting transaction:', err);
+        connection.release();
+        return res.status(500).json({
+          success: false,
+          message: 'Transaction error',
+          error: err.message
+        });
+      }
+
+      // Step 1: Create order record
+      const orderQuery = `
+        INSERT INTO orders (user_id, total_amount, status, billing_address, created_at)
+        VALUES (?, ?, 'pending', ?, NOW())
+      `;
+
+      connection.query(orderQuery, [userId, totalAmount, billingAddress], (err, orderResult) => {
+        if (err) {
+          console.error('❌ Error creating order:', err);
+          return connection.rollback(() => {
+            connection.release();
+            res.status(500).json({
+              success: false,
+              message: 'Error creating order',
+              error: err.message
+            });
+          });
+        }
+
+        const orderId = orderResult.insertId;
+        console.log(`✅ Order ${orderId} created successfully`);
+
+        // Step 2: Insert order items
+        const orderItemsQuery = `
+          INSERT INTO order_items (order_id, item_id, quantity, price)
+          VALUES ?
+        `;
+
+        const orderItemsValues = cartItems.map(item => [
+          orderId,
+          parseInt(item.id),
+          parseInt(item.quantity),
+          parseFloat(item.price)
+        ]);
+
+        connection.query(orderItemsQuery, [orderItemsValues], (err, itemsResult) => {
+          if (err) {
+            console.error('❌ Error creating order items:', err);
+            return connection.rollback(() => {
+              connection.release();
+              res.status(500).json({
+                success: false,
+                message: 'Error creating order items',
+                error: err.message
+              });
+            });
+          }
+
+          console.log(`✅ ${itemsResult.affectedRows} order items created`);
+
+          // Commit transaction
+          connection.commit((err) => {
+            if (err) {
+              console.error('❌ Error committing transaction:', err);
+              return connection.rollback(() => {
+                connection.release();
+                res.status(500).json({
+                  success: false,
+                  message: 'Error committing transaction',
+                  error: err.message
+                });
+              });
+            }
+
+            connection.release();
+            console.log(`✅ Checkout completed successfully! Order ID: ${orderId}`);
+            
+            res.json({
+              success: true,
+              message: 'Order placed successfully',
+              orderId: orderId,
+              totalItems: cartItems.length,
+              totalAmount: totalAmount
+            });
+          });
+        });
+      });
+    });
+  });
+});
+
 module.exports = router;
