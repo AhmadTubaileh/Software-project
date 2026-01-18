@@ -71,6 +71,11 @@ function AdminSidebar() {
       return userType === 0 || userType === 1 || userType === 2;
     }
     
+    // Special case: Order Management is Admin, Senior Manager, Manager, Supervisor only (0-3)
+    if (itemName === 'Order Management') {
+      return userType === 0 || userType === 1 || userType === 2 || userType === 3;
+    }
+    
     // Admin, Senior Manager, Manager can see everything (except Branches which is admin-only)
     if (userType === 0) {
       return true; // Admin can see everything including Branches
@@ -170,7 +175,8 @@ function AdminSidebar() {
         { name: 'POS', path: '/pos', icon: '💳' },
         { name: 'New Contract', path: '/contract-application', icon: '📝' },
         { name: 'Payment Processing', path: '/payment-processing', icon: '💰' },
-        { name: 'Returns', path: '/returns', icon: '↩️' }
+        { name: 'Returns', path: '/returns', icon: '↩️' },
+        { name: 'Order Management', path: '/order-management', icon: '📦' }
       ].filter(item => canSeeItem(item.name, 'Sales'))
     },
     {

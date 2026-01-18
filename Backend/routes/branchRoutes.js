@@ -36,7 +36,7 @@ router.get('/:id', (req, res) => {
 // Create new branch
 router.post('/', (req, res) => {
   try {
-    const { name, address, phone } = req.body;
+    const { name, address, phone, branch_img } = req.body;
 
     // Basic validation
     if (!name || !name.trim()) {
@@ -62,7 +62,8 @@ router.post('/', (req, res) => {
       const branchData = {
         name: name.trim(),
         address: address ? address.trim() : null,
-        phone: phone ? phone.trim() : null
+        phone: phone ? phone.trim() : null,
+        branch_img: branch_img ? branch_img.trim() : ''
       };
 
       Branch.create(branchData, (err, results) => {
@@ -87,7 +88,7 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const branchId = req.params.id;
-    const { name, address, phone } = req.body;
+    const { name, address, phone, branch_img } = req.body;
 
     // Basic validation
     if (!name || !name.trim()) {
@@ -120,7 +121,8 @@ router.put('/:id', (req, res) => {
         const branchData = {
           name: name.trim(),
           address: address ? address.trim() : null,
-          phone: phone ? phone.trim() : null
+          phone: phone ? phone.trim() : null,
+          branch_img: branch_img ? branch_img.trim() : ''
         };
 
         Branch.update(branchId, branchData, (err, results) => {

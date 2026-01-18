@@ -24,8 +24,26 @@ function BranchCard({ branch, onEdit, onDelete }) {
 
   const status = getBranchStatus();
 
+  // Get image URL - use the URL directly (like items main_img)
+  const imageUrl = branch.branch_img && branch.branch_img.trim() !== '' ? branch.branch_img : null;
+
   return (
     <div className="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition-all duration-200 hover:scale-[1.02] transform-gpu group">
+      {/* Branch Image */}
+      {imageUrl && (
+        <div className="mb-4 rounded-lg overflow-hidden">
+          <img
+            src={imageUrl}
+            alt={branch.name}
+            className="w-full h-48 object-cover"
+            onError={(e) => {
+              // Hide image if it fails to load
+              e.target.style.display = 'none';
+            }}
+          />
+        </div>
+      )}
+
       {/* Header with Name and Status */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex-1">

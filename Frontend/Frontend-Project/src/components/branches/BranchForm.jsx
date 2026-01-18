@@ -5,7 +5,8 @@ function BranchForm({ branch, onSubmit, onCancel }) {
   const [formData, setFormData] = useState({
     name: '',
     address: '',
-    phone: ''
+    phone: '',
+    branch_img: ''
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -17,14 +18,16 @@ function BranchForm({ branch, onSubmit, onCancel }) {
       setFormData({
         name: branch.name || '',
         address: branch.address || '',
-        phone: branch.phone || ''
+        phone: branch.phone || '',
+        branch_img: branch.branch_img || ''
       });
     } else {
       // Reset form for new branch
       setFormData({
         name: '',
         address: '',
-        phone: ''
+        phone: '',
+        branch_img: ''
       });
     }
     setErrors({});
@@ -42,6 +45,7 @@ function BranchForm({ branch, onSubmit, onCancel }) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
   };
+
 
   // Form validation
   const validateForm = () => {
@@ -163,6 +167,46 @@ function BranchForm({ branch, onSubmit, onCancel }) {
         )}
         <p className="mt-1 text-xs text-gray-400">
           Optional contact number for the branch
+        </p>
+      </div>
+
+      {/* Branch Image URL */}
+      <div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Branch Image URL
+        </label>
+        <input
+          type="text"
+          name="branch_img"
+          value={formData.branch_img}
+          onChange={handleInputChange}
+          className={`w-full px-3 py-2 bg-gray-700 border rounded-md text-white focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+            errors.branch_img ? 'border-red-500' : 'border-gray-600'
+          }`}
+          placeholder="https://example.com/image.jpg or /uploads/branch.jpg"
+        />
+        {formData.branch_img && (
+          <div className="mt-2">
+            <img 
+              src={formData.branch_img} 
+              alt="Branch preview" 
+              className="w-full h-48 object-cover rounded-lg border border-gray-600"
+              onError={(e) => {
+                e.target.style.display = 'none';
+                const errorDiv = e.target.nextElementSibling;
+                if (errorDiv) errorDiv.style.display = 'block';
+              }}
+            />
+            <div className="hidden text-xs text-red-400 mt-1">⚠️ Failed to load image</div>
+          </div>
+        )}
+        {errors.branch_img && (
+          <p className="mt-1 text-sm text-red-400 flex items-center gap-1">
+            <span>⚠️</span> {errors.branch_img}
+          </p>
+        )}
+        <p className="mt-1 text-xs text-gray-400">
+          Optional image URL for the branch (local paths or internet URLs)
         </p>
       </div>
 
