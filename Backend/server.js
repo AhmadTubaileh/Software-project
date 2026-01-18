@@ -19,6 +19,7 @@ const overdueRoutes = require('./routes/overdue');
 const branchRoutes = require('./routes/branchRoutes');
 const ocrRoutes = require('./routes/ocr');
 const storeRoutes = require('./routes/store');
+const categoryRoutes = require('./routes/categories');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -122,6 +123,7 @@ app.use('/api/overdue', overdueRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/ocr', ocrRoutes);
 app.use('/api/store', storeRoutes);
+app.use('/api/categories', categoryRoutes);
 
 // Health check with CORS headers explicitly
 app.get('/api/health', (req, res) => {

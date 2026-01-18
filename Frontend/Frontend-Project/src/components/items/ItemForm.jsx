@@ -15,7 +15,13 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel,
     installment: 1,
     on_sale_price: '',
     item_image: null,
-    branch_id: ''
+    branch_id: '',
+    category_id: '',
+    main_img: '',
+    sub_img1: '',
+    sub_img2: '',
+    sub_img3: '',
+    sub_img4: ''
   });
   const [previewImage, setPreviewImage] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -24,10 +30,32 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel,
     installment_per_month: '',
     installment_last_payment: ''
   });
+  const [categories, setCategories] = useState([]);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [creatingCategory, setCreatingCategory] = useState(false);
 
   // Get available branches for the form
   const getFormBranches = () => {
     return userType === 0 ? allBranches : userBranches;
+  };
+
+  // Fetch categories on mount
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/categories');
+      const data = await response.json();
+      if (data.success) {
+        setCategories(data.categories);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      toast.error('Failed to load categories');
+    }
   };
 
   useEffect(() => {
@@ -45,7 +73,13 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel,
         installment: item.installment !== undefined ? item.installment : 1,
         on_sale_price: item.on_sale_price || '',
         item_image: null,
-        branch_id: item.branch_id || ''
+        branch_id: item.branch_id || '',
+        category_id: item.category_id || '',
+        main_img: item.main_img || '',
+        sub_img1: item.sub_img1 || '',
+        sub_img2: item.sub_img2 || '',
+        sub_img3: item.sub_img3 || '',
+        sub_img4: item.sub_img4 || ''
       });
       
       // Set calculated payments
@@ -75,7 +109,13 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel,
         installment: 1,
         on_sale_price: '',
         item_image: null,
-        branch_id: ''
+        branch_id: '',
+        category_id: '',
+        main_img: '',
+        sub_img1: '',
+        sub_img2: '',
+        sub_img3: '',
+        sub_img4: ''
       });
       setPreviewImage(null);
       setCalculatedPayments({
@@ -158,6 +198,41 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel,
     }
   };
 
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast.error('Please enter a category name');
+      return;
+    }
+
+    setCreatingCategory(true);
+    try {
+      const response = await fetch('http://localhost:5000/api/categories', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name: newCategoryName.trim() }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success('Category created successfully');
+        setCategories([...categories, data.category]);
+        setFormData(prev => ({ ...prev, category_id: data.category.id }));
+        setNewCategoryName('');
+        setShowCategoryModal(false);
+      } else {
+        toast.error(data.message || 'Failed to create category');
+      }
+    } catch (error) {
+      console.error('Error creating category:', error);
+      toast.error('Failed to create category');
+    } finally {
+      setCreatingCategory(false);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSubmitting) return;
@@ -193,6 +268,28 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel,
       // ✅ CRITICAL: Add branch_id for new items
       if (formData.branch_id) {
         submitData.append('branch_id', formData.branch_id);
+      }
+      
+      // Append category_id if selected
+      if (formData.category_id) {
+        submitData.append('category_id', formData.category_id);
+      }
+      
+      // Append image URLs if provided
+      if (formData.main_img) {
+        submitData.append('main_img', formData.main_img);
+      }
+      if (formData.sub_img1) {
+        submitData.append('sub_img1', formData.sub_img1);
+      }
+      if (formData.sub_img2) {
+        submitData.append('sub_img2', formData.sub_img2);
+      }
+      if (formData.sub_img3) {
+        submitData.append('sub_img3', formData.sub_img3);
+      }
+      if (formData.sub_img4) {
+        submitData.append('sub_img4', formData.sub_img4);
       }
       
       // Append image if selected
@@ -267,6 +364,36 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel,
               {item && userType === 0 && (
                 <p className="text-green-400 text-xs mt-1">✓ As admin, you can change the branch</p>
               )}
+            </div>
+
+            {/* Category Selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">
+                Category (Optional)
+              </label>
+              <div className="flex gap-2">
+                <select
+                  name="category_id"
+                  value={formData.category_id}
+                  onChange={handleInputChange}
+                  className="flex-1 px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
+                >
+                  <option value="">Select a category</option>
+                  {categories.map(category => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowCategoryModal(true)}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md text-white font-medium transition-colors duration-200"
+                  title="Create new category"
+                >
+                  + New
+                </button>
+              </div>
             </div>
 
             {/* Basic Information */}
@@ -503,10 +630,10 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel,
               </label>
             </div>
 
-            {/* Image Upload */}
+            {/* Image Upload (Blob) */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
-                Product Image
+                Product Image (Upload)
               </label>
               <input
                 type="file"
@@ -523,6 +650,102 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel,
                   />
                 </div>
               )}
+            </div>
+
+            {/* Image URL Fields */}
+            <div className="border border-gray-700 rounded-md p-4">
+              <h3 className="text-sm font-medium text-gray-300 mb-3">Image URLs (Optional)</h3>
+              <p className="text-xs text-gray-500 mb-4">
+                Enter image URLs (local paths or internet URLs) for the product images
+              </p>
+              
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 mb-1">
+                    Main Image URL
+                  </label>
+                  <input
+                    type="text"
+                    name="main_img"
+                    value={formData.main_img}
+                    onChange={handleInputChange}
+                    placeholder="https://example.com/image.jpg or /uploads/product.jpg"
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white text-sm focus:outline-none focus:border-blue-500"
+                  />
+                  {formData.main_img && (
+                    <div className="mt-2">
+                      <img 
+                        src={formData.main_img} 
+                        alt="Main preview" 
+                        className="w-24 h-24 object-cover rounded border border-gray-600"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextElementSibling.style.display = 'block';
+                        }}
+                      />
+                      <div className="hidden text-xs text-red-400 mt-1">⚠️ Failed to load image</div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Sub Image 1 URL
+                    </label>
+                    <input
+                      type="text"
+                      name="sub_img1"
+                      value={formData.sub_img1}
+                      onChange={handleInputChange}
+                      placeholder="Optional"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white text-sm focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Sub Image 2 URL
+                    </label>
+                    <input
+                      type="text"
+                      name="sub_img2"
+                      value={formData.sub_img2}
+                      onChange={handleInputChange}
+                      placeholder="Optional"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white text-sm focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Sub Image 3 URL
+                    </label>
+                    <input
+                      type="text"
+                      name="sub_img3"
+                      value={formData.sub_img3}
+                      onChange={handleInputChange}
+                      placeholder="Optional"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white text-sm focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-400 mb-1">
+                      Sub Image 4 URL
+                    </label>
+                    <input
+                      type="text"
+                      name="sub_img4"
+                      value={formData.sub_img4}
+                      onChange={handleInputChange}
+                      placeholder="Optional"
+                      className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white text-sm focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Submit Buttons */}
@@ -555,6 +778,69 @@ function ItemForm({ isOpen, item, isUpdateMode, currentUser, onSubmit, onCancel,
           </form>
         </div>
       </div>
+
+      {/* Category Creation Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 z-[60] bg-black bg-opacity-75 flex items-center justify-center p-4">
+          <div className="bg-gray-800 rounded-lg max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-white">Create New Category</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCategoryModal(false);
+                  setNewCategoryName('');
+                }}
+                className="text-gray-400 hover:text-white text-2xl"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Category Name *
+                </label>
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="e.g., Electronics, Furniture, Clothing"
+                  className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-md text-white focus:outline-none focus:border-blue-500"
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter' && !creatingCategory) {
+                      handleCreateCategory();
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCategoryModal(false);
+                    setNewCategoryName('');
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors duration-200"
+                  disabled={creatingCategory}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCreateCategory}
+                  disabled={creatingCategory || !newCategoryName.trim()}
+                  className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-md transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {creatingCategory ? 'Creating...' : 'Create Category'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
