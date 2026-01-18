@@ -3,6 +3,7 @@ import { cartProducts as initialCartProducts } from "../data/cartProducts";
 import Header from "../components/store/Header";
 import Footer from "../components/store/Footer";
 import Checkout from "../components/store/Checkout";
+import { useLocalSession } from "../hooks/useLocalSession";
 
 import "../styles/cart.css";
 
@@ -10,6 +11,7 @@ import "../styles/cart.css";
 export default function StoreCart() {
   const [cartItems, setCartItems] = React.useState(initialCartProducts);
   const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
+  const { currentUser } = useLocalSession();
   // total below
   const total = cartItems.reduce(
     (sum, item) => sum + item.subtotal,
@@ -24,32 +26,50 @@ export default function StoreCart() {
 
   async function handleCheckout(paymentData) {
     try {
+      // Check if user is logged in
+      if (!currentUser || !currentUser.id) {
+        return {
+          success: false,
+          message: 'Please login to complete checkout'
+        };
+      }
+
+      // Check if cart is empty
+      if (!paymentData.cartItems || paymentData.cartItems.length === 0) {
+        return {
+          success: false,
+          message: 'Your cart is empty'
+        };
+      }
+
       console.log("Processing checkout with payment data:", paymentData);
       
-      // TODO: Implement actual API call to process payment
-      // For now, simulate successful payment
-      // Example API call:
-      // const response = await fetch('/api/store/checkout', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     cartItems,
-      //     paymentData,
-      //     total
-      //   })
-      // });
-      // const result = await response.json();
-      // return result;
-      
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Send checkout data to backend
+      const response = await fetch('http://localhost:5000/api/store/checkout', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({
+          cartItems: paymentData.cartItems,
+          billingAddress: paymentData.billingAddress,
+          totalAmount: paymentData.amount,
+          userId: currentUser.id
+        })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Payment processing failed');
+      }
       
       // Clear cart on success
       setCartItems([]);
       
       return {
         success: true,
-        message: 'Payment processed successfully'
+        message: result.message || 'Payment processed successfully'
       };
     } catch (error) {
       console.error('Checkout error:', error);

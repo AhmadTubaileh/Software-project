@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import '../../styles/checkout.css';
 
-export default function Checkout({ isOpen, onClose, cartTotal, onCheckoutSubmit }) {
+export default function Checkout({ isOpen, onClose, cartTotal, onCheckoutSubmit, cartItems }) {
     const [cardNumber, setCardNumber] = useState('');
     const [cardName, setCardName] = useState('');
     const [expiryDate, setExpiryDate] = useState('');
@@ -100,7 +100,8 @@ export default function Checkout({ isOpen, onClose, cartTotal, onCheckoutSubmit 
                     expiryDate,
                     cvv,
                     billingAddress,
-                    amount: cartTotal
+                    amount: cartTotal,
+                    cartItems: cartItems || []
                 });
                 
                 if (result && result.success) {
@@ -132,7 +133,8 @@ export default function Checkout({ isOpen, onClose, cartTotal, onCheckoutSubmit 
                     expiryDate,
                     cvv,
                     billingAddress,
-                    amount: cartTotal
+                    amount: cartTotal,
+                    cartItems: cartItems || []
                 });
                 alert('Payment would be processed here. Check console for data.');
                 if (onClose) onClose();
