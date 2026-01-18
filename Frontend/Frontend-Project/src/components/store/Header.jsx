@@ -45,10 +45,10 @@ export default function Header() {
       setIsLoginModalOpen(false);
 
       // Redirect based on role (same as backend home would do)
-      // Admin (role 0) and Employee (role 1-9) go to backend home (/)
+      // Admin (role 0) and Employee (role 1-9) go to store home (/)
       // Customer stays on store pages
       if (data.user.role === 'admin' || data.user.role === 'employee') {
-        navigate('/home');
+        navigate('/pos');
       }
       // Customer stays on current page (store)
     } catch (error) {

@@ -163,12 +163,7 @@ function AdminSidebar() {
 
   // Filtered menu sections based on user_type
   const menuSections = [
-    {
-      name: 'Main',
-      items: [
-        { name: 'Online Store', path: '/', icon: '💰' }
-      ].filter(item => canSeeItem(item.name, 'Main'))
-    },
+    
     {
       name: 'Sales',
       items: [
@@ -338,7 +333,7 @@ function AdminSidebar() {
           </div>
           <div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-              ShopAdmin Pro
+              MARS 
             </h1>
             <p className="text-xs text-gray-400">Management System</p>
           </div>
