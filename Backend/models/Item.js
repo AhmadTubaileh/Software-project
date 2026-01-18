@@ -148,8 +148,8 @@ class Item {
 
         // Insert into items table
         const itemQuery = `
-          INSERT INTO items (name, description, available, installment, quantity, item_image, branch_id) 
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO items (name, description, available, installment, quantity, item_image, branch_id, category_id, main_img, sub_img1, sub_img2, sub_img3, sub_img4) 
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
         
         connection.query(itemQuery, [
@@ -159,7 +159,13 @@ class Item {
           itemData.installment,
           itemData.quantity,
           itemData.item_image,
-          itemData.branch_id
+          itemData.branch_id,
+          itemData.category_id || null,
+          itemData.main_img || null,
+          itemData.sub_img1 || null,
+          itemData.sub_img2 || null,
+          itemData.sub_img3 || null,
+          itemData.sub_img4 || null
         ], (err, itemResult) => {
           if (err) {
             console.error('Error inserting item:', err);
@@ -239,7 +245,8 @@ class Item {
         const itemQuery = `
           UPDATE items 
           SET name = ?, description = ?, available = ?, 
-              installment = ?, quantity = ?, item_image = ?, branch_id = ?
+              installment = ?, quantity = ?, item_image = ?, branch_id = ?,
+              category_id = ?, main_img = ?, sub_img1 = ?, sub_img2 = ?, sub_img3 = ?, sub_img4 = ?
           WHERE id = ?
         `;
         
@@ -251,6 +258,12 @@ class Item {
           itemData.quantity,
           itemData.item_image,
           itemData.branch_id,
+          itemData.category_id || null,
+          itemData.main_img || null,
+          itemData.sub_img1 || null,
+          itemData.sub_img2 || null,
+          itemData.sub_img3 || null,
+          itemData.sub_img4 || null,
           itemId
         ], (err) => {
           if (err) {

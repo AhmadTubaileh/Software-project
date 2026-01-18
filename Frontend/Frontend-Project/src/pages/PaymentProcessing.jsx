@@ -4,6 +4,7 @@ import AdminSidebar from '../components/AdminSidebar.jsx';
 import PaymentSearch from '../components/PaymentProcessing/PaymentSearch.jsx';
 import ContractDetails from '../components/PaymentProcessing/ContractDetails.jsx';
 import PaymentForm from '../components/PaymentProcessing/PaymentForm.jsx';
+import PaymentReceipt from '../components/PaymentProcessing/PaymentReceipt.jsx';
 import toast, { Toaster } from 'react-hot-toast';
 
 function PaymentProcessing() {
@@ -56,6 +57,8 @@ function PaymentProcessing() {
   const [processing, setProcessing] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [selectedPayment, setSelectedPayment] = useState(null);
+  const [showReceipt, setShowReceipt] = useState(false);
+  const [receiptData, setReceiptData] = useState(null);
   
   // Ref for scrolling to payment form
   const paymentFormRef = useRef(null);
@@ -193,6 +196,24 @@ function PaymentProcessing() {
 
       toast.success(data.message || 'Payment processed successfully!');
       
+      // Store payment data for receipt before refreshing
+      const paymentForReceipt = { ...selectedPayment };
+      const contractForReceipt = { ...selectedContract };
+      const amountPaidForReceipt = paymentAmountNum;
+      
+      // Prepare receipt data
+      setReceiptData({
+        paymentId: data.paymentId || selectedPayment.id,
+        payment: paymentForReceipt,
+        contract: contractForReceipt,
+        amountPaid: amountPaidForReceipt,
+        currentUser: currentUser,
+        timestamp: data.timestamp || new Date().toISOString()
+      });
+      
+      // Show receipt
+      setShowReceipt(true);
+      
       // Refresh contract details and payments
       if (selectedContract) {
         // Reload contract details
@@ -262,6 +283,21 @@ function PaymentProcessing() {
   return (
     <div className="flex min-h-screen bg-[#0e1830] text-white">
       <Toaster position="top-center" />
+
+      {/* Receipt Modal */}
+      {showReceipt && receiptData && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-h-[90vh] overflow-y-auto">
+            <PaymentReceipt 
+              paymentData={receiptData}
+              onClose={() => {
+                setShowReceipt(false);
+                setReceiptData(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Sidebar */}
       <AdminSidebar />

@@ -22,6 +22,7 @@ import Returns from './pages/Returns.jsx';
 import WorkerInventory from './pages/WorkerInventory.jsx';
 import Branches from './pages/Branches.jsx'; // Make sure this import matches
 import ContractBranches from './pages/ContractBranches.jsx';
+import OrderManagement from './pages/OrderManagement.jsx';
 
 
 import StoreHome from './pages/StoreHome.jsx'; //Ahmad new
@@ -58,6 +59,7 @@ function App() {
         <Route path="/worker-inventory" element={<WorkerInventory />} />
         <Route path="/branches" element={<Branches />} /> {/* CHANGED from /branch-management to /branches */}
         <Route path="/contract-branches" element={<ContractBranches />} />
+        <Route path="/order-management" element={<OrderManagement />} />
       </Routes>
     </Router>
   );

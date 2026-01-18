@@ -549,7 +549,13 @@ router.post('/', upload.single('item_image'), async (req, res) => {
       installment: req.body.installment === '1' || req.body.installment === 'true' || req.body.installment === true ? 1 : 0,
       quantity: parseInt(req.body.quantity) || 0,
       item_image: req.file ? req.file.buffer : null,
-      branch_id: branchId
+      branch_id: branchId,
+      category_id: req.body.category_id ? parseInt(req.body.category_id) : null,
+      main_img: req.body.main_img || null,
+      sub_img1: req.body.sub_img1 || null,
+      sub_img2: req.body.sub_img2 || null,
+      sub_img3: req.body.sub_img3 || null,
+      sub_img4: req.body.sub_img4 || null
     };
 
     console.log('Item data:', itemData);

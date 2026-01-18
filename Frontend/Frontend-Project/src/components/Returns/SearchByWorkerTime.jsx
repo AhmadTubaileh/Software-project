@@ -18,14 +18,56 @@ const SearchByWorkerTime = ({ workers, onSearch, loading }) => {
     onSearch(selectedWorker, start, end);
   };
 
-  // Set default dates (last 7 days)
+  // Quick date range presets
+  const setDateRange = (preset) => {
+    const now = new Date();
+    let start = new Date();
+    let end = new Date();
+
+    switch (preset) {
+      case 'today':
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'last24':
+        start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+        break;
+      case 'last7':
+        start.setDate(now.getDate() - 7);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'thisWeek':
+        const dayOfWeek = now.getDay();
+        start.setDate(now.getDate() - dayOfWeek);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      case 'thisMonth':
+        start.setDate(1);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        break;
+      default:
+        return;
+    }
+
+    setStartDate(start.toISOString().slice(0, 16));
+    setEndDate(end.toISOString().slice(0, 16));
+  };
+
+  // Set default dates (last 7 days with time)
   React.useEffect(() => {
     const today = new Date();
     const lastWeek = new Date(today);
     lastWeek.setDate(today.getDate() - 7);
+    lastWeek.setHours(0, 0, 0, 0); // Start of day
     
-    setStartDate(lastWeek.toISOString().split('T')[0]);
-    setEndDate(today.toISOString().split('T')[0]);
+    today.setHours(23, 59, 59, 999); // End of day
+    
+    // Format for datetime-local input (YYYY-MM-DDTHH:MM)
+    setStartDate(lastWeek.toISOString().slice(0, 16));
+    setEndDate(today.toISOString().slice(0, 16));
   }, []);
 
   return (
@@ -55,13 +97,57 @@ const SearchByWorkerTime = ({ workers, onSearch, loading }) => {
           </select>
         </div>
         
-        <div className="grid grid-cols-2 gap-4">
+        {/* Quick Date Presets */}
+        <div className="bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+          <label className="block text-xs font-medium text-gray-400 mb-2">
+            Quick Date Ranges:
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setDateRange('today')}
+              className="px-3 py-1 text-xs bg-gray-700 hover:bg-blue-600 rounded-md transition-colors duration-200"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateRange('last24')}
+              className="px-3 py-1 text-xs bg-gray-700 hover:bg-blue-600 rounded-md transition-colors duration-200"
+            >
+              Last 24h
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateRange('last7')}
+              className="px-3 py-1 text-xs bg-gray-700 hover:bg-blue-600 rounded-md transition-colors duration-200"
+            >
+              Last 7 Days
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateRange('thisWeek')}
+              className="px-3 py-1 text-xs bg-gray-700 hover:bg-blue-600 rounded-md transition-colors duration-200"
+            >
+              This Week
+            </button>
+            <button
+              type="button"
+              onClick={() => setDateRange('thisMonth')}
+              className="px-3 py-1 text-xs bg-gray-700 hover:bg-blue-600 rounded-md transition-colors duration-200"
+            >
+              This Month
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">
-              Start Date
+              Start Date & Time
             </label>
             <input
-              type="date"
+              type="datetime-local"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-300"
@@ -71,10 +157,10 @@ const SearchByWorkerTime = ({ workers, onSearch, loading }) => {
           
           <div>
             <label className="block text-sm font-medium text-gray-400 mb-2">
-              End Date
+              End Date & Time
             </label>
             <input
-              type="date"
+              type="datetime-local"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
               className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-300"
@@ -108,8 +194,8 @@ const SearchByWorkerTime = ({ workers, onSearch, loading }) => {
       <div className="mt-6 pt-4 border-t border-gray-700">
         <h3 className="text-sm font-medium text-gray-400 mb-2">Instructions:</h3>
         <ul className="text-xs text-gray-500 space-y-1">
-          <li>• Select worker and time period</li>
-          <li>• Shows only cash sales in that period</li>
+          <li>• Select worker and specific time period (date & time)</li>
+          <li>• Shows only cash sales within that time range</li>
           <li>• Click on a sale to see all records</li>
           <li>• Then select cash record to process return</li>
         </ul>
