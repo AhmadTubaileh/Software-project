@@ -27,6 +27,7 @@ import ContractBranches from './pages/ContractBranches.jsx';
 import StoreHome from './pages/StoreHome.jsx'; //Ahmad new
 import StoreProduct from './pages/StoreProduct.jsx';
 import StoreCart from './pages/storeCart.jsx';
+import BranchSelection from './pages/BranchSelection.jsx';
 
 
 function App() {
@@ -34,7 +35,8 @@ function App() {
     <Router>
       <Routes>
         <Route path="/home" element={<Home />} /> 
-        <Route path="/" element={<StoreHome />} />{/*Ahmad New*/}
+        <Route path="/" element={<BranchSelection />} />
+        <Route path="/store" element={<StoreHome />} />
         <Route path="/store/product/:id" element={<StoreProduct />} />
         <Route path="/storeCart" element={<StoreCart />} />
         

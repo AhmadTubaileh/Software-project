@@ -2,17 +2,78 @@ const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
 
-// GET /api/store/items - Get all items for the store with main_img and sub_imgs
-router.get('/items', (req, res) => {
-  console.log('🏪 Store: Fetching items with images...');
+// GET /api/store/branches - Get all branches for selection
+router.get('/branches', (req, res) => {
+  console.log('🏪 Store: Fetching branches...');
   
   const query = `
+    SELECT id, name, address, phone, branch_img
+    FROM branches
+    ORDER BY name ASC
+  `;
+  
+  db.query(query, (err, results) => {
+    if (err) {
+      console.error('❌ Error fetching branches:', err);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch branches',
+        error: err.message 
+      });
+    }
+    
+    console.log(`✅ Store: Found ${results.length} branches`);
+    
+    // Process branch images - handle URLs and relative paths
+    const branches = results.map(branch => {
+      let branchImg = branch.branch_img;
+      
+      // If branch_img exists and is not already a full URL
+      if (branchImg && !branchImg.startsWith('http://') && !branchImg.startsWith('https://')) {
+        // If it's a relative path starting with /
+        if (branchImg.startsWith('/')) {
+          branchImg = `http://localhost:5000${branchImg}`;
+        } else {
+          // Assume it's in uploads directory
+          branchImg = `http://localhost:5000/uploads/${branchImg}`;
+        }
+      }
+      
+      return {
+        id: branch.id,
+        name: branch.name,
+        address: branch.address || null,
+        phone: branch.phone || null,
+        branch_img: branchImg || null
+      };
+    });
+    
+    res.json({
+      success: true,
+      branches: branches
+    });
+  });
+});
+
+// GET /api/store/items - Get all items for the store with main_img and sub_imgs
+// Optional query parameter: branch_id to filter by branch
+router.get('/items', (req, res) => {
+  const branchId = req.query.branch_id;
+  
+  if (branchId) {
+    console.log(`🏪 Store: Fetching items for branch ${branchId}...`);
+  } else {
+    console.log('🏪 Store: Fetching all items...');
+  }
+  
+  let query = `
     SELECT 
       i.id,
       i.name,
       i.description,
       i.quantity,
       i.category_id,
+      i.branch_id,
       i.main_img,
       i.sub_img1,
       i.sub_img2,
@@ -21,16 +82,26 @@ router.get('/items', (req, res) => {
       ip.price_cash
     FROM items i
     LEFT JOIN item_prices ip ON i.id = ip.item_id
-    WHERE ip.date = (
+    WHERE (ip.date = (
       SELECT MAX(date) 
       FROM item_prices 
       WHERE item_id = i.id
     )
-    OR ip.date IS NULL
-    ORDER BY i.id DESC
+    OR ip.date IS NULL)
   `;
   
-  db.query(query, (err, results) => {
+  const queryParams = [];
+  
+  // Add branch filter if branch_id is provided
+  if (branchId) {
+    query += ` AND i.branch_id = ?`;
+    queryParams.push(branchId);
+  }
+  
+  query += ` ORDER BY i.id DESC`;
+  
+  // Execute query with or without branch filter
+  const queryCallback = (err, results) => {
     if (err) {
       console.error('❌ Error fetching store items:', err);
       return res.status(500).json({ 
@@ -89,7 +160,13 @@ router.get('/items', (req, res) => {
       success: true,
       items: storeProducts
     });
-  });
+  };
+  
+  if (queryParams.length > 0) {
+    db.query(query, queryParams, queryCallback);
+  } else {
+    db.query(query, queryCallback);
+  }
 });
 
 // GET /api/store/items/:id - Get a single item by ID for the store

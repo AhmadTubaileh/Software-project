@@ -13,7 +13,16 @@ export default function Items() {
         async function fetchProducts() {
             try {
                 setLoading(true);
-                const products = await StoreApi.getItems();
+                // Get selected branch from localStorage
+                const selectedBranchId = localStorage.getItem('selectedBranchId');
+                
+                if (!selectedBranchId) {
+                    setError("Please select a branch first.");
+                    setLoading(false);
+                    return;
+                }
+                
+                const products = await StoreApi.getItems(selectedBranchId);
                 setStoreProducts(products);
                 setError(null);
             } catch (err) {

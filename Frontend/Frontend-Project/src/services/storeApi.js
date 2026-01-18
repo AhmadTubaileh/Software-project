@@ -3,9 +3,15 @@ const API_BASE = 'http://localhost:5000/api/store';
 
 class StoreApi {
   // Get all items for the store
-  static async getItems() {
+  // Optional branchId parameter to filter by branch
+  static async getItems(branchId = null) {
     try {
-      const response = await fetch(`${API_BASE}/items`);
+      let url = `${API_BASE}/items`;
+      if (branchId) {
+        url += `?branch_id=${branchId}`;
+      }
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
