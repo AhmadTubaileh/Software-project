@@ -29,6 +29,7 @@ import StoreHome from './pages/StoreHome.jsx'; //Ahmad new
 import StoreProduct from './pages/StoreProduct.jsx';
 import StoreCart from './pages/storeCart.jsx';
 import BranchSelection from './pages/BranchSelection.jsx';
+import MyInstallments from './pages/MyInstallments.jsx';
 
 
 function App() {
@@ -40,6 +41,7 @@ function App() {
         <Route path="/store" element={<StoreHome />} />
         <Route path="/store/product/:id" element={<StoreProduct />} />
         <Route path="/storeCart" element={<StoreCart />} />
+        <Route path="/my-installments" element={<MyInstallments />} />
         
         <Route path="/pos" element={<POS />} />
         <Route path="/employees" element={<Employees />} />

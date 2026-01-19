@@ -682,4 +682,72 @@ router.post('/transfer-transactions', async (req, res) => {
   }
 });
 
+// GET /api/contracts/my-installments - Get installments for a specific customer (by user_id)
+router.get('/my-installments', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
+    }
+
+    // Get contracts for this user
+    const query = `
+      SELECT 
+        ic.*,
+        cc.full_name as customer_name,
+        cc.phone as customer_phone,
+        i.name as item_name,
+        i.description as item_description,
+        ip.price_cash,
+        ip.price_installment_total,
+        ip.installment_first_payment,
+        ip.installment_months,
+        ip.installment_per_month,
+        ip.installment_last_payment,
+        ca.status as approval_status,
+        ca.reason as rejection_reason,
+        ca.updated_at as decision_date,
+        b.name as branch_name,
+        -- Payment summary
+        (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as total_payments,
+        (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id AND ipay.status = 'paid') as paid_payments,
+        (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id AND ipay.status = 'pending') as pending_payments,
+        (SELECT SUM(amount_due - amount_paid) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as remaining_amount
+      FROM installment_contracts ic
+      LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+      LEFT JOIN items i ON ic.item_id = i.id
+      LEFT JOIN item_prices ip ON ic.price_id = ip.id
+      LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+      LEFT JOIN branches b ON ic.branch_id = b.id
+      WHERE ic.user_id = ?
+      ORDER BY ic.created_at DESC
+    `;
+    
+    db.query(query, [userId], (err, results) => {
+      if (err) {
+        console.error('Error fetching customer installments:', err);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to fetch installments'
+        });
+      }
+
+      res.json({
+        success: true,
+        contracts: results || []
+      });
+    });
+  } catch (error) {
+    console.error('Get customer installments error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch installments'
+    });
+  }
+});
+
 module.exports = router;

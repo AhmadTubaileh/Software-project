@@ -74,6 +74,7 @@ router.get('/items', (req, res) => {
       i.quantity,
       i.category_id,
       i.branch_id,
+      i.installment,
       i.main_img,
       i.sub_img1,
       i.sub_img2,
@@ -148,6 +149,7 @@ router.get('/items', (req, res) => {
         id: item.id.toString(),
         name: item.name,
         price: parseFloat(item.price_cash) || 0,
+        installment: item.installment != null ? Number(item.installment) : 1,
         img: processedImgs[0] || null, // First image as main img
         imgs: processedImgs, // All images as array
         description: item.description || '',
@@ -181,12 +183,19 @@ router.get('/items/:id', (req, res) => {
       i.description,
       i.quantity,
       i.category_id,
+      i.installment,
       i.main_img,
       i.sub_img1,
       i.sub_img2,
       i.sub_img3,
       i.sub_img4,
-      ip.price_cash
+      ip.price_cash,
+      ip.id as price_id,
+      ip.price_installment_total,
+      ip.installment_first_payment,
+      ip.installment_months,
+      ip.installment_per_month,
+      ip.installment_last_payment
     FROM items i
     LEFT JOIN item_prices ip ON i.id = ip.item_id
     WHERE i.id = ? AND (
@@ -250,6 +259,7 @@ router.get('/items/:id', (req, res) => {
       id: item.id.toString(),
       name: item.name,
       price: parseFloat(item.price_cash) || 0,
+      installment: item.installment != null ? Number(item.installment) : 1,
       img: processedImgs[0] || null,
       imgs: processedImgs,
       description: item.description || '',
