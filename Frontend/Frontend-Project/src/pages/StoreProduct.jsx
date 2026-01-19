@@ -4,7 +4,9 @@ import { cartProducts } from "../data/cartProducts";
 import Header from "../components/store/Header";
 import Footer from "../components/store/Footer";
 import StoreApi from "../services/storeApi";
-//import InstallmentModal from "../components/StoreProduct/StoreInstallmentModal";
+import StoreInstallmentModal from "../components/StoreProduct/StoreInstallmentModal";
+import { useLocalSession } from "../hooks/useLocalSession";
+import toast from "react-hot-toast";
 
 
 export default function StoreProduct() {
@@ -12,9 +14,10 @@ export default function StoreProduct() {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  //const [isInstallmentModalOpen, setIsInstallmentModalOpen] = React.useState(false);
+  const [isInstallmentModalOpen, setIsInstallmentModalOpen] = useState(false);
   const [mainImage, setMainImage] = useState(null);
   const [quantity, setQuantity] = useState(1);
+  const { currentUser } = useLocalSession();
 
   useEffect(() => {
     async function fetchProduct() {
@@ -140,11 +143,22 @@ export default function StoreProduct() {
             </div>
 
             {/* second line: installment */}
-            <div className="mars-order-row">
-              <button className="mars-order-installment-btn" >
-                Buy in Installments
-              </button>
-            </div>
+            {(Number(product.installment) === 1) && (
+              <div className="mars-order-row">
+                <button 
+                  className="mars-order-installment-btn" 
+                  onClick={() => {
+                    if (!currentUser) {
+                      toast.error('Please login to apply for installments');
+                      return;
+                    }
+                    setIsInstallmentModalOpen(true);
+                  }}
+                >
+                  Buy in Installments
+                </button>
+              </div>
+            )}
           </div>
 
           {/* description */}
@@ -157,14 +171,13 @@ export default function StoreProduct() {
 
       <Footer />
 
-
-      {/* installment modal 
-      <InstallmentModal
+      {/* Installment Modal */}
+      <StoreInstallmentModal
         isOpen={isInstallmentModalOpen}
         onClose={() => setIsInstallmentModalOpen(false)}
-        onInstallmentSubmit={handleInstallmentSubmit}
-    />
-    */}
+        product={product}
+        quantity={quantity}
+      />
 
     </>
   );

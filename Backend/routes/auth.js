@@ -222,6 +222,52 @@ router.get('/users', (req, res) => {
   });
 });
 
+// PUT /api/auth/update-id-card - Update user's ID card (for customers)
+router.put('/update-id-card', upload.single('card_image'), async (req, res) => {
+  try {
+    const { userId, id_card } = req.body;
+    const card_image = req.file ? req.file.buffer : null;
+
+    if (!userId || !id_card) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'User ID and ID card number are required' 
+      });
+    }
+
+    // Update user's ID card
+    const updateQuery = 'UPDATE users SET id_card = ?, card_image = COALESCE(?, card_image) WHERE id = ?';
+    
+    db.query(updateQuery, [id_card, card_image, userId], (err, result) => {
+      if (err) {
+        console.error('Error updating ID card:', err);
+        return res.status(500).json({ 
+          success: false,
+          error: 'Failed to update ID card' 
+        });
+      }
+
+      if (result.affectedRows === 0) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'ID card updated successfully'
+      });
+    });
+  } catch (error) {
+    console.error('Error in update-id-card:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Server error' 
+    });
+  }
+});
+
 // Health check
 router.get('/test', (req, res) => {
   res.json({ message: 'Auth route is working!' });
