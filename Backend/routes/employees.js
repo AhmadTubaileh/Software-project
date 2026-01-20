@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const upload = require('../middleware/upload');
 const db = require('../config/database');
 
-// Get all employees (with access control)
+// Get all employees (with access control) - EXCLUDING CUSTOMERS (user_type = 10)
 router.get('/', async (req, res) => {
   try {
     console.log('GET /employees called');
@@ -57,7 +57,7 @@ router.get('/', async (req, res) => {
       const minUserType = parseInt(currentUser.user_type) + 1;
       console.log(`User type ${currentUser.user_type} can see employees type >= ${minUserType}`);
 
-      // Query to get employees in accessible branches
+      // Query to get employees in accessible branches - EXCLUDING CUSTOMERS (user_type = 10)
       const query = `
         SELECT DISTINCT
           u.id, u.username, u.email, u.phone, u.id_card, 
@@ -70,6 +70,7 @@ router.get('/', async (req, res) => {
         LEFT JOIN user_branches ub ON u.id = ub.user_id
         WHERE (u.primary_branch_id IN (?) OR ub.branch_id IN (?))
           AND u.user_type >= ?
+          AND u.user_type < 10  -- EXCLUDE CUSTOMERS (type 10)
           AND u.id != ?  -- Don't include self
         GROUP BY u.id
         ORDER BY u.user_type, u.username
@@ -83,7 +84,7 @@ router.get('/', async (req, res) => {
           return res.status(500).json({ error: 'Failed to fetch employees: ' + err.message });
         }
 
-        console.log(`Found ${results.length} employees for user type ${currentUser.user_type}`);
+        console.log(`Found ${results.length} employees (excluding customers) for user type ${currentUser.user_type}`);
 
         // Process results
         const employees = results.map(employee => {
@@ -100,8 +101,8 @@ router.get('/', async (req, res) => {
         res.json(employees);
       });
     } else {
-      // Admin sees all employees
-      console.log('Admin user, fetching all employees...');
+      // Admin sees all employees - BUT EXCLUDING CUSTOMERS (user_type = 10)
+      console.log('Admin user, fetching all employees (excluding customers)...');
       
       const query = `
         SELECT 
@@ -113,6 +114,7 @@ router.get('/', async (req, res) => {
         FROM users u
         LEFT JOIN branches b ON u.primary_branch_id = b.id
         LEFT JOIN user_branches ub ON u.id = ub.user_id
+        WHERE u.user_type < 10  -- EXCLUDE CUSTOMERS (type 10)
         GROUP BY u.id
         ORDER BY u.user_type, u.username
       `;
@@ -123,7 +125,7 @@ router.get('/', async (req, res) => {
           return res.status(500).json({ error: 'Failed to fetch employees: ' + err.message });
         }
 
-        console.log(`Admin found ${results.length} employees`);
+        console.log(`Admin found ${results.length} employees (excluding customers)`);
 
         const employees = results.map(employee => ({
           ...employee,
@@ -221,7 +223,7 @@ router.get('/branches/all', (req, res) => {
   });
 });
 
-// Get employee by ID
+// Get employee by ID - Still accessible even if customer, but employees page won't show them
 router.get('/:id', async (req, res) => {
   try {
     const employeeId = req.params.id;
@@ -311,6 +313,13 @@ router.post('/', upload.single('card_image'), async (req, res) => {
     let parsedBranchIds = [];
     if (branch_ids && branch_ids !== '') {
       parsedBranchIds = branch_ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+    }
+
+    // Prevent creating customers (user_type = 10) from employees page
+    if (parsedUserType === 10) {
+      return res.status(400).json({ 
+        error: 'Cannot create customers on employees page. Use customer management instead.'
+      });
     }
 
     // Check user type assignment (for non-admin)
@@ -426,6 +435,13 @@ router.put('/:id', upload.single('card_image'), async (req, res) => {
     let parsedBranchIds = [];
     if (branch_ids && branch_ids !== '') {
       parsedBranchIds = branch_ids.split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+    }
+
+    // Prevent changing to customer (user_type = 10) from employees page
+    if (parsedUserType === 10) {
+      return res.status(400).json({ 
+        error: 'Cannot update employee to customer on employees page. Use customer management instead.'
+      });
     }
 
     // Get current employee
