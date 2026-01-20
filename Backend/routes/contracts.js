@@ -430,11 +430,26 @@ router.post('/apply-multiple', upload.fields([
     });
 
     // Prepare contracts for batch processing
-    const contractsToProcess = contracts_data.map(contract_data => ({
-      customer_data,
-      sponsors_data,
-      contract_data
-    }));
+    const contractsToProcess = contracts_data.map(contract => {
+      // Ensure the contract has worker_id for the model
+      return {
+        customer_data,
+        sponsors_data,
+        contract_data: {
+          ...contract,
+          worker_id: contract.user_id || contract.worker_id // Map user_id to worker_id
+        }
+      };
+    });
+    
+    console.log('=== DEBUG: Processed Contracts ===');
+    console.log('Total contracts to process:', contractsToProcess.length);
+    console.log('First contract data:', {
+      worker_id: contractsToProcess[0]?.contract_data?.worker_id,
+      user_id: contractsToProcess[0]?.contract_data?.user_id,
+      item_name: contractsToProcess[0]?.contract_data?.item_name,
+      branch_id: contractsToProcess[0]?.contract_data?.branch_id
+    });
 
     // Process contracts
     const result = await Contract.applyMultiple(contractsToProcess);

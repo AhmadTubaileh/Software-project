@@ -75,13 +75,17 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
       }
 
       // Pre-fill contract items with current product (NO DOWNPAYMENT)
-      if (product && product.price_installment_total) {
-        const total_price = parseFloat(product.price_installment_total) || 0;
+      if (product) {
+        const total_price = parseFloat(
+          product.price_installment_total 
+        ) || 0;
+
         const months = parseInt(product.installment_months) || 12;
+        const down_payment = parseFloat(product.installment_first_payment) || 0;
         
         // Calculate payments WITHOUT downpayment (down_payment = 0)
-        const remaining = total_price; // No downpayment, so remaining = total
-        const equal_months = months - 1;
+        const remaining = total_price - down_payment; // No downpayment, so remaining = total
+        const equal_months = Math.max(1, months - 1); // avoid division by zero
         const raw_monthly = remaining / equal_months;
         let monthly_payment = Math.floor(raw_monthly / 10) * 10;
         let last_payment = remaining - (monthly_payment * equal_months);
@@ -89,7 +93,13 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
         if (last_payment === 0) {
           monthly_payment = monthly_payment - 10;
           last_payment = 10 * equal_months;
+        } else if (last_payment < 0) {
+          // If last payment is negative, adjust monthly payment
+          monthly_payment = Math.floor((remaining + 10) / equal_months / 10) * 10;
+          last_payment = remaining - (monthly_payment * equal_months);
         }
+
+        const qty = Math.max(1, quantity || 1);
 
         setFormData(prev => ({
           ...prev,
@@ -99,17 +109,17 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
             item_description: product.description || '',
             price_id: product.price_id || null,
             total_price: total_price,
-            down_payment: 0, // NO DOWNPAYMENT
+            down_payment: down_payment, // NO DOWNPAYMENT
             months: months,
             monthly_payment: monthly_payment,
             installment_last_payment: last_payment,
             start_date: new Date().toISOString().split('T')[0],
-            quantity: 1 // Always 1 for store
+            quantity: qty // Use selected quantity (default 1)
           }]
         }));
       }
     }
-  }, [isOpen, currentUser, product]);
+  }, [isOpen, currentUser, product, quantity]);
 
   // Reset form when modal closes
   useEffect(() => {
@@ -248,7 +258,13 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
       delete customerDataClean.id_card_image;
 
       const sponsorsDataClean = formData.sponsors.map(sponsor => {
-        const { id_card_image, existingCustomer, searched, isDuplicate, ...sponsorWithoutImage } = sponsor;
+        const { 
+          id_card_image: _id_card_image, 
+          existingCustomer: _existingCustomer, 
+          searched: _searched, 
+          isDuplicate: _isDuplicate, 
+          ...sponsorWithoutImage 
+        } = sponsor;
         return sponsorWithoutImage;
       });
 
@@ -265,14 +281,14 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
         item_description: item.item_description,
         price_id: item.price_id,
         total_price: item.total_price,
-        down_payment: 0, // NO DOWNPAYMENT
+        down_payment: item.down_payment, // Use actual down payment
         months: item.months,
         monthly_payment: item.monthly_payment,
         installment_last_payment: item.installment_last_payment,
         start_date: item.start_date,
-        worker_id: currentUser.id,
+        user_id: currentUser.id, // CHANGE FROM worker_id to user_id
         branch_id: userBranchId || 1,
-        quantity: 1,
+        quantity: 1, // Fixed to 1 as requested
         contract_number: 1,
         original_quantity: 1
       }));
@@ -443,7 +459,8 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
+      backgroundColor: 'rgba(0, 0, 0, 0.85)',
+      backdropFilter: 'blur(4px)',
       zIndex: 10000,
       display: 'flex',
       alignItems: 'center',
@@ -453,31 +470,59 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
     }}>
       <Toaster position="top-center" />
       <div className="modal" style={{
-        backgroundColor: 'rgb(3,4,7)',
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
         borderRadius: '12px',
         maxWidth: '900px',
         width: '100%',
         maxHeight: '90vh',
         overflowY: 'auto',
-        border: '1px solid rgba(255,255,255,0.1)'
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: '0 0 30px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 178, 0, 0.1)'
       }}>
         <div className="modal-header" style={{
-          padding: '20px',
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          padding: '20px 24px',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center'
         }}>
-          <h2 style={{ margin: 0, color: 'white', fontSize: '1.3rem' }}>Apply for Installment</h2>
+          <h2 style={{ 
+            margin: 0, 
+            color: 'rgb(255, 178, 0)', 
+            fontSize: '1.6rem',
+            fontWeight: 600,
+            textShadow: '0 0 10px rgba(255, 178, 0, 0.3)'
+          }}>
+            Apply for Installment
+          </h2>
           <button 
             onClick={onClose} 
             style={{
               background: 'transparent',
-              border: 'none',
-              color: 'white',
-              fontSize: '24px',
+              border: '1px solid rgba(255, 80, 80, 0.7)',
+              borderRadius: '50%',
+              color: 'rgb(255, 80, 80)',
+              fontSize: '1.5rem',
               cursor: 'pointer',
-              padding: '0 10px'
+              padding: 0,
+              width: '40px',
+              height: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease',
+              lineHeight: 1
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = 'rgba(255, 80, 80, 0.15)';
+              e.target.style.boxShadow = '0 0 12px rgba(255, 80, 80, 0.4)';
+              e.target.style.transform = 'translateY(-1px) scale(1.05)';
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = 'transparent';
+              e.target.style.boxShadow = 'none';
+              e.target.style.transform = 'translateY(0) scale(1)';
             }}
           >
             ✕

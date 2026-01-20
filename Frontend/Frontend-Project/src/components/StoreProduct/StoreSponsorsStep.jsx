@@ -21,6 +21,55 @@ const StoreSponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => 
     );
   }, [formData.customer.id_card_number, formData.sponsors]);
 
+  // Add this new function to handle image upload
+  const handleImageUpload = (index, file) => {
+    if (!file) return;
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size should be less than 5MB');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const imageDataUrl = e.target.result;
+      
+      const updatedSponsors = [...formData.sponsors];
+      updatedSponsors[index] = {
+        ...updatedSponsors[index],
+        id_card_image: imageDataUrl // Store as base64 data URL
+      };
+      
+      updateFormData({ sponsors: updatedSponsors });
+      toast.success('Image uploaded successfully');
+    };
+    
+    reader.onerror = () => {
+      toast.error('Failed to read image file');
+    };
+    
+    reader.readAsDataURL(file);
+  };
+
+  // Add this function to remove image
+  const removeImage = (index) => {
+    const updatedSponsors = [...formData.sponsors];
+    updatedSponsors[index] = {
+      ...updatedSponsors[index],
+      id_card_image: null
+    };
+    
+    updateFormData({ sponsors: updatedSponsors });
+    toast.success('Image removed');
+  };
+
   const addSponsor = () => {
     if (formData.sponsors.length >= 5) {
       toast.error('Maximum 5 sponsors allowed');
@@ -33,7 +82,7 @@ const StoreSponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => 
       id_card_number: '',
       relationship: '',
       address: '',
-      id_card_image: null,
+      id_card_image: null, // Add image field
       existingCustomer: null,
       searched: false,
       isDuplicate: false
@@ -66,7 +115,8 @@ const StoreSponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => 
     updatedSponsors[index] = {
       ...updatedSponsors[index],
       id_card_number: idCardNumber,
-      isDuplicate: false
+      isDuplicate: false,
+      id_card_image: null // Clear image when ID changes
     };
     
     updateFormData({ sponsors: updatedSponsors });
@@ -202,6 +252,7 @@ const StoreSponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => 
     }
   }, [formData.sponsors, formData.customer.id_card_number, isIdCardDuplicate, updateFormData]);
 
+  // Update the canProceed function to check for image
   const canProceed = () => {
     if (formData.sponsors.length === 0) return false;
     
@@ -210,6 +261,7 @@ const StoreSponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => 
       sponsor.phone.trim() && 
       sponsor.id_card_number.trim() && 
       sponsor.address.trim() &&
+      sponsor.id_card_image && // Check if image exists
       !sponsor.isDuplicate
     );
   };
@@ -368,7 +420,7 @@ const StoreSponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => 
             </div>
 
             {/* Address */}
-            <div>
+            <div style={{ marginBottom: '15px' }}>
               <label style={{ display: 'block', color: 'white', marginBottom: '8px', fontSize: '0.9rem' }}>
                 Address *
               </label>
@@ -388,6 +440,98 @@ const StoreSponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => 
                 }}
                 placeholder="Full residential address"
               />
+            </div>
+
+            {/* ID Card Image Upload - NEW SECTION */}
+            <div>
+              <label style={{ display: 'block', color: 'white', marginBottom: '8px', fontSize: '0.9rem' }}>
+                ID Card Image *
+                <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginLeft: '5px' }}>
+                  (Required - Upload front side of ID card)
+                </span>
+              </label>
+              
+              {sponsor.id_card_image ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div style={{ position: 'relative', maxWidth: '200px' }}>
+                    <img
+                      src={sponsor.id_card_image}
+                      alt="ID Card"
+                      style={{
+                        width: '100%',
+                        height: 'auto',
+                        borderRadius: '8px',
+                        border: '2px solid rgba(59, 130, 246, 0.5)'
+                      }}
+                    />
+                    <button
+                      onClick={() => removeImage(index)}
+                      style={{
+                        position: 'absolute',
+                        top: '5px',
+                        right: '5px',
+                        backgroundColor: 'rgba(239, 68, 68, 0.9)',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '50%',
+                        width: '24px',
+                        height: '24px',
+                        cursor: 'pointer',
+                        fontSize: '14px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <p style={{ color: 'rgb(34, 197, 94)', fontSize: '0.85rem' }}>
+                    ✓ Image uploaded successfully
+                  </p>
+                </div>
+              ) : (
+                <div style={{
+                  border: '2px dashed rgba(59, 130, 246, 0.5)',
+                  borderRadius: '8px',
+                  padding: '20px',
+                  textAlign: 'center',
+                  backgroundColor: 'rgba(0,0,0,0.3)',
+                  cursor: 'pointer'
+                }}>
+                  <input
+                    type="file"
+                    id={`sponsor-image-${index}`}
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) handleImageUpload(index, file);
+                      e.target.value = ''; // Reset input
+                    }}
+                  />
+                  <label htmlFor={`sponsor-image-${index}`} style={{ cursor: 'pointer' }}>
+                    <div style={{ color: 'rgb(59, 130, 246)', marginBottom: '8px' }}>
+                      <svg style={{ width: '48px', height: '48px', margin: '0 auto' }} fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div style={{ color: 'white', fontSize: '0.9rem', marginBottom: '4px' }}>
+                      Click to upload ID card image
+                    </div>
+                    <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem' }}>
+                      JPG, PNG (Max 5MB)
+                    </div>
+                  </label>
+                </div>
+              )}
+              
+              {/* Image requirement message */}
+              {!sponsor.id_card_image && (
+                <p style={{ color: 'rgb(239, 68, 68)', fontSize: '0.8rem', marginTop: '8px' }}>
+                  ⚠️ ID card image is required for each sponsor
+                </p>
+              )}
             </div>
           </div>
         ))}

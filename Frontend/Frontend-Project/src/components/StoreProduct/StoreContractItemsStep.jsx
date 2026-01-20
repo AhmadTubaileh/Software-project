@@ -23,6 +23,39 @@ const StoreContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, 
     }).format(amount || 0);
   };
 
+  // Calculate the actual installment payments
+  const calculatePayments = () => {
+    const totalPrice = contractItem.total_price;
+    const downPayment = contractItem.down_payment || 0;
+    const months = contractItem.months;
+    
+    // Calculate remaining amount after down payment
+    const remaining = totalPrice - downPayment;
+    
+    // Calculate monthly payments (excluding last month which might be different)
+    const equalMonths = Math.max(1, months - 1);
+    const rawMonthly = remaining / equalMonths;
+    
+    // Round to nearest 10 for cleaner numbers
+    let monthlyPayment = Math.floor(rawMonthly / 10) * 10;
+    let lastPayment = remaining - (monthlyPayment * equalMonths);
+    
+    // Adjust if last payment is 0 or negative
+    if (lastPayment <= 0) {
+      monthlyPayment = monthlyPayment - 10;
+      lastPayment = 10 * equalMonths;
+    }
+    
+    return {
+      downPayment,
+      monthlyPayment,
+      lastPayment,
+      remaining,
+      equalMonths
+    };
+  };
+
+  const payments = calculatePayments();
   const canSubmit = () => {
     return contractItem && contractItem.total_price > 0 && contractItem.months >= 3;
   };
@@ -49,11 +82,6 @@ const StoreContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, 
             <h4 style={{ color: 'white', fontSize: '1.1rem', marginBottom: '10px' }}>
               {contractItem.item_name}
             </h4>
-            {contractItem.item_description && (
-              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.9rem', margin: 0 }}>
-                {contractItem.item_description}
-              </p>
-            )}
           </div>
 
           {/* Contract Terms - Read Only */}
@@ -67,6 +95,28 @@ const StoreContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, 
                 type="text"
                 readOnly
                 value={formatCurrency(contractItem.total_price)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  backgroundColor: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: 'rgba(255,255,255,0.6)',
+                  fontSize: '0.9rem',
+                  cursor: 'not-allowed'
+                }}
+              />
+            </div>
+
+            {/* Down Payment - NEW FIELD */}
+            <div>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', marginBottom: '8px', fontSize: '0.9rem' }}>
+                Down Payment *
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={formatCurrency(contractItem.down_payment || 0)}
                 style={{
                   width: '100%',
                   padding: '10px',
@@ -102,15 +152,15 @@ const StoreContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, 
               />
             </div>
 
-            {/* Monthly Payment */}
+            {/* Remaining After Down Payment - NEW FIELD */}
             <div>
               <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', marginBottom: '8px', fontSize: '0.9rem' }}>
-                Monthly Payment
+                Remaining After Down Payment
               </label>
               <input
                 type="text"
                 readOnly
-                value={formatCurrency(contractItem.monthly_payment)}
+                value={formatCurrency(payments.remaining)}
                 style={{
                   width: '100%',
                   padding: '10px',
@@ -124,7 +174,29 @@ const StoreContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, 
               />
             </div>
 
-            {/* Last Month Payment */}
+            {/* Monthly Payment - Use calculated value */}
+            <div>
+              <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', marginBottom: '8px', fontSize: '0.9rem' }}>
+                Monthly Payment
+              </label>
+              <input
+                type="text"
+                readOnly
+                value={formatCurrency(payments.monthlyPayment)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  backgroundColor: 'rgba(0,0,0,0.4)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '8px',
+                  color: 'rgba(255,255,255,0.6)',
+                  fontSize: '0.9rem',
+                  cursor: 'not-allowed'
+                }}
+              />
+            </div>
+
+            {/* Last Month Payment - Use calculated value */}
             <div>
               <label style={{ display: 'block', color: 'rgba(255,255,255,0.6)', marginBottom: '8px', fontSize: '0.9rem' }}>
                 Last Month Payment
@@ -132,7 +204,7 @@ const StoreContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, 
               <input
                 type="text"
                 readOnly
-                value={formatCurrency(contractItem.installment_last_payment)}
+                value={formatCurrency(payments.lastPayment)}
                 style={{
                   width: '100%',
                   padding: '10px',
@@ -147,7 +219,7 @@ const StoreContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, 
             </div>
           </div>
 
-          {/* Payment Schedule */}
+          {/* Payment Schedule - UPDATED with Down Payment */}
           <div style={{
             backgroundColor: 'rgba(0,0,0,0.4)',
             borderRadius: '8px',
@@ -155,29 +227,47 @@ const StoreContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, 
             marginTop: '15px'
           }}>
             <h5 style={{ color: 'white', fontSize: '1rem', marginBottom: '15px' }}>Payment Schedule:</h5>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', textAlign: 'center' }}>
-              <div style={{ padding: '10px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', textAlign: 'center' }}>
+              {/* Down Payment */}
+              <div style={{ padding: '10px', backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: '6px' }}>
                 <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 5px 0' }}>
-                  Monthly × {Math.max(0, contractItem.months - 1)}
+                  Down Payment
                 </p>
-                <p style={{ color: 'rgb(59, 130, 246)', fontSize: '1rem', fontWeight: 'bold', margin: 0 }}>
-                  {formatCurrency(contractItem.monthly_payment)}
+                <p style={{ color: 'rgb(245, 158, 11)', fontSize: '1rem', fontWeight: 'bold', margin: 0 }}>
+                  {formatCurrency(payments.downPayment)}
                 </p>
                 <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', margin: '5px 0 0 0' }}>
-                  Months 1-{contractItem.months - 1}
+                  At Contract Start
                 </p>
               </div>
+              
+              {/* Monthly Payments */}
+              <div style={{ padding: '10px', backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: '6px' }}>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 5px 0' }}>
+                  Monthly × {payments.equalMonths}
+                </p>
+                <p style={{ color: 'rgb(59, 130, 246)', fontSize: '1rem', fontWeight: 'bold', margin: 0 }}>
+                  {formatCurrency(payments.monthlyPayment)}
+                </p>
+                <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', margin: '5px 0 0 0' }}>
+                  Months 1-{payments.equalMonths}
+                </p>
+              </div>
+              
+              {/* Last Month Payment */}
               <div style={{ padding: '10px', backgroundColor: 'rgba(139, 92, 246, 0.1)', borderRadius: '6px' }}>
                 <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 5px 0' }}>
                   Last Month Payment
                 </p>
                 <p style={{ color: 'rgb(139, 92, 246)', fontSize: '1rem', fontWeight: 'bold', margin: 0 }}>
-                  {formatCurrency(contractItem.installment_last_payment)}
+                  {formatCurrency(payments.lastPayment)}
                 </p>
                 <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', margin: '5px 0 0 0' }}>
                   Month {contractItem.months}
                 </p>
               </div>
+              
+              {/* Total */}
               <div style={{ padding: '10px', backgroundColor: 'rgba(16, 185, 129, 0.1)', borderRadius: '6px' }}>
                 <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem', margin: '0 0 5px 0' }}>
                   Total
@@ -186,9 +276,23 @@ const StoreContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, 
                   {formatCurrency(contractItem.total_price)}
                 </p>
                 <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem', margin: '5px 0 0 0' }}>
-                  Verification
+                  Sum of All Payments
                 </p>
               </div>
+            </div>
+            
+            {/* Payment Summary */}
+            <div style={{ 
+              marginTop: '15px', 
+              padding: '12px',
+              backgroundColor: 'rgba(255,255,255,0.05)',
+              borderRadius: '6px'
+            }}>
+              <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', margin: 0, textAlign: 'center' }}>
+                <strong>Payment Breakdown:</strong> {formatCurrency(payments.downPayment)} (Down) + 
+                ({payments.equalMonths} × {formatCurrency(payments.monthlyPayment)}) + 
+                {formatCurrency(payments.lastPayment)} (Last) = {formatCurrency(contractItem.total_price)}
+              </p>
             </div>
           </div>
         </div>

@@ -18,6 +18,7 @@ export default function StoreProduct() {
   const [mainImage, setMainImage] = useState(null);
   const [quantity, setQuantity] = useState(1);
   const { currentUser } = useLocalSession();
+  const isLoggedIn = !!currentUser;
 
   useEffect(() => {
     async function fetchProduct() {
@@ -127,7 +128,9 @@ export default function StoreProduct() {
           <h1 className="mars-product-title">{product.name}</h1>
           <div className="mars-product-price">${product.price}</div>
 
+
           {/* order section */}
+          {isLoggedIn && (
           <div className="mars-order-box">
             {/* first line: quantity + add to cart */}
             <div className="mars-order-row">
@@ -143,7 +146,7 @@ export default function StoreProduct() {
             </div>
 
             {/* second line: installment */}
-            {(Number(product.installment) === 1) && (
+            {(Number(product.installment) === 1) &&(
               <div className="mars-order-row">
                 <button 
                   className="mars-order-installment-btn" 
@@ -160,6 +163,7 @@ export default function StoreProduct() {
               </div>
             )}
           </div>
+          )}
 
           {/* description */}
           <div className="mars-product-description">

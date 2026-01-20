@@ -149,12 +149,18 @@ router.get('/items', (req, res) => {
         id: item.id.toString(),
         name: item.name,
         price: parseFloat(item.price_cash) || 0,
+        price_installment_total: parseFloat(item.price_installment_total) || 0,
+        installment_first_payment: parseFloat(item.installment_first_payment) || 0, // ADD
         installment: item.installment != null ? Number(item.installment) : 1,
-        img: processedImgs[0] || null, // First image as main img
-        imgs: processedImgs, // All images as array
+        installment_months: parseInt(item.installment_months) || 12, // ADD
+        installment_per_month: parseFloat(item.installment_per_month) || 0, // ADD
+        installment_last_payment: parseFloat(item.installment_last_payment) || 0, // ADD
+        img: processedImgs[0] || null,
+        imgs: processedImgs,
         description: item.description || '',
         quantity: item.quantity || 0,
-        category_id: item.category_id || null
+        category_id: item.category_id || null,
+        price_id: item.price_id || null // ADD
       };
     });
     
@@ -259,12 +265,18 @@ router.get('/items/:id', (req, res) => {
       id: item.id.toString(),
       name: item.name,
       price: parseFloat(item.price_cash) || 0,
+      price_installment_total: parseFloat(item.price_installment_total) || 0,
+      installment_first_payment: parseFloat(item.installment_first_payment) || 0, // ADD THIS
       installment: item.installment != null ? Number(item.installment) : 1,
+      installment_months: parseInt(item.installment_months) || 12, // ADD THIS
+      installment_per_month: parseFloat(item.installment_per_month) || 0, // ADD THIS
+      installment_last_payment: parseFloat(item.installment_last_payment) || 0, // ADD THIS
       img: processedImgs[0] || null,
       imgs: processedImgs,
       description: item.description || '',
       quantity: item.quantity || 0,
-      category_id: item.category_id || null
+      category_id: item.category_id || null,
+      price_id: item.price_id || null // ADD THIS
     };
     
     res.json({
