@@ -192,16 +192,15 @@ const ProductCard = ({
                 )}
               </div>
               
-              {/* Edit Price Button (Admin only) */}
-              {currentUser && currentUser.role === 'admin'|| currentUser.role === 'employee' && inCart && (
-                <button
-                  onClick={() => onStartEditPrice(product)}
-                  className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-medium transition-colors duration-200"
-                  title="Edit Sale Price"
-                >
-                  ✏️ Edit
-                </button>
-              )}
+              {/* Edit Price Button - SHOW FOR ALL USERS */}
+              {/* Remove all role checks and show for everyone */}
+              <button
+                onClick={() => onStartEditPrice(product)}
+                className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 rounded text-xs font-medium transition-colors duration-200"
+                title="Edit Sale Price"
+              >
+                ✏️ Edit
+              </button>
             </div>
             
             {/* Installment Info (for display only) */}

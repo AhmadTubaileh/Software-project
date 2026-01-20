@@ -22,7 +22,7 @@ function POS() {
   const [priceEdit, setPriceEdit] = useState('');
   const [showReceipt, setShowReceipt] = useState(false);
   const [receiptData, setReceiptData] = useState(null);
-  const [selectedBranch, setSelectedBranch] = useState(null); // null = all branches
+  const [selectedBranch, setSelectedBranch] = useState(''); // Empty string instead of null
   const [accessibleBranches, setAccessibleBranches] = useState([]);
   const { currentUser } = useLocalSession();
 
@@ -112,8 +112,8 @@ function POS() {
       }
       const branches = await response.json();
       setAccessibleBranches(branches);
-      // If user has only one branch, auto-select it
-      if (branches.length === 1) {
+      // Auto-select the first branch if available
+      if (branches.length > 0) {
         setSelectedBranch(branches[0].id);
       }
     } catch (error) {
@@ -349,6 +349,12 @@ function POS() {
 
     if (cart.length === 0) {
       toast.error('Cart is empty');
+      return;
+    }
+
+    // Check if a branch is selected
+    if (!selectedBranch) {
+      toast.error('Please select a branch first');
       return;
     }
 
