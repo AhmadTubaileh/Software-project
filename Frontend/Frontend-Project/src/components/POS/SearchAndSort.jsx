@@ -40,7 +40,7 @@ const SearchAndSort = ({ query, setQuery, sortBy, setSortBy, selectedBranch, set
               onChange={e => setSelectedBranch(e.target.value ? parseInt(e.target.value) : null)}
               className="appearance-none pl-10 pr-8 py-3 bg-gradient-to-br from-gray-800 to-gray-900 border-2 border-gray-700 rounded-xl text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 transition-all duration-300 cursor-pointer min-w-[180px]"
             >
-              <option value="" className="bg-gray-800">All Branches</option>
+              {/*<option value="" className="bg-gray-800">All Branches</option>*/}
               {accessibleBranches.map(branch => (
                 <option key={branch.id} value={branch.id} className="bg-gray-800">
                   {branch.name}
