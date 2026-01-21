@@ -495,9 +495,10 @@ class Contract {
               
               console.log('📝 Creating contract...');
               console.log('📍 Branch ID:', contract_data.branch_id);
+              console.log('👤 User ID:', contract_data.user_id || contract_data.worker_id);
               db.query(contractQuery, [
                 contract_data.branch_id,
-                contract_data.worker_id,
+                contract_data.user_id || contract_data.worker_id, // Use user_id for store contracts, worker_id for admin contracts
                 customerId,
                 contract_data.item_id,
                 contract_data.price_id,

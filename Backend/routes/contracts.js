@@ -181,6 +181,89 @@ router.get('/branch-analysis', async (req, res) => {
   }
 });
 
+// GET /api/contracts/my-installments - Get installments for a specific customer
+// Matches by user_id OR by id_card (users.id_card = contract_customers.id_card_number)
+// IMPORTANT: This route must come BEFORE /:id to avoid matching 'my-installments' as an ID
+router.get('/my-installments', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    
+    console.log('🔍 My Installments Request - User ID:', userId);
+    
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required'
+      });
+    }
+
+    // Get contracts for this user by user_id OR by matching id_card
+    const query = `
+      SELECT 
+        ic.*,
+        cc.full_name as customer_name,
+        cc.phone as customer_phone,
+        i.name as item_name,
+        i.description as item_description,
+        ip.price_cash,
+        ip.price_installment_total,
+        ip.installment_first_payment,
+        ip.installment_months,
+        ip.installment_per_month,
+        ip.installment_last_payment,
+        ca.status as approval_status,
+        ca.reason as rejection_reason,
+        ca.updated_at as decision_date,
+        b.name as branch_name,
+        -- Payment summary
+        (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as total_payments,
+        (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id AND ipay.status = 'paid') as paid_payments,
+        (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id AND ipay.status = 'pending') as pending_payments,
+        (SELECT SUM(amount_due - amount_paid) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as remaining_amount
+      FROM installment_contracts ic
+      LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
+      LEFT JOIN items i ON ic.item_id = i.id
+      LEFT JOIN item_prices ip ON ic.price_id = ip.id
+      LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
+      LEFT JOIN branches b ON ic.branch_id = b.id
+      WHERE ic.user_id = ?
+         OR (ic.customer_id IN (
+           SELECT cc2.id 
+           FROM contract_customers cc2
+           INNER JOIN users u ON u.id_card = cc2.id_card_number
+           WHERE u.id = ?
+         ))
+      ORDER BY ic.created_at DESC
+    `;
+    
+    db.query(query, [userId, userId], (err, results) => {
+      if (err) {
+        console.error('❌ Error fetching customer installments:', err);
+        return res.status(500).json({
+          success: false,
+          error: 'Failed to fetch installments'
+        });
+      }
+
+      console.log(`✅ Found ${results.length} contracts for user ${userId}`);
+      if (results.length > 0) {
+        console.log('Contract IDs:', results.map(r => r.id).join(', '));
+      }
+
+      res.json({
+        success: true,
+        contracts: results || []
+      });
+    });
+  } catch (error) {
+    console.error('Get customer installments error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch installments'
+    });
+  }
+});
+
 // GET /api/contracts/:id - Get contract details by ID
 router.get('/:id', async (req, res) => {
   try {
@@ -454,13 +537,16 @@ router.post('/apply-multiple', upload.fields([
 
     // Prepare contracts for batch processing
     const contractsToProcess = contracts_data.map(contract => {
-      // Ensure the contract has worker_id for the model
+      // For store contracts: preserve user_id (customer's user account)
+      // For admin/employee contracts: use worker_id
       return {
         customer_data,
         sponsors_data,
         contract_data: {
           ...contract,
-          worker_id: contract.user_id || contract.worker_id // Map user_id to worker_id
+          // Keep both user_id and worker_id, prioritize user_id for store contracts
+          user_id: contract.user_id,
+          worker_id: contract.worker_id || contract.user_id
         }
       };
     });
@@ -743,74 +829,6 @@ router.post('/transfer-transactions', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message || 'Failed to transfer transactions'
-    });
-  }
-});
-
-// GET /api/contracts/my-installments - Get installments for a specific customer (by user_id)
-router.get('/my-installments', async (req, res) => {
-  try {
-    const { userId } = req.query;
-    
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: 'User ID is required'
-      });
-    }
-
-    // Get contracts for this user
-    const query = `
-      SELECT 
-        ic.*,
-        cc.full_name as customer_name,
-        cc.phone as customer_phone,
-        i.name as item_name,
-        i.description as item_description,
-        ip.price_cash,
-        ip.price_installment_total,
-        ip.installment_first_payment,
-        ip.installment_months,
-        ip.installment_per_month,
-        ip.installment_last_payment,
-        ca.status as approval_status,
-        ca.reason as rejection_reason,
-        ca.updated_at as decision_date,
-        b.name as branch_name,
-        -- Payment summary
-        (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as total_payments,
-        (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id AND ipay.status = 'paid') as paid_payments,
-        (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id AND ipay.status = 'pending') as pending_payments,
-        (SELECT SUM(amount_due - amount_paid) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as remaining_amount
-      FROM installment_contracts ic
-      LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
-      LEFT JOIN items i ON ic.item_id = i.id
-      LEFT JOIN item_prices ip ON ic.price_id = ip.id
-      LEFT JOIN contract_approvals ca ON ic.id = ca.contract_id
-      LEFT JOIN branches b ON ic.branch_id = b.id
-      WHERE ic.user_id = ?
-      ORDER BY ic.created_at DESC
-    `;
-    
-    db.query(query, [userId], (err, results) => {
-      if (err) {
-        console.error('Error fetching customer installments:', err);
-        return res.status(500).json({
-          success: false,
-          error: 'Failed to fetch installments'
-        });
-      }
-
-      res.json({
-        success: true,
-        contracts: results || []
-      });
-    });
-  } catch (error) {
-    console.error('Get customer installments error:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch installments'
     });
   }
 });
