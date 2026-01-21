@@ -340,6 +340,24 @@ router.post('/apply', upload.fields([
       }
     });
 
+    const workerId = contract_data.worker_id || contract_data.user_id;
+    if (workerId && customer_data?.id_card_number) {
+      const updateUserIdCardQuery = `
+        UPDATE users
+        SET id_card = COALESCE(id_card, ?)
+        WHERE id = ?
+      `;
+
+      await new Promise((resolve) => {
+        db.query(updateUserIdCardQuery, [customer_data.id_card_number, workerId], (updateErr) => {
+          if (updateErr) {
+            console.error('⚠️ User id_card update error (continuing):', updateErr.message);
+          }
+          resolve();
+        });
+      });
+    }
+
     // Apply for contract
     const result = await Contract.apply({
       customer_data,
@@ -450,6 +468,28 @@ router.post('/apply-multiple', upload.fields([
       item_name: contractsToProcess[0]?.contract_data?.item_name,
       branch_id: contractsToProcess[0]?.contract_data?.branch_id
     });
+
+    if (customer_data?.id_card_number) {
+      const updateUserIdCardQuery = `
+        UPDATE users
+        SET id_card = COALESCE(id_card, ?)
+        WHERE id = ?
+      `;
+
+      await Promise.all(
+        contractsToProcess
+          .map(c => c?.contract_data?.worker_id)
+          .filter(Boolean)
+          .map(workerId => new Promise((resolve) => {
+            db.query(updateUserIdCardQuery, [customer_data.id_card_number, workerId], (updateErr) => {
+              if (updateErr) {
+                console.error('⚠️ User id_card update error (continuing):', updateErr.message);
+              }
+              resolve();
+            });
+          }))
+      );
+    }
 
     // Process contracts
     const result = await Contract.applyMultiple(contractsToProcess);

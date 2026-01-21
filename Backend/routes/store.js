@@ -80,7 +80,13 @@ router.get('/items', (req, res) => {
       i.sub_img2,
       i.sub_img3,
       i.sub_img4,
-      ip.price_cash
+      ip.price_cash,
+      ip.id as price_id,
+      ip.price_installment_total,
+      ip.installment_first_payment,
+      ip.installment_months,
+      ip.installment_per_month,
+      ip.installment_last_payment
     FROM items i
     LEFT JOIN item_prices ip ON i.id = ip.item_id
     WHERE (ip.date = (

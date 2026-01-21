@@ -1,10 +1,8 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import '../../styles/store.css';
 
 const StoreSponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => {
-  const [verifyingSponsors, setVerifyingSponsors] = useState({});
-
   // Check if ID card number already exists (customer or other sponsors)
   const isIdCardDuplicate = useCallback((idCardNumber, currentSponsorIndex) => {
     if (!idCardNumber.trim()) return false;
@@ -128,114 +126,6 @@ const StoreSponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => 
     }
   };
 
-  const verifySponsorIdCard = async (index) => {
-    const sponsor = formData.sponsors[index];
-    
-    if (!sponsor.id_card_number.trim()) {
-      toast.error('Please enter an ID card number');
-      return;
-    }
-
-    if (sponsor.id_card_number.trim().length < 5) {
-      toast.error('Please enter a valid ID card number');
-      return;
-    }
-
-    // Check for duplicates before verifying
-    if (isIdCardDuplicate(sponsor.id_card_number, index)) {
-      if (formData.customer.id_card_number === sponsor.id_card_number) {
-        toast.error('This ID card belongs to the customer. Customer cannot be a sponsor.');
-      } else {
-        toast.error('This ID card already exists in another sponsor. Duplicate sponsors are not allowed.');
-      }
-      
-      // Mark as duplicate but DON'T disable fields
-      const updatedSponsors = [...formData.sponsors];
-      updatedSponsors[index].isDuplicate = true;
-      updateFormData({ sponsors: updatedSponsors });
-      return;
-    }
-
-    setVerifyingSponsors(prev => ({ ...prev, [index]: true }));
-    
-    try {
-      const response = await fetch('http://localhost:5000/api/customers/check', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          id_card_number: sponsor.id_card_number,
-          target_type: 'sponsor' 
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Verification failed');
-      }
-
-      if (data.exists && data.customerData) {
-        // Person found - auto-fill ONLY empty fields, preserve existing values
-        const customerData = data.customerData;
-        
-        const updatedSponsor = {
-          ...sponsor, // Keep existing values
-          full_name: sponsor.full_name || customerData.full_name || '',
-          phone: sponsor.phone || customerData.phone || '',
-          address: sponsor.address || customerData.address || '',
-          id_card_image: sponsor.id_card_image || customerData.id_card_image || null,
-          existingCustomer: customerData,
-          searched: true,
-          isDuplicate: false
-        };
-
-        const updatedSponsors = [...formData.sponsors];
-        updatedSponsors[index] = updatedSponsor;
-        
-        updateFormData({ 
-          sponsors: updatedSponsors 
-        });
-        
-        toast.success('Sponsor information updated');
-      } else {
-        // Person not found - keep all existing fields, just mark as searched
-        const updatedSponsor = {
-          ...sponsor, // Keep all existing values
-          existingCustomer: null,
-          searched: true,
-          isDuplicate: false
-        };
-        
-        const updatedSponsors = [...formData.sponsors];
-        updatedSponsors[index] = updatedSponsor;
-        
-        updateFormData({ 
-          sponsors: updatedSponsors 
-        });
-        
-        toast.success('ID card verified. Please fill in sponsor information.');
-      }
-    } catch (error) {
-      console.error('Sponsor verification error:', error);
-      toast.error(error.message || 'Failed to verify sponsor ID card');
-      
-      // Keep existing values on error
-      const updatedSponsor = {
-        ...sponsor, // Keep all existing values
-        searched: true,
-        isDuplicate: false
-      };
-      
-      const updatedSponsors = [...formData.sponsors];
-      updatedSponsors[index] = updatedSponsor;
-      updateFormData({ sponsors: updatedSponsors });
-    } finally {
-      setVerifyingSponsors(prev => ({ ...prev, [index]: false }));
-    }
-  };
-
   // Check for duplicates on component mount and when sponsors change
   useEffect(() => {
     const updatedSponsors = formData.sponsors.map((sponsor, index) => ({
@@ -338,16 +228,7 @@ const StoreSponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => 
                     fontSize: '0.9rem'
                   }}
                   placeholder="Enter sponsor's ID card number"
-                  disabled={verifyingSponsors[index]}
                 />
-                <button
-                  onClick={() => verifySponsorIdCard(index)}
-                  disabled={verifyingSponsors[index] || !sponsor.id_card_number.trim()}
-                  className="mars-header-button"
-                  style={{ whiteSpace: 'nowrap', opacity: (verifyingSponsors[index] || !sponsor.id_card_number.trim()) ? 0.6 : 1 }}
-                >
-                  {verifyingSponsors[index] ? 'Verifying...' : 'Verify'}
-                </button>
               </div>
             </div>
 

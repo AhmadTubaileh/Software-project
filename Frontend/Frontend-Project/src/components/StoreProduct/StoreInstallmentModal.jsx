@@ -174,54 +174,6 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
     }
   }, [currentStep]);
 
-  // Verify and update user ID card if needed
-  const verifyAndUpdateIdCard = async () => {
-    if (!formData.idCardNumber.trim()) {
-      toast.error('Please enter your ID card number');
-      return false;
-    }
-
-    // Check if user has ID card
-    if (!currentUser.id_card) {
-      // Update user's ID card
-      try {
-        const formDataToSend = new FormData();
-        formDataToSend.append('userId', currentUser.id);
-        formDataToSend.append('id_card', formData.idCardNumber);
-
-        // If customer uploaded an image, add it
-        if (formData.customer.id_card_image instanceof File) {
-          formDataToSend.append('card_image', formData.customer.id_card_image);
-        }
-
-        const response = await fetch('http://localhost:5000/api/auth/update-id-card', {
-          method: 'PUT',
-          body: formDataToSend
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to update ID card');
-        }
-
-        toast.success('ID card updated successfully');
-        return true;
-      } catch (error) {
-        console.error('Error updating ID card:', error);
-        toast.error(error.message || 'Failed to update ID card');
-        return false;
-      }
-    } else {
-      // Verify ID card matches
-      if (currentUser.id_card !== formData.idCardNumber) {
-        toast.error('ID card number does not match your account. Please enter the correct ID card number.');
-        return false;
-      }
-      return true;
-    }
-  };
-
   const handleSubmit = async () => {
     // Validate sponsors (REQUIRED - at least one)
     if (!formData.sponsors || formData.sponsors.length === 0) {
@@ -406,14 +358,10 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
       case 1:
         return (
           <StoreIdVerificationStep
+            currentUser={currentUser}
             formData={formData}
             updateFormData={updateFormData}
-            nextStep={async () => {
-              const verified = await verifyAndUpdateIdCard();
-              if (verified) {
-                nextStep();
-              }
-            }}
+            nextStep={nextStep}
           />
         );
       case 2:

@@ -90,10 +90,10 @@ class Contract {
         // Check if sponsor already exists
         const checkQuery = `
           SELECT id FROM contract_sponsors 
-          WHERE contract_id = ? AND id_card_number = ?
+          WHERE id_card_number = ?
         `;
         
-        db.query(checkQuery, [contractId, sponsor.id_card_number], (checkErr, checkResults) => {
+        db.query(checkQuery, [sponsor.id_card_number], (checkErr, checkResults) => {
           if (checkErr) {
             console.error(`❌ Sponsor ${index + 1}: Check error:`, checkErr.message);
             // Continue anyway
@@ -106,7 +106,7 @@ class Contract {
               UPDATE contract_sponsors 
               SET full_name = ?, phone = ?, relationship = ?, address = ?, 
                   id_card_image = COALESCE(?, id_card_image)
-              WHERE contract_id = ? AND id_card_number = ?
+              WHERE id_card_number = ?
             `;
             
             // Log what we're about to update
@@ -118,7 +118,6 @@ class Contract {
               sponsor.relationship || '',
               sponsor.address,
               compressedImage,
-              contractId,
               sponsor.id_card_number
             ], (updateErr) => {
               if (updateErr) {
@@ -481,7 +480,17 @@ class Contract {
                 (branch_id, user_id, customer_id, item_id, price_id,
                  total_price, down_payment, months, monthly_payment, 
                  installment_last_payment, start_date, status, original_contract_id) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+                VALUES (
+                  ?, ?, ?, ?,
+                  COALESCE(?, (
+                    SELECT id
+                    FROM item_prices
+                    WHERE item_id = ?
+                    ORDER BY date DESC
+                    LIMIT 1
+                  )),
+                  ?, ?, ?, ?, ?, ?, 'pending', ?
+                )
               `;
               
               console.log('📝 Creating contract...');
@@ -492,6 +501,7 @@ class Contract {
                 customerId,
                 contract_data.item_id,
                 contract_data.price_id,
+                contract_data.item_id,
                 contract_data.total_price,
                 contract_data.down_payment,
                 contract_data.months,
