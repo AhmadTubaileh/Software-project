@@ -219,7 +219,8 @@ router.get('/my-installments', async (req, res) => {
         (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as total_payments,
         (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id AND ipay.status = 'paid') as paid_payments,
         (SELECT COUNT(*) FROM installment_payments ipay WHERE ipay.contract_id = ic.id AND ipay.status = 'pending') as pending_payments,
-        (SELECT SUM(amount_due - amount_paid) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as remaining_amount
+        (SELECT SUM(amount_due - amount_paid) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as remaining_amount,
+        (SELECT COALESCE(SUM(amount_paid), 0) FROM installment_payments ipay WHERE ipay.contract_id = ic.id) as total_amount_paid
       FROM installment_contracts ic
       LEFT JOIN contract_customers cc ON ic.customer_id = cc.id
       LEFT JOIN items i ON ic.item_id = i.id

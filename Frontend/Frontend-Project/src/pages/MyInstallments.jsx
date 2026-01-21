@@ -295,6 +295,23 @@ export default function MyInstallments() {
                     </div>
                   </div>
 
+                  <div>
+                    <div style={{ 
+                      color: 'rgba(255,255,255,0.6)', 
+                      fontSize: '0.85rem',
+                      marginBottom: '5px'
+                    }}>
+                      💰 Total Paid
+                    </div>
+                    <div style={{ 
+                      color: 'rgb(16, 185, 129)', 
+                      fontSize: '1.3rem',
+                      fontWeight: 'bold'
+                    }}>
+                      {formatCurrency(contract.total_amount_paid || 0)}
+                    </div>
+                  </div>
+
                   {contract.status === 'active' && (
                     <>
                       <div>
