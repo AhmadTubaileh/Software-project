@@ -1091,7 +1091,7 @@ router.post('/:id/duplicate', upload.single('item_image'), async (req, res) => {
       });
       
       function proceedWithDuplicate() {
-        // Prepare item data for new item
+        // Prepare item data for new item - copy all fields including category_id from original item
         const itemData = {
           name: existingItem.name,
           description: existingItem.description,
@@ -1099,7 +1099,13 @@ router.post('/:id/duplicate', upload.single('item_image'), async (req, res) => {
           installment: existingItem.installment,
           quantity: existingItem.quantity,
           item_image: existingItem.item_image,
-          branch_id: parseInt(targetBranchId)
+          branch_id: parseInt(targetBranchId),
+          category_id: existingItem.category_id !== undefined && existingItem.category_id !== null ? parseInt(existingItem.category_id) : null, // Copy category_id from original item (e.g., if original has category 1, duplicate will also have category 1)
+          main_img: existingItem.main_img || null,
+          sub_img1: existingItem.sub_img1 || null,
+          sub_img2: existingItem.sub_img2 || null,
+          sub_img3: existingItem.sub_img3 || null,
+          sub_img4: existingItem.sub_img4 || null
         };
 
         // Prepare price data
