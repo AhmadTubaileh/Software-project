@@ -159,7 +159,7 @@ const StoreSponsorsStep = ({ formData, updateFormData, nextStep, prevStep }) => 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
       <h2 style={{ color: 'rgb(181,62,32)', fontSize: '1.5rem', marginBottom: '20px' }}>
-        Step 3: Sponsors Information
+        Step 2: Sponsors Information
       </h2>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

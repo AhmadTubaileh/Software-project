@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import StoreIdVerificationStep from './StoreIdVerificationStep';
 import StoreCustomerInfoStep from './StoreCustomerInfoStep';
 import StoreSponsorsStep from './StoreSponsorsStep';
 import StoreContractItemsStep from './StoreContractItemsStep';
@@ -15,11 +14,7 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
 
   // Main form state
   const [formData, setFormData] = useState({
-    // Step 1: ID Verification
-    idCardNumber: '',
-    existingCustomer: null,
-    
-    // Step 2: Customer Information
+    // Step 1: Customer Information & ID Verification
     customer: {
       full_name: '',
       phone: '',
@@ -29,10 +24,10 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
       id_card_image: null
     },
     
-    // Step 3: Sponsors (REQUIRED - at least one)
+    // Step 2: Sponsors (REQUIRED - at least one)
     sponsors: [],
     
-    // Step 4: Contract Items - Pre-filled with current product (only one item)
+    // Step 3: Contract Items - Pre-filled with current product (only one item)
     contractItems: []
   });
 
@@ -49,8 +44,7 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
           address: '',
           email: currentUser.email || '',
           id_card_image: null
-        },
-        idCardNumber: currentUser.id_card || ''
+        }
       }));
 
       // Set user's branch ID
@@ -147,9 +141,9 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
   }, []);
 
   const nextStep = useCallback(() => {
-    if (currentStep < 4) {
-      // When moving to step 3 (Sponsors), ensure at least one sponsor exists
-      if (currentStep === 2 && formData.sponsors.length === 0) {
+    if (currentStep < 3) {
+      // When moving to step 2 (Sponsors), ensure at least one sponsor exists
+      if (currentStep === 1 && formData.sponsors.length === 0) {
         updateFormData({
           sponsors: [{
             full_name: '',
@@ -357,7 +351,7 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
     switch (currentStep) {
       case 1:
         return (
-          <StoreIdVerificationStep
+          <StoreCustomerInfoStep
             currentUser={currentUser}
             formData={formData}
             updateFormData={updateFormData}
@@ -366,15 +360,6 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
         );
       case 2:
         return (
-          <StoreCustomerInfoStep
-            formData={formData}
-            updateFormData={updateFormData}
-            nextStep={nextStep}
-            prevStep={prevStep}
-          />
-        );
-      case 3:
-        return (
           <StoreSponsorsStep
             formData={formData}
             updateFormData={updateFormData}
@@ -382,7 +367,7 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
             prevStep={prevStep}
           />
         );
-      case 4:
+      case 3:
         return (
           <StoreContractItemsStep
             formData={formData}
@@ -479,7 +464,7 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
         <div className="modal-body" style={{ padding: '20px' }}>
           {/* Progress Steps */}
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '30px', gap: '10px' }}>
-            {[1, 2, 3, 4].map((step) => (
+            {[1, 2, 3].map((step) => (
               <React.Fragment key={step}>
                 <div style={{
                   width: '40px',
@@ -504,7 +489,7 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
                 }}>
                   {step < currentStep ? '✓' : step}
                 </div>
-                {step < 4 && (
+                {step < 3 && (
                   <div style={{
                     width: '60px',
                     height: '2px',

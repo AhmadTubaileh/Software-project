@@ -344,14 +344,19 @@ router.post('/apply', upload.fields([
     if (workerId && customer_data?.id_card_number) {
       const updateUserIdCardQuery = `
         UPDATE users
-        SET id_card = COALESCE(id_card, ?)
+        SET id_card = COALESCE(id_card, ?),
+            card_image = COALESCE(card_image, ?)
         WHERE id = ?
       `;
 
       await new Promise((resolve) => {
-        db.query(updateUserIdCardQuery, [customer_data.id_card_number, workerId], (updateErr) => {
+        db.query(updateUserIdCardQuery, [
+          customer_data.id_card_number, 
+          customer_data.id_card_image || null,
+          workerId
+        ], (updateErr) => {
           if (updateErr) {
-            console.error('⚠️ User id_card update error (continuing):', updateErr.message);
+            console.error('⚠️ User id_card/card_image update error (continuing):', updateErr.message);
           }
           resolve();
         });
@@ -472,7 +477,8 @@ router.post('/apply-multiple', upload.fields([
     if (customer_data?.id_card_number) {
       const updateUserIdCardQuery = `
         UPDATE users
-        SET id_card = COALESCE(id_card, ?)
+        SET id_card = COALESCE(id_card, ?),
+            card_image = COALESCE(card_image, ?)
         WHERE id = ?
       `;
 
@@ -481,9 +487,13 @@ router.post('/apply-multiple', upload.fields([
           .map(c => c?.contract_data?.worker_id)
           .filter(Boolean)
           .map(workerId => new Promise((resolve) => {
-            db.query(updateUserIdCardQuery, [customer_data.id_card_number, workerId], (updateErr) => {
+            db.query(updateUserIdCardQuery, [
+              customer_data.id_card_number,
+              customer_data.id_card_image || null,
+              workerId
+            ], (updateErr) => {
               if (updateErr) {
-                console.error('⚠️ User id_card update error (continuing):', updateErr.message);
+                console.error('⚠️ User id_card/card_image update error (continuing):', updateErr.message);
               }
               resolve();
             });
