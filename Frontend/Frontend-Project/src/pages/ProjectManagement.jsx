@@ -104,8 +104,14 @@ function ProjectManagement() {
         const branches = await response.json();
         setAccessibleBranches(branches);
         
-        // Set default to "all" (null) - user can see all projects but create in primary branch
-        setSelectedBranchId(null);
+        // Set default to primary branch for the employee
+        const primaryBranchId = currentUser?.primary_branch_id;
+        if (primaryBranchId && branches.some(b => b.id === primaryBranchId)) {
+          setSelectedBranchId(primaryBranchId);
+        } else if (branches.length > 0) {
+          // If primary branch not accessible or doesn't exist, use first accessible branch
+          setSelectedBranchId(branches[0].id);
+        }
       } catch (error) {
         console.error('Error loading accessible branches:', error);
         toast.error('Failed to load branches');
@@ -121,8 +127,9 @@ function ProjectManagement() {
   // Fetch all projects (only non-deleted ones) - filtered by branch
   const fetchProjects = useCallback(async () => {
     try {
-      let url = 'http://localhost:5000/api/projects';
-      if (selectedBranchId !== null) {
+      // Always filter by branch_id (selectedBranchId should never be null)
+      let url = `http://localhost:5000/api/projects`;
+      if (selectedBranchId) {
         url += `?branch_id=${selectedBranchId}`;
       }
       
@@ -783,17 +790,15 @@ function ProjectManagement() {
               {accessibleBranches.length > 0 && (
                 <div className="relative">
                   <select
-                    value={selectedBranchId !== null ? selectedBranchId : 'all'}
+                    value={selectedBranchId || ''}
                     onChange={(e) => {
-                      const value = e.target.value;
-                      setSelectedBranchId(value === 'all' ? null : parseInt(value));
+                      setSelectedBranchId(parseInt(e.target.value));
                     }}
                     className="px-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 appearance-none pr-10 min-w-[200px]"
                   >
-                    <option value="all">All Branches</option>
                     {accessibleBranches.map(branch => (
                       <option key={branch.id} value={branch.id}>
-                        {branch.name}
+                        {branch.name} {branch.id === currentUser?.primary_branch_id ? '(Primary)' : ''}
                       </option>
                     ))}
                   </select>
@@ -1213,14 +1218,12 @@ function ProjectManagement() {
         <CreateProjectModal
           workers={workers}
           currentUser={currentUser}
-          selectedBranchId={selectedBranchId !== null ? selectedBranchId : null}
+          selectedBranchId={selectedBranchId}
           selectedBranchName={
-            selectedBranchId !== null 
-              ? accessibleBranches.find(b => b.id === selectedBranchId)?.name
-              : null
+            accessibleBranches.find(b => b.id === selectedBranchId)?.name || ''
           }
           accessibleBranches={accessibleBranches}
-          showBranchSelector={selectedBranchId === null}
+          showBranchSelector={false}
           onSubmit={handleCreateProject}
           onClose={() => setShowCreateModal(false)}
         />
