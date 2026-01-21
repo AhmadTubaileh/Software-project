@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import toast from 'react-hot-toast';
 import '../../styles/store.css';
 
-const StoreIdVerificationStep = ({ formData, updateFormData, nextStep }) => {
+const StoreIdVerificationStep = ({ currentUser, formData, updateFormData, nextStep }) => {
   const [verifying, setVerifying] = useState(false);
   const [searched, setSearched] = useState(false);
 
@@ -23,6 +23,12 @@ const StoreIdVerificationStep = ({ formData, updateFormData, nextStep }) => {
       return;
     }
 
+    // Validate against logged-in account: if user already has id_card, it must match
+    if (currentUser?.id_card && currentUser.id_card !== formData.idCardNumber.trim()) {
+      toast.error('ID card number does not match your account. Please enter the correct ID card number.');
+      return;
+    }
+
     setVerifying(true);
     try {
       const response = await fetch('http://localhost:5000/api/customers/check', {
@@ -40,18 +46,19 @@ const StoreIdVerificationStep = ({ formData, updateFormData, nextStep }) => {
       }
 
       setSearched(true);
-      
-      if (data.exists) {
+
+      // Prefer contract_customers record for prefill, otherwise treat as new customer
+      if (data.exists && data.customerData && data.source_table === 'contract_customers') {
         const customerData = data.customerData;
         updateFormData({
           existingCustomer: customerData,
           customer: {
             ...formData.customer,
-            full_name: customerData.full_name || '',
-            phone: customerData.phone || '',
+            full_name: customerData.full_name || formData.customer.full_name || '',
+            phone: customerData.phone || formData.customer.phone || '',
             id_card_number: formData.idCardNumber,
-            address: customerData.address || '',
-            email: customerData.email || '',
+            address: customerData.address || formData.customer.address || '',
+            email: customerData.email || formData.customer.email || '',
             id_card_image: null
           }
         });
@@ -61,14 +68,10 @@ const StoreIdVerificationStep = ({ formData, updateFormData, nextStep }) => {
           existingCustomer: null,
           customer: {
             ...formData.customer,
-            id_card_number: formData.idCardNumber,
-            full_name: '',
-            phone: '',
-            address: '',
-            email: '',
-            id_card_image: null
+            id_card_number: formData.idCardNumber
           }
         });
+
         toast.success('ID card verified. Please fill in your information.');
       }
     } catch (error) {

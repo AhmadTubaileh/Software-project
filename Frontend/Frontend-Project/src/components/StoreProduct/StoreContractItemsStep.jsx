@@ -63,7 +63,7 @@ const StoreContractItemsStep = ({ formData, updateFormData, prevStep, onSubmit, 
   return (
     <div style={{ maxWidth: '800px', margin: '0 auto' }}>
       <h2 style={{ color: 'rgb(181,62,32)', fontSize: '1.5rem', marginBottom: '20px' }}>
-        Step 4: Contract Details
+        Step 3: Contract Details
       </h2>
       
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
