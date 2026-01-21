@@ -541,53 +541,75 @@ static adjustQuantity(itemId, workerId, changeType, quantity, callback) {
         return callback(err);
       }
 
-      // Calculate new quantity
-      const operator = changeType === 'add' ? '+' : '-';
-      const updateQuery = `
-        UPDATE items 
-        SET quantity = quantity ${operator} ?
-        WHERE id = ?
-      `;
+      // First, get the item's branch_id
+      const getItemQuery = `SELECT branch_id FROM items WHERE id = ?`;
       
-      connection.query(updateQuery, [quantity, itemId], (err, updateResult) => {
+      connection.query(getItemQuery, [itemId], (err, itemResults) => {
         if (err) {
-          console.error('Error updating quantity:', err);
+          console.error('Error fetching item:', err);
           return connection.rollback(() => {
             connection.release();
             callback(err);
           });
         }
 
-        // Create inventory log
-        const logQuery = `
-          INSERT INTO inventory_logs 
-          (item_id, worker_id, change_type, quantity_changed) 
-          VALUES (?, ?, ?, ?)
+        if (!itemResults || itemResults.length === 0) {
+          return connection.rollback(() => {
+            connection.release();
+            callback(new Error('Item not found'));
+          });
+        }
+
+        const branchId = itemResults[0].branch_id;
+
+        // Calculate new quantity
+        const operator = changeType === 'add' ? '+' : '-';
+        const updateQuery = `
+          UPDATE items 
+          SET quantity = quantity ${operator} ?
+          WHERE id = ?
         `;
         
-        connection.query(logQuery, [itemId, workerId, changeType, quantity], (err, logResult) => {
+        connection.query(updateQuery, [quantity, itemId], (err, updateResult) => {
           if (err) {
-            console.error('Error creating inventory log:', err);
+            console.error('Error updating quantity:', err);
             return connection.rollback(() => {
               connection.release();
               callback(err);
             });
           }
 
-          connection.commit((err) => {
+          // Create inventory log with branch_id
+          const logQuery = `
+            INSERT INTO inventory_logs 
+            (branch_id, item_id, worker_id, change_type, quantity_changed) 
+            VALUES (?, ?, ?, ?, ?)
+          `;
+          
+          connection.query(logQuery, [branchId, itemId, workerId, changeType, quantity], (err, logResult) => {
             if (err) {
-              console.error('Error committing transaction:', err);
+              console.error('Error creating inventory log:', err);
               return connection.rollback(() => {
                 connection.release();
                 callback(err);
               });
             }
-            
-            connection.release();
-            callback(null, {
-              itemId,
-              newLogId: logResult.insertId,
-              success: true
+
+            connection.commit((err) => {
+              if (err) {
+                console.error('Error committing transaction:', err);
+                return connection.rollback(() => {
+                  connection.release();
+                  callback(err);
+                });
+              }
+              
+              connection.release();
+              callback(null, {
+                itemId,
+                newLogId: logResult.insertId,
+                success: true
+              });
             });
           });
         });
