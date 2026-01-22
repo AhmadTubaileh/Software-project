@@ -22,6 +22,7 @@ const storeOcrRoutes = require('./routes/storeOcr');
 const storeRoutes = require('./routes/store');
 const categoryRoutes = require('./routes/categories');
 const orderRoutes = require('./routes/orders');
+const recommendationRoutes = require('./routes/recommendations');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -128,6 +129,7 @@ app.use('/api/ocr', storeOcrRoutes);
 app.use('/api/store', storeRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/recommendations', recommendationRoutes);
 
 // Health check with CORS headers explicitly
 app.get('/api/health', (req, res) => {
@@ -192,6 +194,7 @@ app.use((req, res) => {
 // DAILY OVERDUE PAYMENTS CHECK (Option 2)
 // ============================================
 const db = require('./config/database');
+const recommendationService = require('./services/recommendationService');
 
 // ⭐ ADDED: Database connection error handler
 db.on('error', (err) => {
@@ -261,6 +264,34 @@ function scheduleDailyCheck() {
 }
 
 // ============================================
+// AUTOMATIC RECOMMENDATION METRICS UPDATE
+// ============================================
+async function updateRecommendationMetrics() {
+  const now = new Date();
+  console.log(`[${now.toLocaleString()}] 🔄 Updating recommendation metrics...`);
+  
+  try {
+    await recommendationService.updateItemMetrics();
+    console.log(`[${new Date().toLocaleString()}] ✅ Recommendation metrics updated successfully`);
+  } catch (err) {
+    console.error('❌ Error updating recommendation metrics:', err.message);
+  }
+}
+
+function scheduleMetricsUpdate() {
+  // Update metrics every hour
+  const updateInterval = 30 * 60 * 1000; // 30 minutes in milliseconds
+  
+  console.log(`⏰ Recommendation metrics will update every 30 minutes`);
+  
+  // Run immediately on server start
+  updateRecommendationMetrics();
+  
+  // Then run every hour
+  setInterval(updateRecommendationMetrics, updateInterval);
+}
+
+// ============================================
 // Start server
 // ============================================
 app.listen(PORT, () => {
@@ -281,4 +312,8 @@ app.listen(PORT, () => {
   // Also run a check immediately on server start (optional)
   console.log('🔄 Running initial overdue check on server start...');
   checkOverduePayments();
+  
+  // Start the recommendation metrics update scheduler
+  console.log('\n📊 Starting automated recommendation metrics update system...');
+  scheduleMetricsUpdate();
 });

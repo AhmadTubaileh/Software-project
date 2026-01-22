@@ -6,6 +6,8 @@ import Footer from "../components/store/Footer";
 import StoreApi from "../services/storeApi";
 import StoreInstallmentModal from "../components/StoreProduct/StoreInstallmentModal";
 import { useLocalSession } from "../hooks/useLocalSession";
+import { useItemViewTracking } from "../hooks/useItemViewTracking";
+import RelatedItems from "../components/store/RelatedItems";
 import toast from "react-hot-toast";
 
 
@@ -19,6 +21,8 @@ export default function StoreProduct() {
   const [quantity, setQuantity] = useState(1);
   const { currentUser } = useLocalSession();
   const isLoggedIn = !!currentUser;
+
+  useItemViewTracking(id);
 
   useEffect(() => {
     async function fetchProduct() {
@@ -172,6 +176,8 @@ export default function StoreProduct() {
           </div>
         </div>
       </div>
+
+      <RelatedItems currentItemId={id} />
 
       <Footer />
 
