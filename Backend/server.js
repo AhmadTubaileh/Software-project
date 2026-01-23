@@ -280,9 +280,9 @@ async function updateRecommendationMetrics() {
 
 function scheduleMetricsUpdate() {
   // Update metrics every hour
-  const updateInterval = 30 * 60 * 1000; // 30 minutes in milliseconds
+  const updateInterval =  10 * 1000; // 10 seconds
   
-  console.log(`⏰ Recommendation metrics will update every 30 minutes`);
+  console.log(`⏰ Recommendation metrics will update every 10 seconds`);
   
   // Run immediately on server start
   updateRecommendationMetrics();
