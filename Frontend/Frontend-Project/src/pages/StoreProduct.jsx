@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
-import { cartProducts } from "../data/cartProducts";
 import Header from "../components/store/Header";
 import Footer from "../components/store/Footer";
 import StoreApi from "../services/storeApi";
@@ -79,15 +78,35 @@ export default function StoreProduct() {
     setQuantity((q) => (q > 1 ? q - 1 : 1));
   }
 
-  function addToCart() {
-    cartProducts.push({
-      id: product.id,
-      img: product.img,
-      name: product.name,
-      price: product.price,
-      quantity: quantity,
-      subtotal: product.price * quantity
-    });
+  async function addToCart() {
+    if (!currentUser || !currentUser.id) {
+      toast.error('Please login to add items to cart');
+      return;
+    }
+
+    try {
+      const response = await fetch('http://localhost:5000/api/cart/add', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          itemId: product.id,
+          quantity: quantity,
+          paymentPreference: 'cash'
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast.success(`${product.name} added to cart!`);
+      } else {
+        toast.error(data.message || 'Failed to add to cart');
+      }
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      toast.error('Error adding item to cart');
+    }
   }
   /*const handleInstallmentSubmit = (credentials) => {
     console.log('installment attempt with:', credentials);

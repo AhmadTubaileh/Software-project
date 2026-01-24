@@ -173,6 +173,9 @@ export default function Header() {
             <Link to="/my-installments">
               <button type="button" className="mars-header-button">My Installments</button>
             </Link>
+            <Link to="/my-orders">
+              <button type="button" className="mars-header-button">My Orders</button>
+            </Link>
           </>
           )}
 

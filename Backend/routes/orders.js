@@ -57,6 +57,46 @@ router.get('/', (req, res) => {
   });
 });
 
+// GET /api/orders/user/:userId - Get all orders for a specific user
+router.get('/user/:userId', (req, res) => {
+  const userId = req.params.userId;
+  
+  console.log(`📦 Orders: Fetching orders for user ${userId}...`);
+  
+  const query = `
+    SELECT 
+      o.id,
+      o.worker_id,
+      o.user_id,
+      o.total_amount,
+      o.status,
+      o.reason_for_decline,
+      o.billing_address,
+      o.created_at
+    FROM orders o
+    WHERE o.user_id = ?
+    ORDER BY o.created_at DESC
+  `;
+  
+  db.query(query, [userId], (err, results) => {
+    if (err) {
+      console.error('❌ Error fetching user orders:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch orders',
+        error: err.message
+      });
+    }
+    
+    console.log(`✅ Orders: Found ${results.length} orders for user ${userId}`);
+    
+    res.json({
+      success: true,
+      orders: results || []
+    });
+  });
+});
+
 // GET /api/orders/:id - Get order details with items
 router.get('/:id', (req, res) => {
   const orderId = req.params.id;
@@ -138,6 +178,46 @@ router.get('/:id', (req, res) => {
           items: itemsResults || []
         }
       });
+    });
+  });
+});
+
+// GET /api/orders/:id/items - Get items for a specific order
+router.get('/:id/items', (req, res) => {
+  const orderId = req.params.id;
+  
+  console.log(`📦 Orders: Fetching items for order ${orderId}...`);
+  
+  const itemsQuery = `
+    SELECT 
+      oi.id,
+      oi.order_id,
+      oi.item_id,
+      oi.quantity,
+      oi.price,
+      i.name,
+      i.description,
+      i.main_img as img
+    FROM order_items oi
+    LEFT JOIN items i ON oi.item_id = i.id
+    WHERE oi.order_id = ?
+  `;
+  
+  db.query(itemsQuery, [orderId], (err, results) => {
+    if (err) {
+      console.error('❌ Error fetching order items:', err);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch order items',
+        error: err.message
+      });
+    }
+    
+    console.log(`✅ Orders: Found ${results.length} items for order ${orderId}`);
+    
+    res.json({
+      success: true,
+      items: results || []
     });
   });
 });

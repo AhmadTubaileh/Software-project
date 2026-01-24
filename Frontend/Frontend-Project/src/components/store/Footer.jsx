@@ -23,7 +23,7 @@ export default function Footer() {
                     </ul>
                 </div>
 
-                <div className="footer-section">
+                {/*<div className="footer-section">
                     <h3>Categories</h3>
                     <ul>
                         <li><a href="#">Mobile</a></li>
@@ -32,7 +32,8 @@ export default function Footer() {
                         <li><a href="#">Consoles</a></li>
                     </ul>
                 </div>
-
+                */}
+                
                 <div className="footer-section">
                     <h3>Follow Us</h3>
                     <div className="socials">

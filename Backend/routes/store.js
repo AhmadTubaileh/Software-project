@@ -391,7 +391,7 @@ router.post('/checkout', (req, res) => {
 
         const orderItemsValues = cartItems.map(item => [
           orderId,
-          parseInt(item.id),
+          parseInt(item.itemId || item.id),
           parseInt(item.quantity),
           parseFloat(item.price)
         ]);

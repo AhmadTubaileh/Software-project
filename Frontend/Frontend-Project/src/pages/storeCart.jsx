@@ -1,32 +1,79 @@
 import React from "react";
-import { cartProducts as initialCartProducts } from "../data/cartProducts";
 import Header from "../components/store/Header";
 import Footer from "../components/store/Footer";
 import Checkout from "../components/store/Checkout";
 import { useLocalSession } from "../hooks/useLocalSession";
+import toast from "react-hot-toast";
 
 import "../styles/cart.css";
 
 
 export default function StoreCart() {
-  const [cartItems, setCartItems] = React.useState(initialCartProducts);
+  const [cartItems, setCartItems] = React.useState([]);
   const [isCheckoutOpen, setIsCheckoutOpen] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
   const { currentUser } = useLocalSession();
-  // total below
+  
   const total = cartItems.reduce(
     (sum, item) => sum + item.subtotal,
     0
   );
 
-  function delet(itemToDelete){
-    setCartItems(copy =>
-      copy.filter(item => item.id !== itemToDelete.id)
-    )
+  const fetchCartItems = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`http://localhost:5000/api/cart/${currentUser.id}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setCartItems(data.items);
+      } else {
+        console.error('Failed to fetch cart:', data.message);
+        toast.error('Failed to load cart');
+      }
+    } catch (error) {
+      console.error('Error fetching cart:', error);
+      toast.error('Error loading cart');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser]);
+
+  React.useEffect(() => {
+    if (currentUser?.id) {
+      fetchCartItems();
+    } else {
+      setLoading(false);
+    }
+  }, [currentUser, fetchCartItems]);
+
+  async function delet(itemToDelete){
+    try {
+      const response = await fetch('http://localhost:5000/api/cart/remove', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          itemId: itemToDelete.itemId
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setCartItems(copy => copy.filter(item => item.id !== itemToDelete.id));
+        toast.success('Item removed from cart');
+      } else {
+        toast.error(data.message || 'Failed to remove item');
+      }
+    } catch (error) {
+      console.error('Error removing item:', error);
+      toast.error('Error removing item from cart');
+    }
   }
 
-  async function handleCheckout(paymentData) {
+  const handleCheckout = React.useCallback(async (paymentData) => {
     try {
-      // Check if user is logged in
       if (!currentUser || !currentUser.id) {
         return {
           success: false,
@@ -34,7 +81,6 @@ export default function StoreCart() {
         };
       }
 
-      // Check if cart is empty
       if (!paymentData.cartItems || paymentData.cartItems.length === 0) {
         return {
           success: false,
@@ -44,7 +90,6 @@ export default function StoreCart() {
 
       console.log("Processing checkout with payment data:", paymentData);
       
-      // Send checkout data to backend
       const response = await fetch('http://localhost:5000/api/store/checkout', {
         method: 'POST',
         headers: { 
@@ -64,8 +109,13 @@ export default function StoreCart() {
         throw new Error(result.message || 'Payment processing failed');
       }
       
-      // Clear cart on success
-      setCartItems([]);
+      const clearResponse = await fetch(`http://localhost:5000/api/cart/clear/${currentUser.id}`, {
+        method: 'DELETE'
+      });
+      
+      if (clearResponse.ok) {
+        setCartItems([]);
+      }
       
       return {
         success: true,
@@ -78,9 +128,21 @@ export default function StoreCart() {
         message: error.message || 'Payment processing failed'
       };
     }
-  }
+  }, [currentUser]);
 
   
+
+  if (loading) {
+    return (
+      <div className="mars-page">
+        <Header />
+        <div className="cart-container">
+          <div className="empty-cart">Loading cart...</div>
+        </div>
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="mars-page">

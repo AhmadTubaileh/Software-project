@@ -29,6 +29,8 @@ import StoreProduct from './pages/StoreProduct.jsx';
 import StoreCart from './pages/storeCart.jsx';
 import BranchSelection from './pages/BranchSelection.jsx';
 import MyInstallments from './pages/MyInstallments.jsx';
+import MyOrders from './pages/MyOrders.jsx';
+import OrderDetails from './pages/OrderDetails.jsx';
 import CategoryPage from './components/store/CategoryPage.jsx';
 
 function App() {
@@ -42,6 +44,8 @@ function App() {
         <Route path="/category/:slug" element={<CategoryPage />} />
         <Route path="/storeCart" element={<StoreCart />} />
         <Route path="/my-installments" element={<MyInstallments />} />
+        <Route path="/my-orders" element={<MyOrders />} />
+        <Route path="/order/:orderId" element={<OrderDetails />} />
         
         <Route path="/pos" element={<POS />} />
         <Route path="/employees" element={<Employees />} />

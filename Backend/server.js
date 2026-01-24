@@ -23,6 +23,7 @@ const storeRoutes = require('./routes/store');
 const categoryRoutes = require('./routes/categories');
 const orderRoutes = require('./routes/orders');
 const recommendationRoutes = require('./routes/recommendations');
+const cartRoutes = require('./routes/cart');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -130,6 +131,7 @@ app.use('/api/store', storeRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/cart', cartRoutes);
 
 // Health check with CORS headers explicitly
 app.get('/api/health', (req, res) => {
