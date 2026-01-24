@@ -1,4 +1,4 @@
-import React,{useState, useCallback} from "react";
+import React,{useState, useCallback, useEffect} from "react";
 import { Link, useNavigate } from "react-router-dom";
 import LoginModal from './StoreLoginForm';
 import SignupModal from './StoreSignupForm';
@@ -9,9 +9,29 @@ export default function Header() {
   const [searchText, setSearchText] = useState("");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSignupModalOpen, setIsSignupModalOpen] = useState(false);
+  const [categories, setCategories] = useState([]);
   const { currentUser, setSession } = useLocalSession();
   const isLoggedIn = !!currentUser;
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/categories');
+      const data = await response.json();
+      
+      if (data.success) {
+        setCategories(data.categories);
+      } else {
+        console.error('Failed to fetch categories:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   function saveSearch(event) {
     setSearchText(event.target.value);
@@ -115,9 +135,9 @@ export default function Header() {
     <>
     <header className="mars-header">
       <div className="mars-header-top">
-        <a href="#" className="mars-logo">
+        <p className="mars-logo">
           MARS
-        </a>
+        </p>
 
         <form className="mars-search-form">
           <input
@@ -161,10 +181,13 @@ export default function Header() {
 
       <nav className="mars-nav">
         <ul className="mars-nav-list">
-          <li><a href="#" className="mars-nav-link">Mobile</a></li>
-          <li><a href="#" className="mars-nav-link">PC</a></li>
-          <li><a href="#" className="mars-nav-link">Accessories</a></li>
-          <li><a href="#" className="mars-nav-link">Consoles</a></li>
+          {categories.map((category) => (
+            <li key={category.id}>
+              <Link to={`/category/${category.slug}`} className="mars-nav-link">
+                {category.name}
+              </Link>
+            </li>
+          ))}
         </ul>
       </nav>
     </header>

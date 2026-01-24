@@ -24,13 +24,12 @@ import Branches from './pages/Branches.jsx'; // Make sure this import matches
 import ContractBranches from './pages/ContractBranches.jsx';
 import OrderManagement from './pages/OrderManagement.jsx';
 
-
 import StoreHome from './pages/StoreHome.jsx'; //Ahmad new
 import StoreProduct from './pages/StoreProduct.jsx';
 import StoreCart from './pages/storeCart.jsx';
 import BranchSelection from './pages/BranchSelection.jsx';
 import MyInstallments from './pages/MyInstallments.jsx';
-
+import CategoryPage from './components/store/CategoryPage.jsx';
 
 function App() {
   return (
@@ -40,6 +39,7 @@ function App() {
         <Route path="/" element={<BranchSelection />} />
         <Route path="/store" element={<StoreHome />} />
         <Route path="/store/product/:id" element={<StoreProduct />} />
+        <Route path="/category/:slug" element={<CategoryPage />} />
         <Route path="/storeCart" element={<StoreCart />} />
         <Route path="/my-installments" element={<MyInstallments />} />
         

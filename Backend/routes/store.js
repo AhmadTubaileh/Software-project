@@ -56,12 +56,15 @@ router.get('/branches', (req, res) => {
 });
 
 // GET /api/store/items - Get all items for the store with main_img and sub_imgs
-// Optional query parameter: branch_id to filter by branch
+// Optional query parameters: branch_id to filter by branch, category_id to filter by category
 router.get('/items', (req, res) => {
   const branchId = req.query.branch_id;
+  const categoryId = req.query.category_id;
   
   if (branchId) {
     console.log(`🏪 Store: Fetching items for branch ${branchId}...`);
+  } else if (categoryId) {
+    console.log(`🏪 Store: Fetching items for category ${categoryId}...`);
   } else {
     console.log('🏪 Store: Fetching all items...');
   }
@@ -103,6 +106,12 @@ router.get('/items', (req, res) => {
   if (branchId) {
     query += ` AND i.branch_id = ?`;
     queryParams.push(branchId);
+  }
+  
+  // Add category filter if category_id is provided
+  if (categoryId) {
+    query += ` AND i.category_id = ?`;
+    queryParams.push(categoryId);
   }
   
   query += ` ORDER BY i.id DESC`;

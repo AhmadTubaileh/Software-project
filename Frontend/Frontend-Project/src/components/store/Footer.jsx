@@ -37,16 +37,16 @@ export default function Footer() {
                     <h3>Follow Us</h3>
                     <div className="socials">
                         
-                        <a href="#" aria-label="Facebook">
+                        <a href="https://www.facebook.com/ahmad.tubaileh.7/" aria-label="Facebook">
                             <i className="fa-brands fa-facebook-f"></i>
                         </a>
-                        <a href="#" aria-label="Instagram">
+                        <a href="https://www.instagram.com/ahmad.tubaileh.7/" aria-label="Instagram">
                             <i className="fa-brands fa-instagram"></i>
                         </a>
                         <a href="#" aria-label="X (Twitter)">
                             <i className="fa-brands fa-x-twitter"></i>
                         </a>
-                        <a href="#" aria-label="YouTube">
+                        <a href="https://www.youtube.com/@ahmadtubaileh7186" aria-label="YouTube">
                             <i className="fa-brands fa-youtube"></i>
                         </a>
                     </div>
