@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import StoreApi from "../../services/storeApi";
 import RecommendationApi from "../../services/recommendationApi";
 import { useLocalSession } from "../../hooks/useLocalSession";
@@ -12,6 +12,8 @@ export default function Items() {
     const [error, setError] = useState(null);
     const [recommendationType, setRecommendationType] = useState('loading');
     const { currentUser } = useLocalSession();
+    const [searchParams] = useSearchParams();
+    const searchQuery = searchParams.get('search') || '';
 
     useEffect(() => {
         async function fetchProducts() {
@@ -89,26 +91,37 @@ export default function Items() {
         return <div style={{ color: "red", padding: "20px", textAlign: "center" }}>{error}</div>;
     }
 
+    // Filter products based on search query
+    const filteredProducts = storeProducts.filter(product => {
+        if (!searchQuery.trim()) return true;
+        const query = searchQuery.toLowerCase();
+        const name = product.name.toLowerCase();
+        return name.includes(query);
+    });
+
     if (storeProducts.length === 0) {
         return <div style={{ color: "white", padding: "20px", textAlign: "center" }}>No products available.</div>;
     }
 
+    if (filteredProducts.length === 0 && searchQuery) {
+        return (
+            <div style={{ color: "white", padding: "20px", textAlign: "center" }}>
+                No products found matching "{searchQuery}"
+            </div>
+        );
+    }
+
     return (
         <div>
-            {/*
-            <div style={{ padding: "20px 40px", color: "white" }}>
-                <h2 style={{ marginBottom: "10px" }}>
-                    {recommendationType === 'personalized' ? '🎯 Recommended For You' : '🔥 Popular Items'}
-                </h2>
-                <p style={{ fontSize: "14px", opacity: 0.8 }}>
-                    {recommendationType === 'personalized' 
-                        ? 'Based on your browsing and purchase history' 
-                        : 'Trending products loved by our customers'}
-                </p>
-            </div>
-            */}
+            {searchQuery && (
+                <div style={{ padding: "20px 40px", color: "white" }}>
+                    <p style={{ fontSize: "16px" }}>
+                        Showing {filteredProducts.length} result{filteredProducts.length !== 1 ? 's' : ''} for "{searchQuery}"
+                    </p>
+                </div>
+            )}
             <div className="items-grid">
-            {storeProducts.map((product) => (
+            {filteredProducts.map((product) => (
                 <div key={product.id} className="item-card">
                 <Link to={`/store/product/${product.id}`}>
                     <img src={product.img} className="item-image" alt={product.name} />

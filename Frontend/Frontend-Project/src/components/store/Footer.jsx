@@ -44,7 +44,7 @@ export default function Footer() {
                         <a href="https://www.instagram.com/ahmad.tubaileh.7/" aria-label="Instagram">
                             <i className="fa-brands fa-instagram"></i>
                         </a>
-                        <a href="#" aria-label="X (Twitter)">
+                        <a href="https://x.com/ahmadtubaileh2" aria-label="X (Twitter)">
                             <i className="fa-brands fa-x-twitter"></i>
                         </a>
                         <a href="https://www.youtube.com/@ahmadtubaileh7186" aria-label="YouTube">

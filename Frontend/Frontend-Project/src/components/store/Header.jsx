@@ -1,5 +1,5 @@
 import React,{useState, useCallback, useEffect} from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import LoginModal from './StoreLoginForm';
 import SignupModal from './StoreSignupForm';
 import { useLocalSession } from '../../hooks/useLocalSession';
@@ -13,6 +13,11 @@ export default function Header() {
   const { currentUser, setSession } = useLocalSession();
   const isLoggedIn = !!currentUser;
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Determine if we should show the search bar
+  const showSearch = location.pathname === '/store' || location.pathname.startsWith('/category/');
 
   useEffect(() => {
     fetchCategories();
@@ -34,7 +39,15 @@ export default function Header() {
   };
 
   function saveSearch(event) {
-    setSearchText(event.target.value);
+    const value = event.target.value;
+    setSearchText(value);
+    
+    // Update URL search params
+    if (value.trim()) {
+      setSearchParams({ search: value });
+    } else {
+      setSearchParams({});
+    }
   }
 
   function clickedKey(event) {
@@ -42,6 +55,12 @@ export default function Header() {
       console.log(searchText);
     }
   }
+
+  // Sync search text with URL params on mount and location change
+  useEffect(() => {
+    const searchParam = searchParams.get('search') || '';
+    setSearchText(searchParam);
+  }, [location.pathname, searchParams]);
 
   const handleLoginSubmit = useCallback(async (credentials) => {
     try {
@@ -135,19 +154,23 @@ export default function Header() {
     <>
     <header className="mars-header">
       <div className="mars-header-top">
-        <p className="mars-logo">
-          MARS
-        </p>
+        <Link to="/store" style={{ textDecoration: 'none' }}>
+          <p className="mars-logo">
+            MARS
+          </p>
+        </Link>
 
         <form className="mars-search-form">
-          <input
-            className="mars-search-input"
-            type="text"
-            placeholder="Search for Products"
-            value={searchText}
-            onChange={saveSearch}
-            onKeyDown={clickedKey}
-          />
+          {showSearch && (
+            <input
+              className="mars-search-input"
+              type="text"
+              placeholder="Search for Products"
+              value={searchText}
+              onChange={saveSearch}
+              onKeyDown={clickedKey}
+            />
+          )}
 
           {isLoggedIn ? (
             <button type="button" className="mars-header-button" onClick={handleLogout}>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useSearchParams } from "react-router-dom";
 import { cartProducts } from "../../data/cartProducts";
 import Header from "./Header";
 import Footer from "./Footer";
@@ -10,6 +10,8 @@ export default function CategoryPage() {
     const [categoryName, setCategoryName] = useState("");
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [searchParams] = useSearchParams();
+    const searchQuery = searchParams.get('search') || '';
 
     const fetchCategoryItems = useCallback(async () => {
         try {
@@ -84,6 +86,14 @@ export default function CategoryPage() {
         alert(`${product.name} added to cart!`);
     }
 
+    // Filter items based on search query
+    const filteredItems = items.filter(item => {
+        if (!searchQuery.trim()) return true;
+        const query = searchQuery.toLowerCase();
+        const name = item.name.toLowerCase();
+        return name.includes(query);
+    });
+
     return (
         <>
             <Header />
@@ -110,9 +120,23 @@ export default function CategoryPage() {
                     </div>
                 )}
 
-                {!loading && !error && items.length > 0 && (
-                    <div className="items-grid">
-                        {items.map((product) => (
+                {!loading && !error && items.length > 0 && filteredItems.length === 0 && searchQuery && (
+                    <div style={{ color: "white", textAlign: "center" }}>
+                        No items found matching "{searchQuery}" in {categoryName}
+                    </div>
+                )}
+
+                {!loading && !error && filteredItems.length > 0 && (
+                    <>
+                        {searchQuery && (
+                            <div style={{ marginBottom: "20px" }}>
+                                <p style={{ color: "white", fontSize: "16px" }}>
+                                    Showing {filteredItems.length} result{filteredItems.length !== 1 ? 's' : ''} for "{searchQuery}" in {categoryName}
+                                </p>
+                            </div>
+                        )}
+                        <div className="items-grid">
+                            {filteredItems.map((product) => (
                             <div key={product.id} className="item-card">
                                 <Link to={`/store/product/${product.id}`}>
                                     <img src={product.img} className="item-image" alt={product.name} />
@@ -126,7 +150,8 @@ export default function CategoryPage() {
                                 </button>
                             </div>
                         ))}
-                    </div>
+                        </div>
+                    </>
                 )}
             </div>
             <Footer />
