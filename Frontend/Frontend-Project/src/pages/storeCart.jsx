@@ -99,7 +99,9 @@ export default function StoreCart() {
           cartItems: paymentData.cartItems,
           billingAddress: paymentData.billingAddress,
           totalAmount: paymentData.amount,
-          userId: currentUser.id
+          userId: currentUser.id,
+          paymentMethod: paymentData.paymentMethod,
+          paymentIntentId: paymentData.paymentIntentId
         })
       });
 
