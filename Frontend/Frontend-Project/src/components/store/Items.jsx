@@ -5,18 +5,18 @@ import RecommendationApi from "../../services/recommendationApi";
 import { useLocalSession } from "../../hooks/useLocalSession";
 import toast from "react-hot-toast";
 
-
 export default function Items() {
     const [storeProducts, setStoreProducts] = useState([]);
+    const [recommendedProducts, setRecommendedProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [recommendationType, setRecommendationType] = useState('loading');
     const { currentUser } = useLocalSession();
     const [searchParams] = useSearchParams();
     const searchQuery = searchParams.get('search') || '';
+    const [showRecommendations, setShowRecommendations] = useState(false);
 
     useEffect(() => {
-        async function fetchProducts() {
+        async function fetchAllProducts() {
             try {
                 setLoading(true);
                 
@@ -28,28 +28,39 @@ export default function Items() {
                     return;
                 }
                 
+                // ✅ CORRECT: Use StoreApi.getItems() with branchId
+                console.log(`📦 Fetching ALL products for branch ${selectedBranchId}...`);
+                const allProducts = await StoreApi.getItems(selectedBranchId);
+                setStoreProducts(allProducts);
+                console.log(`✅ Found ${allProducts.length} products`);
+                
+                // OPTIONALLY fetch personalized recommendations for logged-in users
                 if (currentUser && currentUser.id) {
-                    console.log(`✅ Logged-in user detected, fetching personalized recommendations for branch ${selectedBranchId}...`);
-                    const personalizedItems = await RecommendationApi.getPersonalizedRecommendations(currentUser.id, 12, selectedBranchId);
-                    setStoreProducts(personalizedItems);
-                    setRecommendationType('personalized');
-                } else {
-                    console.log(`ℹ️ Anonymous user, fetching popular items for branch ${selectedBranchId}...`);
-                    const popularItems = await RecommendationApi.getPopularItems(12, selectedBranchId);
-                    setStoreProducts(popularItems);
-                    setRecommendationType('popular');
+                    console.log(`⭐ Fetching recommendations for user ${currentUser.id}...`);
+                    try {
+                        const personalizedItems = await RecommendationApi.getPersonalizedRecommendations(
+                            currentUser.id, 
+                            12, 
+                            selectedBranchId
+                        );
+                        setRecommendedProducts(personalizedItems);
+                        setShowRecommendations(true);
+                        console.log(`✅ Found ${personalizedItems.length} recommended products`);
+                    } catch (recError) {
+                        console.log("Could not fetch recommendations, showing only all products:", recError);
+                    }
                 }
                 
                 setError(null);
             } catch (err) {
-                console.error("Error fetching recommendations:", err);
+                console.error("Error fetching products:", err);
                 setError("Failed to load products. Please try again later.");
             } finally {
                 setLoading(false);
             }
         }
 
-        fetchProducts();
+        fetchAllProducts();
     }, [currentUser]);
 
     async function addToCart(product, quantity = 1) {
@@ -99,14 +110,10 @@ export default function Items() {
         return name.includes(query);
     });
 
-    if (storeProducts.length === 0) {
-        return <div style={{ color: "white", padding: "20px", textAlign: "center" }}>No products available.</div>;
-    }
-
-    if (filteredProducts.length === 0 && searchQuery) {
+    if (filteredProducts.length === 0) {
         return (
             <div style={{ color: "white", padding: "20px", textAlign: "center" }}>
-                No products found matching "{searchQuery}"
+                {searchQuery ? `No products found matching "${searchQuery}"` : 'No products available.'}
             </div>
         );
     }
@@ -120,20 +127,52 @@ export default function Items() {
                     </p>
                 </div>
             )}
-            <div className="items-grid">
-            {filteredProducts.map((product) => (
-                <div key={product.id} className="item-card">
-                <Link to={`/store/product/${product.id}`}>
-                    <img src={product.img} className="item-image" alt={product.name} />
-                </Link>
-
-                <h3 className="item-title">{product.name}</h3>
-                <p className="item-price">${product.price}</p>
-
-                <button className="item-btn" onClick={()=>addToCart(product,1)}>Add to Cart</button>
+            
+            {/* Show Recommendations Section for logged-in users (only when not searching) */}
+            {/*showRecommendations && !searchQuery && recommendedProducts.length > 0 && (
+                <div style={{ marginBottom: "40px" }}>
+                    <h2 style={{ color: "white", padding: "0 40px 20px", fontSize: "24px" }}>
+                        Recommended For You
+                    </h2>
+                    <div className="items-grid">
+                        {recommendedProducts.map((product) => (
+                            <div key={`rec-${product.id}`} className="item-card">
+                                <Link to={`/store/product/${product.id}`}>
+                                    <img src={product.img} className="item-image" alt={product.name} />
+                                </Link>
+                                <h3 className="item-title">{product.name}</h3>
+                                <p className="item-price">${product.price}</p>
+                                <button className="item-btn" onClick={()=>addToCart(product,1)}>
+                                    Add to Cart
+                                </button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
-            ))}
+            )*/}
+            
+            {/* Show ALL Products (or filtered products when searching) */}
+            <div>
+                {!searchQuery && (
+                    <h2 style={{ color: "white", padding: "0 40px 20px", fontSize: "24px" }}>
+                        {showRecommendations ? "All Products" : "Our Products"}
+                    </h2>
+                )}
+                <div className="items-grid">
+                    {filteredProducts.map((product) => (
+                        <div key={product.id} className="item-card">
+                            <Link to={`/store/product/${product.id}`}>
+                                <img src={product.img} className="item-image" alt={product.name} />
+                            </Link>
+                            <h3 className="item-title">{product.name}</h3>
+                            <p className="item-price">${product.price}</p>
+                            <button className="item-btn" onClick={()=>addToCart(product,1)}>
+                                Add to Cart
+                            </button>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
-  );
+    );
 }
