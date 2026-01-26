@@ -25,17 +25,28 @@ export default function MyInstallments() {
   const fetchInstallments = async () => {
     try {
       setLoading(true);
+      console.log('🔍 Fetching installments for user:', currentUser.id);
+      console.log('Request URL:', `http://localhost:5000/api/contracts/my-installments?userId=${currentUser.id}`);
+      
       const response = await fetch(`http://localhost:5000/api/contracts/my-installments?userId=${currentUser.id}`);
       
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
       if (!response.ok) {
-        throw new Error('Failed to fetch installments');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Response error data:', errorData);
+        throw new Error(errorData.error || 'Failed to fetch installments');
       }
 
       const data = await response.json();
+      console.log('✅ Received data:', data);
+      console.log('Number of contracts:', data.contracts?.length || 0);
       setContracts(data.contracts || []);
     } catch (error) {
-      console.error('Error fetching installments:', error);
-      toast.error('Failed to load installments');
+      console.error('❌ Error fetching installments:', error);
+      console.error('Error details:', error.message);
+      toast.error('Failed to load installments: ' + error.message);
       setContracts([]);
     } finally {
       setLoading(false);
@@ -281,6 +292,23 @@ export default function MyInstallments() {
                       fontWeight: 'bold'
                     }}>
                       {formatCurrency(contract.monthly_payment)}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ 
+                      color: 'rgba(255,255,255,0.6)', 
+                      fontSize: '0.85rem',
+                      marginBottom: '5px'
+                    }}>
+                      💰 Total Paid
+                    </div>
+                    <div style={{ 
+                      color: 'rgb(16, 185, 129)', 
+                      fontSize: '1.3rem',
+                      fontWeight: 'bold'
+                    }}>
+                      {formatCurrency(contract.total_amount_paid || 0)}
                     </div>
                   </div>
 

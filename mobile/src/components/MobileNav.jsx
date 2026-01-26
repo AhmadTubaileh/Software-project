@@ -29,7 +29,7 @@ function MobileNav() {
 
   const handleLogout = () => {
     clearSession();
-    navigate('/login', { replace: true });
+    navigate('/', { replace: true });
   };
 
   return (

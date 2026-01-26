@@ -18,9 +18,12 @@ const chatRoutes = require('./routes/chats');
 const overdueRoutes = require('./routes/overdue');
 const branchRoutes = require('./routes/branchRoutes');
 const ocrRoutes = require('./routes/ocr');
+const storeOcrRoutes = require('./routes/storeOcr');
 const storeRoutes = require('./routes/store');
 const categoryRoutes = require('./routes/categories');
 const orderRoutes = require('./routes/orders');
+const recommendationRoutes = require('./routes/recommendations');
+const cartRoutes = require('./routes/cart');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,11 +47,16 @@ if (!fs.existsSync(tasksUploadsDir)) {
 const allowedOrigins = [
   'http://localhost:5173', // Vite default port (desktop)
   'http://localhost:5174', // Mobile app port
+  'http://localhost:5175', // Mobile app alternative port
   'http://localhost:3000', // Create React App default
   'http://localhost:8080', // Alternative port
   'http://127.0.0.1:5173', // Localhost alternative (desktop)
   'http://127.0.0.1:5174', // Localhost alternative (mobile)
+  'http://127.0.0.1:5175', // Localhost alternative (mobile)
   'http://127.0.0.1:3000',
+  // Network access for mobile testing
+  'http://192.168.1.6:5174',
+  'http://192.168.1.6:5175',
   // Add production URLs here when deploying
   // 'https://yourdomain.com',
 ];
@@ -123,9 +131,12 @@ app.use('/api/chats', chatRoutes);
 app.use('/api/overdue', overdueRoutes);
 app.use('/api/branches', branchRoutes);
 app.use('/api/ocr', ocrRoutes);
+app.use('/api/ocr', storeOcrRoutes);
 app.use('/api/store', storeRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/recommendations', recommendationRoutes);
+app.use('/api/cart', cartRoutes);
 
 // Health check with CORS headers explicitly
 app.get('/api/health', (req, res) => {
@@ -190,6 +201,7 @@ app.use((req, res) => {
 // DAILY OVERDUE PAYMENTS CHECK (Option 2)
 // ============================================
 const db = require('./config/database');
+const recommendationService = require('./services/recommendationService');
 
 // ⭐ ADDED: Database connection error handler
 db.on('error', (err) => {
@@ -259,6 +271,34 @@ function scheduleDailyCheck() {
 }
 
 // ============================================
+// AUTOMATIC RECOMMENDATION METRICS UPDATE
+// ============================================
+async function updateRecommendationMetrics() {
+  const now = new Date();
+  console.log(`[${now.toLocaleString()}] 🔄 Updating recommendation metrics...`);
+  
+  try {
+    await recommendationService.updateItemMetrics();
+    console.log(`[${new Date().toLocaleString()}] ✅ Recommendation metrics updated successfully`);
+  } catch (err) {
+    console.error('❌ Error updating recommendation metrics:', err.message);
+  }
+}
+
+function scheduleMetricsUpdate() {
+  // Update metrics every hour
+  const updateInterval =  10 * 1000; // 10 seconds
+  
+  console.log(`⏰ Recommendation metrics will update every 10 seconds`);
+  
+  // Run immediately on server start
+  updateRecommendationMetrics();
+  
+  // Then run every hour
+  setInterval(updateRecommendationMetrics, updateInterval);
+}
+
+// ============================================
 // Start server
 // ============================================
 app.listen(PORT, () => {
@@ -279,4 +319,8 @@ app.listen(PORT, () => {
   // Also run a check immediately on server start (optional)
   console.log('🔄 Running initial overdue check on server start...');
   checkOverduePayments();
+  
+  // Start the recommendation metrics update scheduler
+  console.log('\n📊 Starting automated recommendation metrics update system...');
+  scheduleMetricsUpdate();
 });

@@ -1,6 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import StoreIdVerificationStep from './StoreIdVerificationStep';
 import StoreCustomerInfoStep from './StoreCustomerInfoStep';
 import StoreSponsorsStep from './StoreSponsorsStep';
 import StoreContractItemsStep from './StoreContractItemsStep';
@@ -15,11 +14,7 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
 
   // Main form state
   const [formData, setFormData] = useState({
-    // Step 1: ID Verification
-    idCardNumber: '',
-    existingCustomer: null,
-    
-    // Step 2: Customer Information
+    // Step 1: Customer Information & ID Verification
     customer: {
       full_name: '',
       phone: '',
@@ -29,95 +24,81 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
       id_card_image: null
     },
     
-    // Step 3: Sponsors (REQUIRED - at least one)
+    // Step 2: Sponsors (REQUIRED - at least one)
     sponsors: [],
     
-    // Step 4: Contract Items - Pre-filled with current product (only one item)
+    // Step 3: Contract Items - Pre-filled with current product (only one item)
     contractItems: []
   });
 
   // Initialize form data when modal opens
   useEffect(() => {
-    if (isOpen && currentUser) {
-      // Pre-fill customer info from user account
-      setFormData(prev => ({
-        ...prev,
+    if (isOpen && currentUser && product) {
+      // Reset form when modal opens
+      setFormData({
         customer: {
-          full_name: currentUser.username || '',
-          phone: currentUser.phone || '',
-          id_card_number: currentUser.id_card || '',
+          full_name: '',
+          phone: '',
           address: '',
-          email: currentUser.email || '',
+          email: '',
+          id_card_number: '',
           id_card_image: null
         },
-        idCardNumber: currentUser.id_card || ''
-      }));
+        sponsors: []
+      });
 
-      // Set user's branch ID
-      if (currentUser.primary_branch_id) {
+      // Get branch ID from localStorage (the branch user is currently browsing)
+      const selectedBranchId = localStorage.getItem('selectedBranchId');
+      if (selectedBranchId) {
+        setUserBranchId(parseInt(selectedBranchId));
+      } else if (currentUser.primary_branch_id) {
+        // Fallback to user's primary branch
         setUserBranchId(currentUser.primary_branch_id);
       } else {
-        // Fetch default branch
-        fetch('http://localhost:5000/api/branches')
-          .then(res => res.json())
-          .then(data => {
-            const branches = Array.isArray(data) ? data : (data.branches || []);
-            if (branches.length > 0) {
-              setUserBranchId(branches[0].id);
-            } else {
-              setUserBranchId(1);
-            }
-          })
-          .catch(err => {
-            console.error('Error fetching branches:', err);
-            setUserBranchId(1);
-          });
+        // Last resort: default to branch 1
+        setUserBranchId(1);
       }
 
-      // Pre-fill contract items with current product (NO DOWNPAYMENT)
-      if (product) {
-        const total_price = parseFloat(
-          product.price_installment_total 
-        ) || 0;
+      setCurrentStep(1);
 
-        const months = parseInt(product.installment_months) || 12;
-        const down_payment = parseFloat(product.installment_first_payment) || 0;
-        
-        // Calculate payments WITHOUT downpayment (down_payment = 0)
-        const remaining = total_price - down_payment; // No downpayment, so remaining = total
-        const equal_months = Math.max(1, months - 1); // avoid division by zero
-        const raw_monthly = remaining / equal_months;
-        let monthly_payment = Math.floor(raw_monthly / 10) * 10;
-        let last_payment = remaining - (monthly_payment * equal_months);
-        
-        if (last_payment === 0) {
-          monthly_payment = monthly_payment - 10;
-          last_payment = 10 * equal_months;
-        } else if (last_payment < 0) {
-          // If last payment is negative, adjust monthly payment
-          monthly_payment = Math.floor((remaining + 10) / equal_months / 10) * 10;
-          last_payment = remaining - (monthly_payment * equal_months);
-        }
-
-        const qty = Math.max(1, quantity || 1);
-
-        setFormData(prev => ({
-          ...prev,
-          contractItems: [{
-            item_id: product.id,
-            item_name: product.name,
-            item_description: product.description || '',
-            price_id: product.price_id || null,
-            total_price: total_price,
-            down_payment: down_payment, // NO DOWNPAYMENT
-            months: months,
-            monthly_payment: monthly_payment,
-            installment_last_payment: last_payment,
-            start_date: new Date().toISOString().split('T')[0],
-            quantity: qty // Use selected quantity (default 1)
-          }]
-        }));
+      // Initialize contract items with product data
+      const total_price = parseFloat(product.price_installment_total) || 0;
+      const months = parseInt(product.installment_months) || 12;
+      const down_payment = parseFloat(product.installment_first_payment) || 0;
+      
+      // Calculate payments
+      const remaining = total_price - down_payment;
+      const equal_months = Math.max(1, months - 1);
+      const raw_monthly = remaining / equal_months;
+      let monthly_payment = Math.floor(raw_monthly / 10) * 10;
+      let last_payment = remaining - (monthly_payment * equal_months);
+      
+      if (last_payment === 0) {
+        monthly_payment = monthly_payment - 10;
+        last_payment = 10 * equal_months;
+      } else if (last_payment < 0) {
+        monthly_payment = Math.floor((remaining + 10) / equal_months / 10) * 10;
+        last_payment = remaining - (monthly_payment * equal_months);
       }
+
+      const qty = Math.max(1, quantity || 1);
+
+      setFormData(prev => ({
+        ...prev,
+        contractItems: [{
+          item_id: product.id,
+          item_name: product.name,
+          item_description: product.description || '',
+          price_id: product.price_id || null,
+          total_price: total_price,
+          down_payment: down_payment,
+          months: months,
+          monthly_payment: monthly_payment,
+          installment_last_payment: last_payment,
+          start_date: new Date().toISOString().split('T')[0],
+          quantity: qty
+        }]
+      }));
     }
   }, [isOpen, currentUser, product, quantity]);
 
@@ -147,9 +128,9 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
   }, []);
 
   const nextStep = useCallback(() => {
-    if (currentStep < 4) {
-      // When moving to step 3 (Sponsors), ensure at least one sponsor exists
-      if (currentStep === 2 && formData.sponsors.length === 0) {
+    if (currentStep < 3) {
+      // When moving to step 2 (Sponsors), ensure at least one sponsor exists
+      if (currentStep === 1 && formData.sponsors.length === 0) {
         updateFormData({
           sponsors: [{
             full_name: '',
@@ -173,54 +154,6 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
       setCurrentStep(prev => prev - 1);
     }
   }, [currentStep]);
-
-  // Verify and update user ID card if needed
-  const verifyAndUpdateIdCard = async () => {
-    if (!formData.idCardNumber.trim()) {
-      toast.error('Please enter your ID card number');
-      return false;
-    }
-
-    // Check if user has ID card
-    if (!currentUser.id_card) {
-      // Update user's ID card
-      try {
-        const formDataToSend = new FormData();
-        formDataToSend.append('userId', currentUser.id);
-        formDataToSend.append('id_card', formData.idCardNumber);
-
-        // If customer uploaded an image, add it
-        if (formData.customer.id_card_image instanceof File) {
-          formDataToSend.append('card_image', formData.customer.id_card_image);
-        }
-
-        const response = await fetch('http://localhost:5000/api/auth/update-id-card', {
-          method: 'PUT',
-          body: formDataToSend
-        });
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data.error || 'Failed to update ID card');
-        }
-
-        toast.success('ID card updated successfully');
-        return true;
-      } catch (error) {
-        console.error('Error updating ID card:', error);
-        toast.error(error.message || 'Failed to update ID card');
-        return false;
-      }
-    } else {
-      // Verify ID card matches
-      if (currentUser.id_card !== formData.idCardNumber) {
-        toast.error('ID card number does not match your account. Please enter the correct ID card number.');
-        return false;
-      }
-      return true;
-    }
-  };
 
   const handleSubmit = async () => {
     // Validate sponsors (REQUIRED - at least one)
@@ -405,27 +338,14 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
     switch (currentStep) {
       case 1:
         return (
-          <StoreIdVerificationStep
-            formData={formData}
-            updateFormData={updateFormData}
-            nextStep={async () => {
-              const verified = await verifyAndUpdateIdCard();
-              if (verified) {
-                nextStep();
-              }
-            }}
-          />
-        );
-      case 2:
-        return (
           <StoreCustomerInfoStep
+            currentUser={currentUser}
             formData={formData}
             updateFormData={updateFormData}
             nextStep={nextStep}
-            prevStep={prevStep}
           />
         );
-      case 3:
+      case 2:
         return (
           <StoreSponsorsStep
             formData={formData}
@@ -434,7 +354,7 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
             prevStep={prevStep}
           />
         );
-      case 4:
+      case 3:
         return (
           <StoreContractItemsStep
             formData={formData}
@@ -531,7 +451,7 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
         <div className="modal-body" style={{ padding: '20px' }}>
           {/* Progress Steps */}
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', marginBottom: '30px', gap: '10px' }}>
-            {[1, 2, 3, 4].map((step) => (
+            {[1, 2, 3].map((step) => (
               <React.Fragment key={step}>
                 <div style={{
                   width: '40px',
@@ -556,7 +476,7 @@ const StoreInstallmentModal = ({ isOpen, onClose, product, quantity = 1 }) => {
                 }}>
                   {step < currentStep ? '✓' : step}
                 </div>
-                {step < 4 && (
+                {step < 3 && (
                   <div style={{
                     width: '60px',
                     height: '2px',

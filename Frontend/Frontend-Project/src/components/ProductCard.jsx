@@ -13,6 +13,12 @@ function getCategoryIcon(category) {
 }
 
 function ProductCard({ product, paymentPref, onSetPayment, onAddToCart }) {
+  const handleAddToCart = async () => {
+    if (onAddToCart) {
+      await onAddToCart(product, paymentPref);
+    }
+  };
+
   return (
     <article className="product-card transition-transform">
       <div className="product-icon" aria-hidden="true">{getCategoryIcon(product.category)}</div>
@@ -32,7 +38,7 @@ function ProductCard({ product, paymentPref, onSetPayment, onAddToCart }) {
           </label>
         </div>
 
-        <button className="add-to-cart px-3 py-2 rounded-lg border border-brand bg-brand text-white shadow hover:brightness-105 transition" onClick={() => onAddToCart(product)}>
+        <button className="add-to-cart px-3 py-2 rounded-lg border border-brand bg-brand text-white shadow hover:brightness-105 transition" onClick={handleAddToCart}>
           Add to Cart
         </button>
       </div>

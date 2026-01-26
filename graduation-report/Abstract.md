@@ -1,0 +1,9 @@
+Abstract
+
+Modern electronics retail stores often rely on fragmented tools and manual procedures to manage sales, inventory, payments, and employee activities. This separation increases operational complexity, introduces inconsistencies in records, and limits effective oversight. To address these challenges, this project presents MARS, an integrated software system that unifies customer-facing e-commerce functionality with internal management operations for an electronics store.
+
+MARS is implemented as a full-stack application composed of React-based web and mobile clients, a Node.js and Express backend, and a MySQL relational database. The system provides centralized product management, point-of-sale and order processing, contract and payment recording, employee duty-hour tracking, and internal project and task management. Role-based access control ensures that customers, store workers, and administrative users interact with the system according to their responsibilities. In addition, the system includes prototype services for optical character recognition (OCR) to extract data from receipt images and a lightweight recommendation component to support product suggestions during sales workflows.
+
+The project results in a functional prototype that demonstrates how a unified platform can reduce data duplication, improve record consistency, and streamline routine retail operations. Design choices emphasize modularity, separation of concerns, and maintainability, while acknowledging constraints related to security hardening, scalability, and data-driven model accuracy.
+
+Overall, MARS serves as a practical academic implementation that applies software engineering principles to a real-world problem. The system provides a solid foundation for future enhancements, including improved authentication mechanisms, cloud-based deployment, and more advanced OCR and recommendation models.

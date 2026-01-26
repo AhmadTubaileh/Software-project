@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
+require('dotenv').config();
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
 // GET /api/store/branches - Get all branches for selection
 router.get('/branches', (req, res) => {
@@ -56,12 +58,15 @@ router.get('/branches', (req, res) => {
 });
 
 // GET /api/store/items - Get all items for the store with main_img and sub_imgs
-// Optional query parameter: branch_id to filter by branch
+// Optional query parameters: branch_id to filter by branch, category_id to filter by category
 router.get('/items', (req, res) => {
   const branchId = req.query.branch_id;
+  const categoryId = req.query.category_id;
   
   if (branchId) {
     console.log(`🏪 Store: Fetching items for branch ${branchId}...`);
+  } else if (categoryId) {
+    console.log(`🏪 Store: Fetching items for category ${categoryId}...`);
   } else {
     console.log('🏪 Store: Fetching all items...');
   }
@@ -80,9 +85,17 @@ router.get('/items', (req, res) => {
       i.sub_img2,
       i.sub_img3,
       i.sub_img4,
-      ip.price_cash
+      ip.price_cash,
+      ip.id as price_id,
+      ip.price_installment_total,
+      ip.installment_first_payment,
+      ip.installment_months,
+      ip.installment_per_month,
+      ip.installment_last_payment,
+      COALESCE(im.popularity_score, 0) as popularity_score
     FROM items i
     LEFT JOIN item_prices ip ON i.id = ip.item_id
+    LEFT JOIN item_metrics im ON i.id = im.item_id
     WHERE (ip.date = (
       SELECT MAX(date) 
       FROM item_prices 
@@ -99,7 +112,13 @@ router.get('/items', (req, res) => {
     queryParams.push(branchId);
   }
   
-  query += ` ORDER BY i.id DESC`;
+  // Add category filter if category_id is provided
+  if (categoryId) {
+    query += ` AND i.category_id = ?`;
+    queryParams.push(categoryId);
+  }
+  
+  query += ` ORDER BY popularity_score DESC, i.id DESC`;
   
   // Execute query with or without branch filter
   const queryCallback = (err, results) => {
@@ -286,14 +305,54 @@ router.get('/items/:id', (req, res) => {
   });
 });
 
+// POST /api/store/create-payment-intent - Create Stripe Payment Intent
+router.post('/create-payment-intent', async (req, res) => {
+  const { amount } = req.body;
+
+  console.log('💳 Creating Stripe Payment Intent...');
+  console.log(`💰 Amount: $${amount}`);
+
+  if (!amount || amount <= 0) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid amount'
+    });
+  }
+
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100), // Convert to cents
+      currency: 'usd',
+      automatic_payment_methods: {
+        enabled: true,
+      },
+    });
+
+    console.log(`✅ Payment Intent created: ${paymentIntent.id}`);
+
+    res.json({
+      success: true,
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id
+    });
+  } catch (error) {
+    console.error('❌ Error creating payment intent:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 // POST /api/store/checkout - Process store checkout and create order
 router.post('/checkout', (req, res) => {
-  const { cartItems, billingAddress, totalAmount, userId } = req.body;
+  const { cartItems, billingAddress, totalAmount, userId, paymentMethod, paymentIntentId } = req.body;
 
   console.log('🏪 Store: Processing checkout...');
   console.log(`👤 User ID: ${userId}`);
   console.log(`📦 Cart items: ${cartItems?.length || 0}`);
   console.log(`💰 Total amount: ${totalAmount}`);
+  console.log(`💳 Payment method: ${paymentMethod}`);
 
   // Validation
   if (!userId) {
@@ -324,6 +383,20 @@ router.post('/checkout', (req, res) => {
     });
   }
 
+  if (!paymentMethod || !['visa', 'cash_on_delivery'].includes(paymentMethod)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Invalid payment method'
+    });
+  }
+
+  if (paymentMethod === 'visa' && !paymentIntentId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Payment Intent ID is required for card payments'
+    });
+  }
+
   // Use transaction to ensure data consistency
   db.getConnection((err, connection) => {
     if (err) {
@@ -347,12 +420,15 @@ router.post('/checkout', (req, res) => {
       }
 
       // Step 1: Create order record
+      // For visa payments, set status to 'approved' immediately
+      // For cash_on_delivery, set status to 'pending'
+      const orderStatus = paymentMethod === 'visa' ? 'approved' : 'pending';
       const orderQuery = `
         INSERT INTO orders (user_id, total_amount, status, billing_address, created_at)
-        VALUES (?, ?, 'pending', ?, NOW())
+        VALUES (?, ?, ?, ?, NOW())
       `;
 
-      connection.query(orderQuery, [userId, totalAmount, billingAddress], (err, orderResult) => {
+      connection.query(orderQuery, [userId, totalAmount, orderStatus, billingAddress], (err, orderResult) => {
         if (err) {
           console.error('❌ Error creating order:', err);
           return connection.rollback(() => {
@@ -376,7 +452,7 @@ router.post('/checkout', (req, res) => {
 
         const orderItemsValues = cartItems.map(item => [
           orderId,
-          parseInt(item.id),
+          parseInt(item.itemId || item.id),
           parseInt(item.quantity),
           parseFloat(item.price)
         ]);
@@ -413,12 +489,18 @@ router.post('/checkout', (req, res) => {
             connection.release();
             console.log(`✅ Checkout completed successfully! Order ID: ${orderId}`);
             
+            const successMessage = paymentMethod === 'visa' 
+              ? 'Payment processed and order approved successfully'
+              : 'Order placed successfully. We will contact you soon for payment upon delivery.';
+            
             res.json({
               success: true,
-              message: 'Order placed successfully',
+              message: successMessage,
               orderId: orderId,
               totalItems: cartItems.length,
-              totalAmount: totalAmount
+              totalAmount: totalAmount,
+              paymentMethod: paymentMethod,
+              status: orderStatus
             });
           });
         });

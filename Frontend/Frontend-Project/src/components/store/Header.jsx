@@ -1,5 +1,5 @@
-import React,{useState, useCallback} from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React,{useState, useCallback, useEffect} from "react";
+import { Link, useNavigate, useLocation, useSearchParams } from "react-router-dom";
 import LoginModal from './StoreLoginForm';
 import SignupModal from './StoreSignupForm';
 import { useLocalSession } from '../../hooks/useLocalSession';
@@ -9,12 +9,45 @@ export default function Header() {
   const [searchText, setSearchText] = useState("");
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSignupModalOpen, setIsSignupModalOpen] = useState(false);
+  const [categories, setCategories] = useState([]);
   const { currentUser, setSession } = useLocalSession();
   const isLoggedIn = !!currentUser;
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Determine if we should show the search bar
+  const showSearch = location.pathname === '/store' || location.pathname.startsWith('/category/');
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/categories');
+      const data = await response.json();
+      
+      if (data.success) {
+        setCategories(data.categories);
+      } else {
+        console.error('Failed to fetch categories:', data.message);
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   function saveSearch(event) {
-    setSearchText(event.target.value);
+    const value = event.target.value;
+    setSearchText(value);
+    
+    // Update URL search params
+    if (value.trim()) {
+      setSearchParams({ search: value });
+    } else {
+      setSearchParams({});
+    }
   }
 
   function clickedKey(event) {
@@ -22,6 +55,12 @@ export default function Header() {
       console.log(searchText);
     }
   }
+
+  // Sync search text with URL params on mount and location change
+  useEffect(() => {
+    const searchParam = searchParams.get('search') || '';
+    setSearchText(searchParam);
+  }, [location.pathname, searchParams]);
 
   const handleLoginSubmit = useCallback(async (credentials) => {
     try {
@@ -115,19 +154,23 @@ export default function Header() {
     <>
     <header className="mars-header">
       <div className="mars-header-top">
-        <a href="#" className="mars-logo">
-          MARS
-        </a>
+        <Link to="/store" style={{ textDecoration: 'none' }}>
+          <p className="mars-logo">
+            MARS
+          </p>
+        </Link>
 
         <form className="mars-search-form">
-          <input
-            className="mars-search-input"
-            type="text"
-            placeholder="Search for Products"
-            value={searchText}
-            onChange={saveSearch}
-            onKeyDown={clickedKey}
-          />
+          {showSearch && (
+            <input
+              className="mars-search-input"
+              type="text"
+              placeholder="Search for Products"
+              value={searchText}
+              onChange={saveSearch}
+              onKeyDown={clickedKey}
+            />
+          )}
 
           {isLoggedIn ? (
             <button type="button" className="mars-header-button" onClick={handleLogout}>
@@ -153,6 +196,9 @@ export default function Header() {
             <Link to="/my-installments">
               <button type="button" className="mars-header-button">My Installments</button>
             </Link>
+            <Link to="/my-orders">
+              <button type="button" className="mars-header-button">My Orders</button>
+            </Link>
           </>
           )}
 
@@ -161,10 +207,13 @@ export default function Header() {
 
       <nav className="mars-nav">
         <ul className="mars-nav-list">
-          <li><a href="#" className="mars-nav-link">Mobile</a></li>
-          <li><a href="#" className="mars-nav-link">PC</a></li>
-          <li><a href="#" className="mars-nav-link">Accessories</a></li>
-          <li><a href="#" className="mars-nav-link">Consoles</a></li>
+          {categories.map((category) => (
+            <li key={category.id}>
+              <Link to={`/category/${category.slug}`} className="mars-nav-link">
+                {category.name}
+              </Link>
+            </li>
+          ))}
         </ul>
       </nav>
     </header>

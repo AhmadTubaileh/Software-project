@@ -1,37 +1,21 @@
 import React, { useState } from 'react';
+import { loadStripe } from '@stripe/stripe-js';
+import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import '../../styles/checkout.css';
 
-export default function Checkout({ isOpen, onClose, cartTotal, onCheckoutSubmit, cartItems }) {
-    const [cardNumber, setCardNumber] = useState('');
-    const [cardName, setCardName] = useState('');
-    const [expiryDate, setExpiryDate] = useState('');
-    const [cvv, setCvv] = useState('');
+// Replace with your actual Stripe publishable key from https://dashboard.stripe.com/test/apikeys
+const stripePromise = loadStripe('pk_test_51StRAnCINXEdDi8CSzEQXvzkvpoYxi17Cu1BtkrmuRBivTwkdtATA1yezgc42tvkaUdlYBHOITif9VBmtihZY0VI00i33GbV8F');
+
+function CheckoutForm({ onClose, cartTotal, onCheckoutSubmit, cartItems, paymentMethod }) {
+    const stripe = useStripe();
+    const elements = useElements();
     const [billingAddress, setBillingAddress] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [errors, setErrors] = useState({});
+    const [orderConfirmed, setOrderConfirmed] = useState(false);
 
-    if (!isOpen) {
-        return null;
-    }
-
-    const validateForm = () => {
+    const validateBillingAddress = () => {
         const newErrors = {};
-        
-        if (!cardNumber.trim() || cardNumber.replace(/\s/g, '').length !== 16) {
-            newErrors.cardNumber = 'Please enter a valid 16-digit card number';
-        }
-        
-        if (!cardName.trim()) {
-            newErrors.cardName = 'Cardholder name is required';
-        }
-        
-        if (!expiryDate.trim() || !/^\d{2}\/\d{2}$/.test(expiryDate)) {
-            newErrors.expiryDate = 'Please enter valid expiry date (MM/YY)';
-        }
-        
-        if (!cvv.trim() || cvv.length !== 3) {
-            newErrors.cvv = 'Please enter valid 3-digit CVV';
-        }
         
         if (!billingAddress.trim()) {
             newErrors.billingAddress = 'Billing address is required';
@@ -40,48 +24,100 @@ export default function Checkout({ isOpen, onClose, cartTotal, onCheckoutSubmit,
         return newErrors;
     };
 
-    const formatCardNumber = (value) => {
-        const v = value.replace(/\s+/g, '').replace(/[^0-9]/gi, '');
-        const matches = v.match(/\d{4,16}/g);
-        const match = (matches && matches[0]) || '';
-        const parts = [];
-        
-        for (let i = 0, len = match.length; i < len; i += 4) {
-            parts.push(match.substring(i, i + 4));
-        }
-        
-        if (parts.length) {
-            return parts.join(' ');
-        } else {
-            return value;
-        }
-    };
-
-    const handleCardNumberChange = (e) => {
-        const formatted = formatCardNumber(e.target.value);
-        setCardNumber(formatted);
-        if (errors.cardNumber) setErrors({...errors, cardNumber: ''});
-    };
-
-    const handleExpiryChange = (e) => {
-        let value = e.target.value.replace(/\D/g, '');
-        if (value.length >= 2) {
-            value = value.substring(0, 2) + '/' + value.substring(2, 4);
-        }
-        setExpiryDate(value);
-        if (errors.expiryDate) setErrors({...errors, expiryDate: ''});
-    };
-
-    const handleCvvChange = (e) => {
-        const value = e.target.value.replace(/\D/g, '').substring(0, 3);
-        setCvv(value);
-        if (errors.cvv) setErrors({...errors, cvv: ''});
-    };
-
-    const handleSubmit = async (e) => {
+    const handleVisaSubmit = async (e) => {
         e.preventDefault();
         
-        const newErrors = validateForm();
+        const newErrors = validateBillingAddress();
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(newErrors);
+            return;
+        }
+
+        if (!stripe || !elements) {
+            return;
+        }
+        
+        setIsProcessing(true);
+        
+        try {
+            // Step 1: Create Payment Intent on backend
+            const paymentIntentResponse = await fetch('http://localhost:5000/api/store/create-payment-intent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: cartTotal })
+            });
+
+            const paymentIntentData = await paymentIntentResponse.json();
+
+            if (!paymentIntentData.success) {
+                throw new Error(paymentIntentData.message || 'Failed to create payment intent');
+            }
+
+            // Step 2: Confirm payment with Stripe (THIS WILL CHARGE THE CARD)
+            const { error: confirmError, paymentIntent } = await stripe.confirmCardPayment(
+                paymentIntentData.clientSecret,
+                {
+                    payment_method: {
+                        card: elements.getElement(CardElement),
+                        billing_details: {
+                            address: {
+                                line1: billingAddress
+                            }
+                        }
+                    }
+                }
+            );
+
+            if (confirmError) {
+                setErrors({ form: confirmError.message });
+                setIsProcessing(false);
+                return;
+            }
+
+            // Step 3: Payment successful, save order to database
+            if (paymentIntent.status === 'succeeded') {
+                if (onCheckoutSubmit) {
+                    const result = await onCheckoutSubmit({
+                        paymentMethod: 'visa',
+                        paymentIntentId: paymentIntent.id,
+                        billingAddress,
+                        amount: cartTotal,
+                        cartItems: cartItems || []
+                    });
+                    
+                    if (result && result.success) {
+                        setBillingAddress('');
+                        setErrors({});
+                        alert('Payment successful! Your order has been placed and your card has been charged.');
+                        
+                        if (onClose) {
+                            onClose();
+                        }
+                    } else {
+                        setErrors({
+                            form: result?.message || 'Order creation failed, but payment was processed. Please contact support.'
+                        });
+                    }
+                }
+            } else {
+                setErrors({
+                    form: 'Payment was not successful. Please try again.'
+                });
+            }
+        } catch (error) {
+            console.error('Checkout error:', error);
+            setErrors({
+                form: error.message || 'An error occurred during payment'
+            });
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const handleCashOnDeliverySubmit = async (e) => {
+        e.preventDefault();
+        
+        const newErrors = validateBillingAddress();
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
             return;
@@ -90,78 +126,61 @@ export default function Checkout({ isOpen, onClose, cartTotal, onCheckoutSubmit,
         setIsProcessing(true);
         
         try {
-            // Simulate processing delay
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            
             if (onCheckoutSubmit) {
                 const result = await onCheckoutSubmit({
-                    cardNumber: cardNumber.replace(/\s/g, ''),
-                    cardName,
-                    expiryDate,
-                    cvv,
+                    paymentMethod: 'cash_on_delivery',
                     billingAddress,
                     amount: cartTotal,
                     cartItems: cartItems || []
                 });
                 
                 if (result && result.success) {
-                    // Reset form on success
-                    setCardNumber('');
-                    setCardName('');
-                    setExpiryDate('');
-                    setCvv('');
                     setBillingAddress('');
                     setErrors({});
-                    
-                    // Show success message
-                    alert('Payment successful! Your order has been placed.');
-                    
-                    // Close modal
-                    if (onClose) {
-                        onClose();
-                    }
+                    setOrderConfirmed(true);
                 } else {
                     setErrors({
-                        form: result?.message || 'Payment failed'
+                        form: result?.message || 'Order submission failed'
                     });
                 }
-            } else {
-                // For testing without backend
-                console.log('Checkout data:', {
-                    cardNumber: cardNumber.replace(/\s/g, ''),
-                    cardName,
-                    expiryDate,
-                    cvv,
-                    billingAddress,
-                    amount: cartTotal,
-                    cartItems: cartItems || []
-                });
-                alert('Payment would be processed here. Check console for data.');
-                if (onClose) onClose();
             }
         } catch (error) {
             console.error('Checkout error:', error);
             setErrors({
-                form: 'An error occurred during payment'
+                form: 'An error occurred during order submission'
             });
         } finally {
             setIsProcessing(false);
         }
     };
 
-    return (
-        <div className="checkout-modal-overlay" onClick={onClose}>
-            <div className="checkout-modal" onClick={(e) => e.stopPropagation()}>
-                <div className="checkout-modal-header">
-                    <h2>Checkout</h2>
+    if (paymentMethod === 'cash_on_delivery' && orderConfirmed) {
+        return (
+            <div className="confirmation-container">
+                <div className="confirmation-message">
+                    <div className="success-icon">✓</div>
+                    <h2>Order Confirmed!</h2>
+                    <p>Thank you for your order. We will contact you soon to confirm the delivery details.</p>
                     <button 
-                        className="close-checkout-btn" 
+                        className="submit-payment-btn" 
                         onClick={onClose}
-                        aria-label="Close checkout modal"
+                        style={{ marginTop: '20px' }}
                     >
-                        ×
+                        Close
                     </button>
                 </div>
+            </div>
+        );
+    }
+
+    if (paymentMethod === 'visa') {
+        return (
+            <form onSubmit={handleVisaSubmit} className="checkout-form">
+                {errors.form && (
+                    <div className="form-error-message">
+                        {errors.form}
+                    </div>
+                )}
                 
                 <div className="order-summary-box">
                     <div className="summary-item">
@@ -169,165 +188,236 @@ export default function Checkout({ isOpen, onClose, cartTotal, onCheckoutSubmit,
                         <span className="order-total">${cartTotal.toFixed(2)}</span>
                     </div>
                 </div>
+
+                <div className="form-section">
+                    <h3 className="section-title">Card Details</h3>
+                    <div className="form-group">
+                        <label>Card Information</label>
+                        <div className="stripe-card-element">
+                            <CardElement 
+                                options={{
+                                    style: {
+                                        base: {
+                                            fontSize: '16px',
+                                            color: '#ffffff',
+                                            '::placeholder': {
+                                                color: '#aab7c4',
+                                            },
+                                        },
+                                        invalid: {
+                                            color: '#fa755a',
+                                        },
+                                    },
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
                 
-                <form onSubmit={handleSubmit} className="checkout-form">
-                    {errors.form && (
-                        <div className="form-error-message">
-                            {errors.form}
-                        </div>
-                    )}
-                    
-                    {/* Card Details Section */}
-                    <div className="form-section">
-                        <h3 className="section-title">Card Details</h3>
-                        
-                        <div className="form-group">
-                            <label htmlFor="cardNumber">Card Number</label>
-                            <input
-                                id="cardNumber"
-                                type="text"
-                                value={cardNumber}
-                                onChange={handleCardNumberChange}
-                                placeholder="1234 5678 9012 3456"
-                                maxLength="19"
-                                className={errors.cardNumber ? 'input-error' : ''}
-                                disabled={isProcessing}
-                            />
-                            {errors.cardNumber && (
-                                <span className="error-message">{errors.cardNumber}</span>
-                            )}
-                        </div>
-                        
-                        <div className="form-group">
-                            <label htmlFor="cardName">Cardholder Name</label>
-                            <input
-                                id="cardName"
-                                type="text"
-                                value={cardName}
-                                onChange={(e) => {
-                                    setCardName(e.target.value);
-                                    if (errors.cardName) setErrors({...errors, cardName: ''});
-                                }}
-                                placeholder="John Doe"
-                                className={errors.cardName ? 'input-error' : ''}
-                                disabled={isProcessing}
-                            />
-                            {errors.cardName && (
-                                <span className="error-message">{errors.cardName}</span>
-                            )}
-                        </div>
-                        
-                        <div className="form-row">
-                            <div className="form-group half">
-                                <label htmlFor="expiryDate">Expiry Date (MM/YY)</label>
-                                <input
-                                    id="expiryDate"
-                                    type="text"
-                                    value={expiryDate}
-                                    onChange={handleExpiryChange}
-                                    placeholder="MM/YY"
-                                    maxLength="5"
-                                    className={errors.expiryDate ? 'input-error' : ''}
-                                    disabled={isProcessing}
-                                />
-                                {errors.expiryDate && (
-                                    <span className="error-message">{errors.expiryDate}</span>
-                                )}
-                            </div>
-                            
-                            <div className="form-group half">
-                                <label htmlFor="cvv">CVV</label>
-                                <input
-                                    id="cvv"
-                                    type="password"
-                                    value={cvv}
-                                    onChange={handleCvvChange}
-                                    placeholder="123"
-                                    maxLength="3"
-                                    className={errors.cvv ? 'input-error' : ''}
-                                    disabled={isProcessing}
-                                />
-                                {errors.cvv && (
-                                    <span className="error-message">{errors.cvv}</span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    {/* Billing Address Section */}
-                    <div className="form-section">
-                        <h3 className="section-title">Billing Address</h3>
-                        
-                        <div className="form-group">
-                            <label htmlFor="billingAddress">Full Address</label>
-                            <textarea
-                                id="billingAddress"
-                                value={billingAddress}
-                                onChange={(e) => {
-                                    setBillingAddress(e.target.value);
-                                    if (errors.billingAddress) setErrors({...errors, billingAddress: ''});
-                                }}
-                                placeholder="Street address, city, state, ZIP code"
-                                rows="3"
-                                className={errors.billingAddress ? 'input-error' : ''}
-                                disabled={isProcessing}
-                            />
-                            {errors.billingAddress && (
-                                <span className="error-message">{errors.billingAddress}</span>
-                            )}
-                        </div>
-                    </div>
-                    
-                    {/* Terms and Security */}
-                    <div className="checkout-info">
-                        <div className="terms-agreement">
-                            <input
-                                type="checkbox"
-                                id="terms"
-                                required
-                                disabled={isProcessing}
-                            />
-                            <label htmlFor="terms">
-                                I agree to the <a href="/terms">Terms of Service</a> and authorize this charge
-                            </label>
-                        </div>
-                        
-                        {/*<div className="security-info">
-                            <div className="secure-badge">
-                                🔒 Secure Payment
-                            </div>
-                            <div className="payment-icons">
-                                <span className="payment-icon">💳</span>
-                                <span className="payment-icon">🏦</span>
-                                <span className="payment-icon">🔐</span>
-                            </div>
-                        </div>*/}
-                    </div>
-                    
-                    {/* Submit Button */}
-                    <button 
-                        type="submit" 
-                        className="submit-payment-btn"
-                        disabled={isProcessing}
-                    >
-                        {isProcessing ? (
-                            <>
-                                <span className="spinner"></span>
-                                Processing Payment...
-                            </>
-                        ) : (
-                            `Pay $${cartTotal.toFixed(2)}`
+                <div className="form-section">
+                    <h3 className="section-title">Billing Address</h3>
+                    <div className="form-group">
+                        <label htmlFor="billingAddress">Full Address</label>
+                        <textarea
+                            id="billingAddress"
+                            value={billingAddress}
+                            onChange={(e) => {
+                                setBillingAddress(e.target.value);
+                                if (errors.billingAddress) setErrors({...errors, billingAddress: ''});
+                            }}
+                            placeholder="Street address, city, state, ZIP code"
+                            rows="3"
+                            className={errors.billingAddress ? 'input-error' : ''}
+                            disabled={isProcessing}
+                        />
+                        {errors.billingAddress && (
+                            <span className="error-message">{errors.billingAddress}</span>
                         )}
-                    </button>
-                    
-                    {/*<div className="alternative-payments">
-                        <p className="or-divider">OR</p>
-                        <button type="button" className="paypal-btn">
-                            <span className="paypal-icon">P</span>
-                            Pay with PayPal
+                    </div>
+                </div>
+                
+                <div className="checkout-info">
+                    <div className="terms-agreement">
+                        <input
+                            type="checkbox"
+                            id="terms"
+                            required
+                            disabled={isProcessing}
+                        />
+                        <label htmlFor="terms">
+                            I agree to the <a href="/terms">Terms of Service</a> and authorize this charge
+                        </label>
+                    </div>
+                </div>
+                
+                <button 
+                    type="submit" 
+                    className="submit-payment-btn"
+                    disabled={isProcessing || !stripe}
+                >
+                    {isProcessing ? (
+                        <>
+                            <span className="spinner"></span>
+                            Processing Payment...
+                        </>
+                    ) : (
+                        `Pay $${cartTotal.toFixed(2)}`
+                    )}
+                </button>
+            </form>
+        );
+    }
+
+    if (paymentMethod === 'cash_on_delivery') {
+        return (
+            <form onSubmit={handleCashOnDeliverySubmit} className="checkout-form">
+                {errors.form && (
+                    <div className="form-error-message">
+                        {errors.form}
+                    </div>
+                )}
+                
+                <div className="order-summary-box">
+                    <div className="summary-item">
+                        <span>Order Total:</span>
+                        <span className="order-total">${cartTotal.toFixed(2)}</span>
+                    </div>
+                </div>
+
+                <div className="form-section">
+                    <h3 className="section-title">Billing Address</h3>
+                    <p style={{ color: '#aab7c4', marginBottom: '15px' }}>
+                        Please provide your delivery address. Payment will be collected upon receipt.
+                    </p>
+                    <div className="form-group">
+                        <label htmlFor="billingAddress">Full Address</label>
+                        <textarea
+                            id="billingAddress"
+                            value={billingAddress}
+                            onChange={(e) => {
+                                setBillingAddress(e.target.value);
+                                if (errors.billingAddress) setErrors({...errors, billingAddress: ''});
+                            }}
+                            placeholder="Street address, city, state, ZIP code"
+                            rows="3"
+                            className={errors.billingAddress ? 'input-error' : ''}
+                            disabled={isProcessing}
+                        />
+                        {errors.billingAddress && (
+                            <span className="error-message">{errors.billingAddress}</span>
+                        )}
+                    </div>
+                </div>
+                
+                <div className="checkout-info">
+                    <div className="terms-agreement">
+                        <input
+                            type="checkbox"
+                            id="terms"
+                            required
+                            disabled={isProcessing}
+                        />
+                        <label htmlFor="terms">
+                            I agree to the <a href="/terms">Terms of Service</a>
+                        </label>
+                    </div>
+                </div>
+                
+                <button 
+                    type="submit" 
+                    className="submit-payment-btn"
+                    disabled={isProcessing}
+                >
+                    {isProcessing ? (
+                        <>
+                            <span className="spinner"></span>
+                            Confirming Order...
+                        </>
+                    ) : (
+                        'Confirm Order'
+                    )}
+                </button>
+            </form>
+        );
+    }
+
+    return null;
+}
+
+export default function Checkout({ isOpen, onClose, cartTotal, onCheckoutSubmit, cartItems }) {
+    const [paymentMethod, setPaymentMethod] = useState(null);
+
+    if (!isOpen) {
+        return null;
+    }
+
+    const handleClose = () => {
+        setPaymentMethod(null);
+        onClose();
+    };
+
+    const handleBack = () => {
+        setPaymentMethod(null);
+    };
+
+    return (
+        <div className="checkout-modal-overlay" onClick={handleClose}>
+            <div className="checkout-modal" onClick={(e) => e.stopPropagation()}>
+                <div className="checkout-modal-header">
+                    <h2>{paymentMethod ? 'Checkout' : 'Select Payment Method'}</h2>
+                    {paymentMethod && (
+                        <button 
+                            className="back-btn" 
+                            onClick={handleBack}
+                            aria-label="Go back"
+                        >
+                            ← Back
                         </button>
-                    </div>*/}
-                </form>
+                    )}
+                    <button 
+                        className="close-checkout-btn" 
+                        onClick={handleClose}
+                        aria-label="Close checkout modal"
+                    >
+                        ×
+                    </button>
+                </div>
+                
+                {!paymentMethod ? (
+                    <div className="payment-method-selection">
+                        <div className="payment-method-card" onClick={() => setPaymentMethod('visa')}>
+                            <div className="payment-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2"></rect>
+                                    <line x1="1" y1="10" x2="23" y2="10"></line>
+                                </svg>
+                            </div>
+                            <h3>Pay with Visa</h3>
+                            <p>Secure card payment via Stripe</p>
+                        </div>
+                        
+                        <div className="payment-method-card" onClick={() => setPaymentMethod('cash_on_delivery')}>
+                            <div className="payment-icon">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                </svg>
+                            </div>
+                            <h3>Payment upon Receipt</h3>
+                            <p>Pay when you receive your order</p>
+                        </div>
+                    </div>
+                ) : (
+                    <Elements stripe={stripePromise}>
+                        <CheckoutForm 
+                            onClose={handleClose}
+                            cartTotal={cartTotal}
+                            onCheckoutSubmit={onCheckoutSubmit}
+                            cartItems={cartItems}
+                            paymentMethod={paymentMethod}
+                        />
+                    </Elements>
+                )}
             </div>
         </div>
     );

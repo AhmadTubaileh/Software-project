@@ -23,7 +23,7 @@ export default function Footer() {
                     </ul>
                 </div>
 
-                <div className="footer-section">
+                {/*<div className="footer-section">
                     <h3>Categories</h3>
                     <ul>
                         <li><a href="#">Mobile</a></li>
@@ -32,21 +32,22 @@ export default function Footer() {
                         <li><a href="#">Consoles</a></li>
                     </ul>
                 </div>
-
+                */}
+                
                 <div className="footer-section">
                     <h3>Follow Us</h3>
                     <div className="socials">
                         
-                        <a href="#" aria-label="Facebook">
+                        <a href="https://www.facebook.com/ahmad.tubaileh.7/" aria-label="Facebook">
                             <i className="fa-brands fa-facebook-f"></i>
                         </a>
-                        <a href="#" aria-label="Instagram">
+                        <a href="https://www.instagram.com/ahmad.tubaileh.7/" aria-label="Instagram">
                             <i className="fa-brands fa-instagram"></i>
                         </a>
-                        <a href="#" aria-label="X (Twitter)">
+                        <a href="https://x.com/ahmadtubaileh2" aria-label="X (Twitter)">
                             <i className="fa-brands fa-x-twitter"></i>
                         </a>
-                        <a href="#" aria-label="YouTube">
+                        <a href="https://www.youtube.com/@ahmadtubaileh7186" aria-label="YouTube">
                             <i className="fa-brands fa-youtube"></i>
                         </a>
                     </div>

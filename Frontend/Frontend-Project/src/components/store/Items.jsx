@@ -1,19 +1,25 @@
 import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { cartProducts } from "../../data/cartProducts";
+import { Link, useSearchParams } from "react-router-dom";
 import StoreApi from "../../services/storeApi";
-
+import RecommendationApi from "../../services/recommendationApi";
+import { useLocalSession } from "../../hooks/useLocalSession";
+import toast from "react-hot-toast";
 
 export default function Items() {
     const [storeProducts, setStoreProducts] = useState([]);
+    const [recommendedProducts, setRecommendedProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const { currentUser } = useLocalSession();
+    const [searchParams] = useSearchParams();
+    const searchQuery = searchParams.get('search') || '';
+    const [showRecommendations, setShowRecommendations] = useState(false);
 
     useEffect(() => {
-        async function fetchProducts() {
+        async function fetchAllProducts() {
             try {
                 setLoading(true);
-                // Get selected branch from localStorage
+                
                 const selectedBranchId = localStorage.getItem('selectedBranchId');
                 
                 if (!selectedBranchId) {
@@ -22,43 +28,70 @@ export default function Items() {
                     return;
                 }
                 
-                const products = await StoreApi.getItems(selectedBranchId);
-                setStoreProducts(products);
+                // ✅ CORRECT: Use StoreApi.getItems() with branchId
+                console.log(`📦 Fetching ALL products for branch ${selectedBranchId}...`);
+                const allProducts = await StoreApi.getItems(selectedBranchId);
+                setStoreProducts(allProducts);
+                console.log(`✅ Found ${allProducts.length} products`);
+                
+                // OPTIONALLY fetch personalized recommendations for logged-in users
+                if (currentUser && currentUser.id) {
+                    console.log(`⭐ Fetching recommendations for user ${currentUser.id}...`);
+                    try {
+                        const personalizedItems = await RecommendationApi.getPersonalizedRecommendations(
+                            currentUser.id, 
+                            12, 
+                            selectedBranchId
+                        );
+                        setRecommendedProducts(personalizedItems);
+                        setShowRecommendations(true);
+                        console.log(`✅ Found ${personalizedItems.length} recommended products`);
+                    } catch (recError) {
+                        console.log("Could not fetch recommendations, showing only all products:", recError);
+                    }
+                }
+                
                 setError(null);
             } catch (err) {
-                console.error("Error fetching store products:", err);
+                console.error("Error fetching products:", err);
                 setError("Failed to load products. Please try again later.");
             } finally {
                 setLoading(false);
             }
         }
 
-        fetchProducts();
-    }, []);
+        fetchAllProducts();
+    }, [currentUser]);
 
-    function addToCart(product,quantity=1){
-        const existingIndex = cartProducts.findIndex((item)=>item.id===product.id);
-        
+    async function addToCart(product, quantity = 1) {
+        if (!currentUser || !currentUser.id) {
+            toast.error('Please login to add items to cart');
+            return;
+        }
 
-        if(existingIndex!==-1){
-            const item = cartProducts[existingIndex]
+        try {
+            const response = await fetch('http://localhost:5000/api/cart/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    userId: currentUser.id,
+                    itemId: product.id,
+                    quantity: quantity,
+                    paymentPreference: 'cash'
+                })
+            });
 
-            item.quantity+=quantity;
-            item.subtotal = item.price*item.quantity;
-            cartProducts[existingIndex]  = item
+            const data = await response.json();
 
-        } else {
-            cartProducts.push({
-                  id: product.id,
-                  img: product.img,
-                  name: product.name,
-                  price: product.price,
-                  quantity: quantity,
-                  subtotal: product.price * quantity
-                });
-                console.log("Added to cart:", product.name);
-                alert(`${product.name} added to cart!`);
-              }
+            if (data.success) {
+                toast.success(`${product.name} added to cart!`);
+            } else {
+                toast.error(data.message || 'Failed to add to cart');
+            }
+        } catch (error) {
+            console.error('Error adding to cart:', error);
+            toast.error('Error adding item to cart');
+        }
     }
 
     if (loading) {
@@ -69,24 +102,77 @@ export default function Items() {
         return <div style={{ color: "red", padding: "20px", textAlign: "center" }}>{error}</div>;
     }
 
-    if (storeProducts.length === 0) {
-        return <div style={{ color: "white", padding: "20px", textAlign: "center" }}>No products available.</div>;
+    // Filter products based on search query
+    const filteredProducts = storeProducts.filter(product => {
+        if (!searchQuery.trim()) return true;
+        const query = searchQuery.toLowerCase();
+        const name = product.name.toLowerCase();
+        return name.includes(query);
+    });
+
+    if (filteredProducts.length === 0) {
+        return (
+            <div style={{ color: "white", padding: "20px", textAlign: "center" }}>
+                {searchQuery ? `No products found matching "${searchQuery}"` : 'No products available.'}
+            </div>
+        );
     }
 
     return (
-        <div className="items-grid">
-        {storeProducts.map((product) => (
-            <div key={product.id} className="item-card">
-            <Link to={`/store/product/${product.id}`}>
-                <img src={product.img} className="item-image" alt={product.name} />
-            </Link>
-
-            <h3 className="item-title">{product.name}</h3>
-            <p className="item-price">${product.price}</p>
-
-            <button className="item-btn" onClick={()=>addToCart(product,1)}>Add to Cart</button>
+        <div>
+            {searchQuery && (
+                <div style={{ padding: "20px 40px", color: "white" }}>
+                    <p style={{ fontSize: "16px" }}>
+                        Showing {filteredProducts.length} result{filteredProducts.length !== 1 ? 's' : ''} for "{searchQuery}"
+                    </p>
+                </div>
+            )}
+            
+            {/* Show Recommendations Section for logged-in users (only when not searching) */}
+            {/*showRecommendations && !searchQuery && recommendedProducts.length > 0 && (
+                <div style={{ marginBottom: "40px" }}>
+                    <h2 style={{ color: "white", padding: "0 40px 20px", fontSize: "24px" }}>
+                        Recommended For You
+                    </h2>
+                    <div className="items-grid">
+                        {recommendedProducts.map((product) => (
+                            <div key={`rec-${product.id}`} className="item-card">
+                                <Link to={`/store/product/${product.id}`}>
+                                    <img src={product.img} className="item-image" alt={product.name} />
+                                </Link>
+                                <h3 className="item-title">{product.name}</h3>
+                                <p className="item-price">${product.price}</p>
+                                <button className="item-btn" onClick={()=>addToCart(product,1)}>
+                                    Add to Cart
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )*/}
+            
+            {/* Show ALL Products (or filtered products when searching) */}
+            <div>
+                {!searchQuery && (
+                    <h2 style={{ color: "white", padding: "0 40px 20px", fontSize: "24px" }}>
+                        {showRecommendations ? "All Products" : "Our Products"}
+                    </h2>
+                )}
+                <div className="items-grid">
+                    {filteredProducts.map((product) => (
+                        <div key={product.id} className="item-card">
+                            <Link to={`/store/product/${product.id}`}>
+                                <img src={product.img} className="item-image" alt={product.name} />
+                            </Link>
+                            <h3 className="item-title">{product.name}</h3>
+                            <p className="item-price">${product.price}</p>
+                            <button className="item-btn" onClick={()=>addToCart(product,1)}>
+                                Add to Cart
+                            </button>
+                        </div>
+                    ))}
+                </div>
             </div>
-        ))}
         </div>
-  );
+    );
 }
