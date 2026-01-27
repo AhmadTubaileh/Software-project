@@ -241,15 +241,17 @@ class Item {
           return callback(err);
         }
 
-        // Update items table
+        // Use COALESCE to preserve existing category_id when caller omits it
+        const categoryParam = (itemData.category_id === undefined) ? null : itemData.category_id;
+
         const itemQuery = `
           UPDATE items 
           SET name = ?, description = ?, available = ?, 
               installment = ?, quantity = ?, item_image = ?, branch_id = ?,
-              category_id = ?, main_img = ?, sub_img1 = ?, sub_img2 = ?, sub_img3 = ?, sub_img4 = ?
+              category_id = COALESCE(?, category_id), main_img = ?, sub_img1 = ?, sub_img2 = ?, sub_img3 = ?, sub_img4 = ?
           WHERE id = ?
         `;
-        
+
         connection.query(itemQuery, [
           itemData.name,
           itemData.description,
@@ -258,7 +260,7 @@ class Item {
           itemData.quantity,
           itemData.item_image,
           itemData.branch_id,
-          itemData.category_id || null,
+          categoryParam,
           itemData.main_img || null,
           itemData.sub_img1 || null,
           itemData.sub_img2 || null,
@@ -293,9 +295,7 @@ class Item {
                     on_sale_price = ?, user_id = ?
                 WHERE id = ?
               `;
-              
-              console.log('Updating price with buy_price:', priceData.buy_price);
-              
+
               connection.query(priceQuery, [
                 priceData.price_cash,
                 priceData.buy_price || null,
@@ -324,7 +324,7 @@ class Item {
                       callback(err);
                     });
                   }
-                  
+
                   connection.release();
                   callback(null, { success: true });
                 });
@@ -338,7 +338,7 @@ class Item {
                     callback(err);
                   });
                 }
-                
+
                 connection.release();
                 callback(null, { success: true });
               });
@@ -433,28 +433,40 @@ class Item {
             });
           }
 
-          // Then delete the item
-          const deleteItemQuery = 'DELETE FROM items WHERE id = ?';
-          connection.query(deleteItemQuery, [itemId], (err, result) => {
+          // Delete related item_metrics rows to satisfy foreign key constraints
+          const deleteMetricsQuery = 'DELETE FROM item_metrics WHERE item_id = ?';
+          connection.query(deleteMetricsQuery, [itemId], (err) => {
             if (err) {
-              console.error('Error deleting item:', err);
+              console.error('Error deleting item metrics:', err);
               return connection.rollback(() => {
                 connection.release();
                 callback(err);
               });
             }
 
-            connection.commit((err) => {
+            // Then delete the item
+            const deleteItemQuery = 'DELETE FROM items WHERE id = ?';
+            connection.query(deleteItemQuery, [itemId], (err, result) => {
               if (err) {
-                console.error('Error committing transaction:', err);
+                console.error('Error deleting item:', err);
                 return connection.rollback(() => {
                   connection.release();
                   callback(err);
                 });
               }
-              
-              connection.release();
-              callback(null, result);
+
+              connection.commit((err) => {
+                if (err) {
+                  console.error('Error committing transaction:', err);
+                  return connection.rollback(() => {
+                    connection.release();
+                    callback(err);
+                  });
+                }
+                
+                connection.release();
+                callback(null, result);
+              });
             });
           });
         });

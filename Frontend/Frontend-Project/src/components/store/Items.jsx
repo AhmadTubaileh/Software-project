@@ -8,14 +8,12 @@ import toast from "react-hot-toast";
 export default function Items() {
     const [storeProducts, setStoreProducts] = useState([]);
     const [recommendedProducts, setRecommendedProducts] = useState([]);
-    const [similarProducts, setSimilarProducts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const { currentUser } = useLocalSession();
     const [searchParams] = useSearchParams();
     const searchQuery = searchParams.get('search') || '';
     const [showRecommendations, setShowRecommendations] = useState(false);
-    const [lastViewedCategory, setLastViewedCategory] = useState(null);
 
     useEffect(() => {
         async function fetchAllProducts() {
@@ -30,13 +28,13 @@ export default function Items() {
                     return;
                 }
                 
-                // Fetch ALL products for this branch
+                // ✅ CORRECT: Use StoreApi.getItems() with branchId
                 console.log(`📦 Fetching ALL products for branch ${selectedBranchId}...`);
                 const allProducts = await StoreApi.getItems(selectedBranchId);
                 setStoreProducts(allProducts);
                 console.log(`✅ Found ${allProducts.length} products`);
                 
-                // Fetch personalized recommendations for logged-in users
+                // OPTIONALLY fetch personalized recommendations for logged-in users
                 if (currentUser && currentUser.id) {
                     console.log(`⭐ Fetching recommendations for user ${currentUser.id}...`);
                     try {
@@ -49,23 +47,7 @@ export default function Items() {
                         setShowRecommendations(true);
                         console.log(`✅ Found ${personalizedItems.length} recommended products`);
                     } catch (recError) {
-                        console.log("Could not fetch recommendations:", recError);
-                    }
-                }
-                
-                // Fetch similar products if last viewed item exists
-                const lastViewedItem = JSON.parse(localStorage.getItem('lastViewedItem'));
-                if (lastViewedItem) {
-                    try {
-                        const similarItems = await RecommendationApi.getSimilarItems(
-                            lastViewedItem.id, 
-                            6, 
-                            selectedBranchId
-                        );
-                        setSimilarProducts(similarItems);
-                        setLastViewedCategory(lastViewedItem.category || 'Products');
-                    } catch (similarError) {
-                        console.log("Could not fetch similar items:", similarError);
+                        console.log("Could not fetch recommendations, showing only all products:", recError);
                     }
                 }
                 
@@ -146,42 +128,8 @@ export default function Items() {
                 </div>
             )}
             
-            {/* Show Similar Products Section (with transparent background) */}
-            {similarProducts.length > 0 && !searchQuery && (
-                <div style={{ 
-                    marginBottom: "40px",
-                    background: "transparent",
-                    borderRadius: "10px",
-                    padding: "20px",
-                    border: "1px solid rgba(255,255,255,0.1)"
-                }}>
-                    <h2 style={{ 
-                        color: "white", 
-                        padding: "0 0 20px 0", 
-                        fontSize: "24px",
-                        textAlign: "center"
-                    }}>
-                        🔍 Similar {lastViewedCategory} Products
-                    </h2>
-                    <div className="items-grid">
-                        {similarProducts.map((product) => (
-                            <div key={`similar-${product.id}`} className="item-card">
-                                <Link to={`/store/product/${product.id}`}>
-                                    <img src={product.img} className="item-image" alt={product.name} />
-                                </Link>
-                                <h3 className="item-title">{product.name}</h3>
-                                <p className="item-price">${product.price}</p>
-                                <button className="item-btn" onClick={()=>addToCart(product,1)}>
-                                    Add to Cart
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-            
-            {/* Show Recommendations Section for logged-in users */}
-            {showRecommendations && !searchQuery && recommendedProducts.length > 0 && (
+            {/* Show Recommendations Section for logged-in users (only when not searching) */}
+            {/*showRecommendations && !searchQuery && recommendedProducts.length > 0 && (
                 <div style={{ marginBottom: "40px" }}>
                     <h2 style={{ color: "white", padding: "0 40px 20px", fontSize: "24px" }}>
                         Recommended For You
@@ -201,7 +149,7 @@ export default function Items() {
                         ))}
                     </div>
                 </div>
-            )}
+            )*/}
             
             {/* Show ALL Products (or filtered products when searching) */}
             <div>
