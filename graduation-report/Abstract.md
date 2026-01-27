@@ -1,4 +1,4 @@
-Abstract
+## Abstract
 
 Modern electronics retail stores often rely on fragmented tools and manual procedures to manage sales, inventory, payments, and employee activities. This separation increases operational complexity, introduces inconsistencies in records, and limits effective oversight. To address these challenges, this project presents MARS, an integrated software system that unifies customer-facing e-commerce functionality with internal management operations for an electronics store.
 
