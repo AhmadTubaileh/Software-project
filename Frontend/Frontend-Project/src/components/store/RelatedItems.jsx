@@ -38,7 +38,7 @@ export default function RelatedItems({ currentItemId }) {
   }
 
   return (
-    <div style={{ padding: "40px", backgroundColor: "#1a1a1a" }}>
+    <div className="similar-section" style={{ padding: "40px" }}>
       <h2 style={{ color: "white", marginBottom: "20px", fontSize: "24px" }}>
         🔍 Similar Products
       </h2>

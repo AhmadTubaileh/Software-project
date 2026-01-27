@@ -148,7 +148,7 @@ export default function Items() {
             
             {/* Show Similar Products Section (with transparent background) */}
             {similarProducts.length > 0 && !searchQuery && (
-                <div style={{ 
+                <div className="similar-section" style={{ 
                     marginBottom: "40px",
                     background: "transparent",
                     borderRadius: "10px",
