@@ -703,7 +703,7 @@ router.put('/:id', upload.single('item_image'), async (req, res) => {
         proceedWithUpdate();
       }
       
-      function proceedWithUpdate() {
+      async function proceedWithUpdate() {
         // Parse item data
         const itemData = {
           name: req.body.name || existingItem.name,
@@ -720,6 +720,35 @@ router.put('/:id', upload.single('item_image'), async (req, res) => {
             ? parseInt(req.body.branch_id) 
             : existingItem.branch_id  // Admin can change, others cannot
         };
+
+        // Handle category_id explicitly: allow null, empty string or missing value
+        if (req.body.category_id !== undefined) {
+          const parsedCat = req.body.category_id === '' ? null : parseInt(req.body.category_id);
+          itemData.category_id = Number.isNaN(parsedCat) ? null : parsedCat;
+        } else {
+          // keep existing category if not provided
+          itemData.category_id = existingItem.category_id !== undefined ? existingItem.category_id : null;
+        }
+
+        // If a category_id was provided (non-null), validate it exists to avoid FK errors
+        if (itemData.category_id !== null) {
+          try {
+            const catExists = await new Promise((resolve, reject) => {
+              const checkCatQuery = 'SELECT id FROM categories WHERE id = ? LIMIT 1';
+              db.query(checkCatQuery, [itemData.category_id], (catErr, catResults) => {
+                if (catErr) return reject(catErr);
+                resolve(!!(catResults && catResults.length > 0));
+              });
+            });
+
+            if (!catExists) {
+              return res.status(400).json({ success: false, message: 'Invalid category_id: category does not exist' });
+            }
+          } catch (catErr) {
+            console.error('Error checking category existence:', catErr);
+            return res.status(500).json({ success: false, message: 'Server error validating category' });
+          }
+        }
 
         // Get latest price
         Item.getLatestPrice(itemId, (err, latestPrice) => {
